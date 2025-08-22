@@ -77,7 +77,7 @@ pub const Ctx = struct {
     }
 
     pub fn findNearestSolid(self: *Self, ecs_p: *edit.EcsT, ray_o: Vec3, ray_d: Vec3, csgctx: *csg.Context, bb_only: bool) ![]const RcastItem {
-        const vis_mask = edit.EcsT.getComponentMask(&.{ .invisible, .deleted });
+        const vis_mask = edit.EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
         //var rcast_timer = try std.time.Timer.start();
         //defer std.debug.print("Rcast took {d} us\n", .{rcast_timer.read() / std.time.ns_per_us});
         self.pot.clearRetainingCapacity();

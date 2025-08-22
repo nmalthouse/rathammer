@@ -1,5 +1,11 @@
 const std = @import("std");
 
+// Laying out how this should work.
+//
+// List of user specified filters that match some subset of the entities
+//
+// For a given entity to be shown in the world all matching filters must be set true
+
 pub const Filter = struct {
     name: []const u8,
     invert: bool = false,
@@ -13,7 +19,7 @@ pub const Filter = struct {
     },
 };
 
-fn checkMatch(f: Filter, class: []const u8) bool {
+fn checkMatchInner(f: Filter, class: []const u8) bool {
     const res = switch (f.match) {
         .startsWith => std.mem.startsWith(u8, class, f.filter),
         .endsWith => std.mem.endsWith(u8, class, f.filter),
@@ -33,9 +39,22 @@ test {
         .match = .startsWith,
     };
 
-    try ex(checkMatch(f, "prop_static"), true);
-    try ex(checkMatch(f, "prop"), true);
-    try ex(checkMatch(f, "pr"), false);
+    try ex(checkMatchInner(f, "prop_static"), true);
+    try ex(checkMatchInner(f, "prop"), true);
+    try ex(checkMatchInner(f, "pr"), false);
+}
+
+pub fn checkMatch(f: Filter, ent_class: ?[]const u8, texture: ?[]const u8, model: ?[]const u8) bool {
+    const string: ?[]const u8 = switch (f.kind) {
+        .class => ent_class,
+        .texture => texture,
+        .model => model,
+    };
+    if (string) |str| {
+        return checkMatchInner(f, str);
+    } else {
+        return f.invert;
+    }
 }
 
 //const World = Filter{ .invert = true, .filter = "", .kind = .class, .match = .equals };
@@ -49,11 +68,32 @@ pub const VisContext = struct {
     filters: std.ArrayList(Filter),
     enabled: std.ArrayList(bool),
 
+    _disabled_buf: std.ArrayList(Filter),
+
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .filters = std.ArrayList(Filter).init(alloc),
             .enabled = std.ArrayList(bool).init(alloc),
+            ._disabled_buf = std.ArrayList(Filter).init(alloc),
         };
+    }
+
+    pub fn getDisabled(self: *Self) ![]const Filter {
+        self._disabled_buf.clearRetainingCapacity();
+        for (self.enabled.items, 0..) |en, i| {
+            if (!en) {
+                try self._disabled_buf.append(self.filters.items[i]);
+            }
+        }
+        return self._disabled_buf.items;
+    }
+
+    pub fn getPtr(self: *Self, name: []const u8) ?*bool {
+        for (self.filters.items, 0..) |f, i| {
+            if (std.mem.eql(u8, name, f.name))
+                return &self.enabled.items[i];
+        }
+        return null;
     }
 
     pub fn add(self: *Self, f: Filter) !void {
@@ -70,6 +110,7 @@ pub const VisContext = struct {
             self.filters.allocator.free(f.filter);
             self.filters.allocator.free(f.name);
         }
+        self._disabled_buf.deinit();
         self.filters.deinit();
         self.enabled.deinit();
     }

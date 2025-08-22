@@ -311,7 +311,6 @@ pub const PauseWindow = struct {
 
             {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-                vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw tools", .{ .bool_ptr = &ds.tog.tools }, null));
                 vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw sprite", .{ .bool_ptr = &ds.tog.sprite }, null));
                 vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw models", .{ .bool_ptr = &ds.tog.models }, null));
                 vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null));

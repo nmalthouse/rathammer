@@ -42,13 +42,19 @@ pub const EcsT = graph.Ecs.Registry(&.{
     Comp("entity", Entity),
     Comp("displacements", Displacements),
     Comp("key_values", KeyValues),
+    Comp("editor_info", EditorInfo),
+    Comp("autovis_invisible", struct {
+        pub const ECS_NO_SERIAL = void;
+        pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
+            return .{};
+        }
+    }),
     Comp("invisible", struct {
         pub const ECS_NO_SERIAL = void;
         pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
             return .{};
         }
     }),
-    Comp("editor_info", EditorInfo),
     Comp("deleted", struct {
         pub const ECS_NO_SERIAL = void;
         pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {

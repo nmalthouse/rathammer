@@ -132,7 +132,8 @@ pub const Context = struct {
     groups: ecs.Groups,
 
     async_asset_load: thread_pool.Context,
-    /// Used to track tool txtures, so we can easily disable drawing, remove once visgroups are good.
+    /// Used to track tool txtures, TODO turn this into transparent_map, sticking all $alphatest and $translucent in here for
+    /// alpha draw ordering
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     visgroups: VisGroups,
     autovis: newvis.VisContext,
@@ -178,7 +179,6 @@ pub const Context = struct {
         /// This should be replaced with visgroups, for the most part.
         tog: struct {
             wireframe: bool = false,
-            tools: bool = true,
             sprite: bool = true,
             models: bool = true,
             skybox: bool = true,
@@ -450,6 +450,10 @@ pub const Context = struct {
 
         try self.autovis.add(.{ .name = "props", .filter = "prop_", .kind = .class, .match = .startsWith });
         try self.autovis.add(.{ .name = "trigger", .filter = "trigger_", .kind = .class, .match = .startsWith });
+        try self.autovis.add(.{ .name = "tools", .filter = "materials/tools", .kind = .texture, .match = .startsWith });
+        try self.autovis.add(.{ .name = "func", .filter = "func", .kind = .class, .match = .startsWith });
+        try self.autovis.add(.{ .name = "models", .filter = "", .kind = .model, .match = .startsWith });
+        try self.autovis.add(.{ .name = "world", .filter = "", .kind = .class, .match = .startsWith, .invert = true });
 
         if (comptime compile_conf.http_version_check) {
             if (self.config.enable_version_check and args.no_version_check == null) {
@@ -513,8 +517,8 @@ pub const Context = struct {
     pub fn getComponent(self: *Self, index: EcsT.Id, comptime comp: EcsT.Components) ?*EcsT.Fields[@intFromEnum(comp)].ftype {
         const ent = self.ecs.getEntity(index) catch return null;
         if (!ent.isSet(@intFromEnum(comp))) return null;
-        if (ent.isSet(@intFromEnum(EcsT.Components.invisible)))
-            return null;
+        const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
+        if (self.ecs.intersects(index, vis_mask)) return null;
         return self.ecs.getPtr(index, comp) catch null;
     }
 
@@ -539,18 +543,22 @@ pub const Context = struct {
             ecs: *EcsT,
 
             pub fn next(self: *@This()) ?*childT {
+                const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
                 while (self.child_it.next()) |item| {
-                    if (!(self.ecs.hasComponent(self.child_it.i, .deleted) catch false)) {
-                        self.i = self.child_it.i;
-                        return item;
-                    }
+                    if (self.ecs.intersects(self.child_it.i, vis_mask))
+                        continue;
+                    self.i = self.child_it.i;
+                    //if (!(self.ecs.hasComponent(self.child_it.i, .deleted) catch false)) {
+                    //    self.i = self.child_it.i;
+                    return item;
+                    //}
                 }
                 return null;
             }
         };
     }
 
-    pub fn iterator(self: *Self, comptime comp: EcsT.Components) Iterator(comp) {
+    pub fn editIterator(self: *Self, comptime comp: EcsT.Components) Iterator(comp) {
         return .{
             .child_it = @field(self.ecs.data, @tagName(comp)).denseIterator(),
             .i = 0,
@@ -595,8 +603,123 @@ pub const Context = struct {
     }
 
     pub fn rebuildAutoVis(self: *Self) !void {
-        _ = self;
-        // For each shown entity, vis = all auto vis & tog
+        var timer = try std.time.Timer.start();
+        defer std.debug.print("auto vis build in {d} ms\n", .{timer.read() / std.time.ns_per_ms});
+        //TODO HANDLE GROUPS PROPERLY
+
+        var get_class = false;
+        var get_texture = false;
+        var get_model = false;
+
+        const disabled = try self.autovis.getDisabled();
+        for (disabled) |dis| {
+            switch (dis.kind) {
+                .class => get_class = true,
+                .texture => get_texture = true,
+                .model => get_model = true,
+            }
+        }
+        var mod_name = std.ArrayList(u8).init(self.frame_arena.allocator());
+        defer mod_name.deinit();
+
+        var tex_name = std.ArrayList(u8).init(self.frame_arena.allocator());
+        defer tex_name.deinit();
+
+        var groups_hidden = std.AutoHashMap(ecs.Groups.GroupId, void).init(self.frame_arena.allocator());
+
+        var num_changed: usize = 0;
+
+        var check_match_time: u64 = 0;
+        var check_match_timer = try std.time.Timer.start();
+        defer std.debug.print("CHECK TIME {d} ms\n", .{check_match_time / std.time.ns_per_ms});
+
+        var it = self.ecs.iterator(.bounding_box);
+        const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted });
+        while (it.next()) |_| {
+            if (self.ecs.intersects(it.i, vis_mask))
+                continue;
+
+            const was_hidden = self.ecs.hasComponent(it.i, .autovis_invisible) catch false;
+            if (was_hidden) // The component must be removed from all !
+                _ = try self.ecs.removeComponentOpt(it.i, .autovis_invisible);
+
+            const ent = if (get_class or get_model) try self.ecs.getOptPtr(it.i, .entity) else null;
+            const solid = if (get_texture) try self.ecs.getOptPtr(it.i, .solid) else null;
+
+            mod_name.clearRetainingCapacity();
+            tex_name.clearRetainingCapacity();
+            const model = mblk: {
+                if (!get_model) break :mblk null;
+                const entity = ent orelse break :mblk null;
+                const mod_id = entity._model_id orelse break :mblk null;
+                const res = self.vpkctx.getResource(mod_id) orelse break :mblk null;
+                try mod_name.appendSlice(res);
+                break :mblk mod_name.items;
+            };
+            const texture = mblk: {
+                if (!get_texture) break :mblk null;
+                const sol = solid orelse break :mblk null;
+                if (sol.sides.items.len == 0) break :mblk null;
+                //just use the first side
+                const side = sol.sides.items[0];
+                if (side.tex_id != 0) {
+                    for (sol.sides.items) |oside| { //Ensure all sides have the same texture
+                        if (oside.tex_id != side.tex_id)
+                            break :mblk null;
+                    }
+                    const res = self.vpkctx.getResource(side.tex_id) orelse break :mblk null;
+                    try tex_name.appendSlice(res);
+                    break :mblk tex_name.items;
+                } else if (side.material.len > 0) {
+                    try tex_name.appendSlice(side.material);
+                    break :mblk tex_name.items;
+                }
+                break :mblk null;
+            };
+            const class = if (ent) |entity| entity.class else null;
+
+            check_match_timer.reset();
+
+            var is_hidden = false;
+            check_disabled: for (disabled) |dis| {
+                if (newvis.checkMatch(dis, class, texture, model)) {
+                    self.ecs.attachComponent(it.i, .autovis_invisible, .{}) catch break :check_disabled;
+                    is_hidden = true;
+                    break :check_disabled;
+                }
+            }
+
+            check_match_time += check_match_timer.read();
+
+            if (is_hidden != was_hidden) {
+                num_changed += 1;
+                if (try self.ecs.getOptPtr(it.i, .solid)) |s_ptr| {
+                    if (is_hidden) {
+                        try s_ptr.removeFromMeshMap(it.i, self);
+                    } else {
+                        try s_ptr.rebuild(it.i, self);
+                    }
+                }
+
+                if (is_hidden) {
+                    if (self.groups.getGroup(it.i)) |group_id| {
+                        try groups_hidden.put(group_id, {});
+                    }
+                }
+            }
+        }
+        {
+            var group_it = self.editIterator(.group);
+            while (group_it.next()) |item| {
+                if (!groups_hidden.contains(item.id)) continue;
+                num_changed += 1;
+                self.ecs.attachComponent(group_it.i, .autovis_invisible, .{}) catch continue;
+                if (try self.ecs.getOptPtr(group_it.i, .solid)) |s_ptr| {
+                    try s_ptr.removeFromMeshMap(group_it.i, self);
+                }
+            }
+        }
+        std.debug.print("Num changed {d}\n", .{num_changed});
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
@@ -928,6 +1051,7 @@ pub const Context = struct {
     }
 
     pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
+        loadctx.printCb("Loading map {s}", .{filename});
         const endsWith = std.mem.endsWith;
         var ext: []const u8 = "";
         if (endsWith(u8, filename, ".ratmap")) {

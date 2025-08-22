@@ -251,20 +251,19 @@ pub fn draw3Dview(
     }
 
     try draw.flush(null, self.draw_state.cam3d);
-    const vis_mask = Editor.EcsT.getComponentMask(&.{ .invisible, .deleted });
     {
-        var ent_it = self.ecs.iterator(.entity);
+        var ent_it = self.editIterator(.entity);
         while (ent_it.next()) |ent| {
-            if (self.ecs.intersects(ent_it.i, vis_mask))
-                continue;
             try ent.drawEnt(self, view_3d, draw, draw_nd, .{});
         }
     }
-    if (self.draw_state.tog.tools) { //Draw all the tools after everything as many are transparent
 
-        graph.c.glEnable(graph.c.GL_BLEND);
-        graph.c.glBlendFunc(graph.c.GL_SRC_ALPHA, graph.c.GL_ONE_MINUS_SRC_ALPHA);
-        graph.c.glBlendEquation(graph.c.GL_FUNC_ADD);
+    graph.c.glEnable(graph.c.GL_BLEND);
+    graph.c.glBlendFunc(graph.c.GL_SRC_ALPHA, graph.c.GL_ONE_MINUS_SRC_ALPHA);
+    graph.c.glBlendEquation(graph.c.GL_FUNC_ADD);
+    { //Draw all the tools after everything as many are transparent
+        //TODO turn into alpha tested texture map
+
         const mat = graph.za.Mat4.identity();
         var tool_it = self.tool_res_map.iterator();
         while (tool_it.next()) |item| {
@@ -448,6 +447,7 @@ pub fn draw3Dview(
     }
     if (self.draw_state.tog.skybox) { //sky stuff
         const c = graph.c;
+        c.glDisable(c.GL_BLEND);
         c.glDepthMask(c.GL_FALSE);
         c.glDepthFunc(c.GL_LEQUAL);
         defer c.glDepthFunc(c.GL_LESS);

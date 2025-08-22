@@ -161,7 +161,8 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !bool {
                 }
                 const to_remove = self.multiContains(id);
                 if (to_remove) _ = self.groups.remove(group.id) else try self.groups.put(group.id, {});
-                var it = editor.iterator(.group);
+                //TODO specify it manually autovis entities should be added
+                var it = editor.editIterator(.group);
                 while (it.next()) |ent| {
                     if (ent.id == group.id and ent.id != 0) {
                         if (to_remove) self.tryRemoveMulti(it.i) else try self.tryAddMulti(it.i);

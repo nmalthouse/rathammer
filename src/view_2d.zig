@@ -96,10 +96,6 @@ pub const Ctx2dView = struct {
         const c = graph.c;
         const model = graph.za.Mat4.identity();
         while (it.next()) |mesh| {
-            if (!ed.draw_state.tog.tools) {
-                if (ed.tool_res_map.contains(mesh.key_ptr.*))
-                    continue;
-            }
             graph.c.glUseProgram(ed.draw_state.basic_shader);
             graph.GL.passUniform(ed.draw_state.basic_shader, "view", view_3d);
             graph.GL.passUniform(ed.draw_state.basic_shader, "model", model);
