@@ -51,6 +51,7 @@ const pointfile = @import("pointfile.zig");
 const def_render = @import("def_render.zig");
 
 const MAPFMT = " {s}{s} - RatHammer";
+var WINDOW_TITLE_BUFFER: [256]u8 = undefined;
 
 const builtin = @import("builtin");
 const WINDOZE = builtin.target.os.tag == .windows;
@@ -211,7 +212,8 @@ pub const Context = struct {
         map_version: u64 = 0, //Incremented every save
         autosaved_at_delta: u64 = 0, // Don't keep autosaving the same thing
         saved_at_delta: u64 = 0,
-        was_saved: bool = false, //Used to set window title
+        //Used to get a rising edge to set window title
+        was_saved: bool = true,
 
         manual_hidden_count: usize = 0,
         default_group_entity: enum { none, func_detail } = .func_detail,
@@ -249,6 +251,19 @@ pub const Context = struct {
     loaded_map_name: ?[]const u8 = null,
     /// This is always relative to cwd
     loaded_map_path: ?[]const u8 = null,
+
+    pub fn setWindowTitle(self: *Self, map_fmt_args: anytype) void {
+        var fbs = std.io.FixedBufferStream([]u8){ .buffer = &WINDOW_TITLE_BUFFER, .pos = 0 };
+        fbs.writer().print(MAPFMT, map_fmt_args) catch {
+            WINDOW_TITLE_BUFFER[0] = 0;
+        };
+        fbs.writer().writeByte(0) catch {
+            WINDOW_TITLE_BUFFER[0] = 0;
+        };
+        if (!graph.c.SDL_SetWindowTitle(self.win.win, &WINDOW_TITLE_BUFFER[0])) {
+            log.err("Failed to set window title", .{});
+        }
+    }
 
     pub fn setMapName(self: *Self, filename: []const u8) !void {
         const eql = std.mem.eql;
@@ -928,6 +943,8 @@ pub const Context = struct {
             return error.unknownMapExtension;
         }
 
+        self.setWindowTitle(.{ "", self.loaded_map_name orelse "unnamed map" });
+
         { //TODO MOVE TO SAVE MAP INSTEAD?
             var recent = std.ArrayList([]const u8).init(self.alloc);
             defer recent.deinit();
@@ -1240,8 +1257,8 @@ pub const Context = struct {
             try self.notify(" saved: {s}{s} in {d:.1}ms", .{ path, basename, timer.read() / std.time.ns_per_ms }, 0xff00ff);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
-            const win_name = try self.printScratchZ(MAPFMT, .{ "", self.loaded_map_name orelse "unnamed_map" });
-            _ = graph.c.SDL_SetWindowTitle(self.win.win, &win_name[0]);
+
+            self.setWindowTitle(.{ "", self.loaded_map_name orelse "unnamed_map" });
 
             const sz = 256;
             var bmp = try graph.Bitmap.initBlank(self.alloc, sz, sz, .rgb_8);
@@ -1297,8 +1314,7 @@ pub const Context = struct {
         } else {
             if (self.edit_state.was_saved) {
                 self.edit_state.was_saved = false;
-                const win_name = try self.printScratchZ(MAPFMT, .{ "*", self.loaded_map_name orelse "unnamed_map" });
-                _ = graph.c.SDL_SetWindowTitle(win.win, &win_name[0]);
+                self.setWindowTitle(.{ "*", self.loaded_map_name orelse "unnamed_map" });
             }
         }
         if (self.autosaver.shouldSave()) {
