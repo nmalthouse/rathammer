@@ -57,19 +57,6 @@ pub fn ensurePathRelative(string: []const u8, should_bitch: bool) []const u8 {
     return string;
 }
 
-pub fn parseSemver(string: []const u8) ![3]u32 {
-    var tkz = std.mem.tokenizeScalar(u8, string, '.');
-    const maj = tkz.next() orelse return error.invalidSemVer;
-    const min = tkz.next() orelse return error.invalidSemVer;
-    const rev = tkz.next() orelse return error.invalidSemVer;
-
-    return [3]u32{
-        std.fmt.parseInt(u32, maj, 10) catch return error.invalidSemVer,
-        std.fmt.parseInt(u32, min, 10) catch return error.invalidSemVer,
-        std.fmt.parseInt(u32, rev, 10) catch return error.invalidSemVer,
-    };
-}
-
 pub fn getFileFromTar(alloc: std.mem.Allocator, fileo: std.fs.File, filename: []const u8) ![]const u8 {
     var fname_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var lname_buffer: [std.fs.max_path_bytes]u8 = undefined;

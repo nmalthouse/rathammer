@@ -164,7 +164,22 @@ pub const PauseWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("area", win_vt));
         const eql = std.mem.eql;
         if (eql(u8, tab, "visgroup")) {
-            buildVisGroups(self, gui, vt);
+            const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
+            buildVisGroups(self, gui, vt, sp2[0]);
+
+            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
+
+            for (self.editor.autovis.filters.items, 0..) |filter, i| {
+                vt.addChildOpt(
+                    gui,
+                    win,
+                    Wg.Checkbox.build(gui, ly.getArea(), filter.name, .{
+                        .cb_fn = &checkbox_cb_auto_vis,
+                        .cb_vt = win.area,
+                        .user_id = i,
+                    }, self.editor.autovis.enabled.items[i]),
+                );
+            }
 
             //var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
             //vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome to visgroup", null));
@@ -378,9 +393,16 @@ pub const PauseWindow = struct {
         _ = window_area;
         gui.tint = color;
     }
+
+    pub fn checkbox_cb_auto_vis(user: *iArea, _: *Gui, val: bool, id: usize) void {
+        const self: *PauseWindow = @alignCast(@fieldParentPtr("area", user));
+        if (id >= self.editor.autovis.enabled.items.len) return;
+        self.editor.autovis.enabled.items[id] = val;
+        self.editor.rebuildAutoVis() catch return;
+    }
 };
 
-fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea) void {
+fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) void {
     const Helper = struct {
         fn recur(vs: *VisGroup, vg: *VisGroup.Group, depth: usize, gui_: *Gui, vl: *guis.VerticalLayout, vt: *iArea, win: *iWindow) void {
             vl.padding.left = @floatFromInt(depth * 20);
@@ -438,7 +460,7 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea) void {
     var ly = guis.VerticalLayout{
         .padding = .{},
         .item_height = gui.style.config.default_item_h,
-        .bounds = area.area,
+        .bounds = ar,
     };
 
     if (self.editor.visgroups.getRoot()) |vg| {

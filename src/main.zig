@@ -588,6 +588,7 @@ pub fn main() !void {
         Arg("config", .string, "load custom config, relative to cwd"),
         Arg("version", .flag, "Print rathammer version and exit"),
         Arg("build", .flag, "Print rathammer build info as json and exit"),
+        Arg("no_version_check", .flag, "Don't check for newer version over http"),
     }, &arg_it);
 
     if (args.version != null) {

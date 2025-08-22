@@ -1,3 +1,6 @@
+// Change to false to disable http version checking. If unspecified, defaults to true 
+enable_version_check    true
+
 // Define all keybinds
 keys {
     // keyboard names can optionally be prefixed with "scancode:" or "keycode:" otherwise the key name is bound as a keycode

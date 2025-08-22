@@ -7,6 +7,7 @@ const StringStorage = @import("string.zig").StringStorage;
 /// The user's 'config.vdf' maps directly into this structure
 pub const Config = struct {
     const mask = graph.SDL.keycodes.Keymod.mask;
+    enable_version_check: bool = true,
     paths: struct {
         steam_dir: []const u8 = "",
     },

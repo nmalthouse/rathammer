@@ -2,6 +2,43 @@ const std = @import("std");
 const thread_pool = @import("thread_pool.zig");
 const Context = @import("editor.zig").Context;
 const graph = @import("graph");
+const compile_conf = @import("config");
+
+pub const JobTemplate = struct {
+    //Jobs must implement iJob vtable
+    job: thread_pool.iJob,
+    //Used to put the finished job in list
+    pool_ptr: *thread_pool.Context,
+
+    alloc: std.mem.Allocator,
+
+    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context) !void {
+        const self = try alloc.create(@This());
+        self.* = .{
+            .job = .{ .onComplete = &onComplete, .user_id = 0 },
+            .alloc = alloc,
+            .pool_ptr = pool,
+        };
+        try pool.spawnJob(workFunc, .{self});
+    }
+
+    pub fn destroy(self: *@This()) void {
+        self.alloc.destroy(self);
+    }
+
+    // Called from self.spawn in a worker thread
+    pub fn workFunc(self: *@This()) void {
+        self.pool_ptr.insertCompletedJob(&self.job) catch {};
+    }
+
+    // Called from main thread.
+    pub fn onComplete(vt: *thread_pool.iJob, edit: *Context) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
+        defer self.destroy();
+        _ = edit;
+    }
+};
+
 /// This will destroy() itself onComplete()
 const log = std.log.scoped(.Async);
 pub const SdlFileData = struct {
@@ -256,5 +293,83 @@ pub const CompressAndSave = struct {
             return;
         };
         self.status = .built;
+    }
+};
+
+pub const CheckVersionHttp_INCOMPLETE = struct {
+    const version = @import("version.zig");
+    //TODO move uri to build config or something
+    //TODO add cli flag and config to disable any http
+    job: thread_pool.iJob,
+    pool_ptr: *thread_pool.Context,
+
+    alloc: std.mem.Allocator,
+    new_version: ?[]const u8 = null,
+
+    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context) !void {
+        const self = try alloc.create(@This());
+        self.* = .{
+            .job = .{ .onComplete = &onComplete, .user_id = 0 },
+            .alloc = alloc,
+            .pool_ptr = pool,
+        };
+        try pool.spawnJob(workFunc, .{self});
+    }
+
+    pub fn destroy(self: *@This()) void {
+        if (self.new_version) |nv|
+            self.alloc.free(nv);
+        self.alloc.destroy(self);
+    }
+
+    pub fn workFunc(self: *@This()) void {
+        self.workFuncErr() catch |err| {
+            log.err("Version check failed: {!}", .{err});
+        };
+    }
+
+    // Called from self.spawn in a worker thread
+    fn workFuncErr(self: *@This()) !void {
+        if (comptime compile_conf.http_version_check) {
+            var client = std.http.Client{
+                .allocator = self.alloc,
+            };
+            defer client.deinit();
+            var header_buf: [1024]u8 = undefined;
+
+            const uri = "http://localhost:8000/version";
+
+            var req = try client.open(.GET, try std.Uri.parse(uri), .{ .server_header_buffer = &header_buf });
+            defer req.deinit();
+
+            try req.send();
+            try req.wait();
+
+            var buf: [16]u8 = undefined;
+            const len = try req.readAll(&buf);
+            const answer = buf[0..len];
+            log.info("Version check {s}", .{answer});
+            if (answer.len > 0) {
+                const server_version = try version.parseSemver(answer);
+                const client_version = try version.parseSemver(version.version);
+                if (version.gtSemver(server_version, client_version)) {
+                    self.new_version = try self.alloc.dupe(u8, answer);
+                }
+            }
+
+            try req.finish();
+        }
+
+        self.pool_ptr.insertCompletedJob(&self.job) catch {};
+    }
+
+    // Called from main thread.
+    pub fn onComplete(vt: *thread_pool.iJob, edit: *Context) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
+        defer self.destroy();
+        if (self.new_version) |nv| {
+            edit.notify("New version available: {s}", .{nv}, 0x00ff00ff) catch {};
+            edit.notify("Current version: {s}", .{version.version}, 0xfca73fff) catch {};
+        }
     }
 };

@@ -23,6 +23,7 @@ const DrawCtx = graph.ImmediateDrawingContext;
 const thread_pool = @import("thread_pool.zig");
 const assetbrowse = @import("asset_browser.zig");
 const Conf = @import("config.zig");
+const compile_conf = @import("config");
 const undo = @import("undo.zig");
 const tool_def = @import("tools.zig");
 const util = @import("util.zig");
@@ -30,6 +31,7 @@ const Autosaver = @import("autosave.zig").Autosaver;
 const NotifyCtx = @import("notify.zig").NotifyCtx;
 const Selection = @import("selection.zig");
 const VisGroups = @import("visgroup.zig");
+const newvis = @import("newvis.zig");
 const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
 const ecs = @import("ecs.zig");
 const json_map = @import("json_map.zig");
@@ -132,6 +134,7 @@ pub const Context = struct {
     /// Used to track tool txtures, so we can easily disable drawing, remove once visgroups are good.
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     visgroups: VisGroups,
+    autovis: newvis.VisContext,
 
     shell: *shell.CommandCtx,
 
@@ -324,6 +327,7 @@ pub const Context = struct {
             .clipctx = clipper.ClipCtx.init(alloc),
             .vpkctx = try vpk.Context.init(alloc),
             .visgroups = VisGroups.init(alloc),
+            .autovis = newvis.VisContext.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
             .scratch_buf = std.ArrayList(u8).init(alloc),
@@ -428,6 +432,15 @@ pub const Context = struct {
         try self.tools.registerCustom("texture", tool_def.TextureTool, try tool_def.TextureTool.create(self.alloc, self));
         try self.tools.registerCustom("vertex", tool_def.VertexTranslate, try tool_def.VertexTranslate.create(self.alloc, self));
         try self.tools.register("clip", tool_def.Clipping);
+
+        try self.autovis.add(.{ .name = "props", .filter = "prop_", .kind = .class, .match = .startsWith });
+        try self.autovis.add(.{ .name = "trigger", .filter = "trigger_", .kind = .class, .match = .startsWith });
+
+        if (comptime compile_conf.http_version_check) {
+            if (self.config.enable_version_check and args.no_version_check == null) {
+                try async_util.CheckVersionHttp_INCOMPLETE.spawn(self.alloc, &self.async_asset_load);
+            }
+        }
     }
 
     pub fn deinit(self: *Self) void {
@@ -435,6 +448,7 @@ pub const Context = struct {
 
         self.classtrack.deinit();
         self.visgroups.deinit();
+        self.autovis.deinit();
         self.tools.deinit();
         self.panes.deinit();
         self.tool_res_map.deinit();
@@ -563,6 +577,11 @@ pub const Context = struct {
                     try solid.rebuild(it.i, self);
             }
         }
+    }
+
+    pub fn rebuildAutoVis(self: *Self) !void {
+        _ = self;
+        // For each shown entity, vis = all auto vis & tog
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
