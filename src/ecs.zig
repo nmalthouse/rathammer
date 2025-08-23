@@ -1009,8 +1009,8 @@ pub const Solid = struct {
     pub fn removeFromMeshMap(self: *Self, id: EcsT.Id, editor: *Editor) !void {
         for (self.sides.items) |side| {
             const batch = editor.meshmap.getPtr(side.tex_id) orelse continue;
-            batch.*.is_dirty = true;
-            _ = batch.*.contains.remove(id);
+            if (batch.*.contains.remove(id))
+                batch.*.is_dirty = true;
         }
         editor.draw_state.meshes_dirty = true;
     }

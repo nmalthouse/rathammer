@@ -1,4 +1,6 @@
 const std = @import("std");
+const vpk = @import("vpk.zig");
+const VpkResId = vpk.VpkResId;
 
 // Laying out how this should work.
 //
@@ -17,6 +19,8 @@ pub const Filter = struct {
         contains,
         equals,
     },
+
+    _id: u32 = 0, //Set by Context
 };
 
 fn checkMatchInner(f: Filter, class: []const u8) bool {
@@ -63,10 +67,19 @@ pub fn checkMatch(f: Filter, ent_class: ?[]const u8, texture: ?[]const u8, model
 //const Trigger = Filter{ .invert = false, .filter = "trigger", .kind = .class, .match = .startsWith };
 //const Tool = Filter{ .invert = false, .Filter = "materials/tools", .kind = .texture, .match = .startsWith };
 
+// After editor init, the set of vis are assumed static
+// TODO ensure they are static
 pub const VisContext = struct {
+    const MAX_VIS = 64;
+    const MaskSet = std.bit_set.IntegerBitSet(MAX_VIS);
     const Self = @This();
+
     filters: std.ArrayList(Filter),
     enabled: std.ArrayList(bool),
+
+    vpk_id_cache: std.AutoHashMap(VpkResId, MaskSet),
+    //TODO convert entity.class to numeric and this to something better
+    class_id_cache: std.StringHashMap(MaskSet),
 
     _disabled_buf: std.ArrayList(Filter),
 
@@ -75,17 +88,61 @@ pub const VisContext = struct {
             .filters = std.ArrayList(Filter).init(alloc),
             .enabled = std.ArrayList(bool).init(alloc),
             ._disabled_buf = std.ArrayList(Filter).init(alloc),
+            .vpk_id_cache = std.AutoHashMap(VpkResId, MaskSet).init(alloc),
+            .class_id_cache = std.StringHashMap(MaskSet).init(alloc),
         };
     }
 
-    pub fn getDisabled(self: *Self) ![]const Filter {
+    /// Returns a bitmask of filters which match this vpk resource
+    /// A id can be tested with a single hashmap lookup and cmp rather than n string comparisons
+    pub fn getCachedMask(self: *Self, vpk_id: VpkResId, vpkctx: *vpk.Context) !MaskSet {
+        if (self.vpk_id_cache.get(vpk_id)) |mask| return mask;
+
+        const name = vpkctx.getResource(vpk_id) orelse {
+            try self.vpk_id_cache.put(vpk_id, MaskSet.initEmpty());
+            return MaskSet.initEmpty();
+        };
+
+        var mask = MaskSet.initEmpty();
+        for (self.filters.items) |filter| {
+            switch (filter.kind) {
+                .class => {}, // not a vpk res
+                .texture, .model => {
+                    if (checkMatchInner(filter, name)) {
+                        mask.set(filter._id);
+                    }
+                },
+            }
+        }
+        try self.vpk_id_cache.put(vpk_id, mask);
+        return mask;
+    }
+
+    pub fn getCachedClassMask(self: *Self, class: []const u8) !MaskSet {
+        if (self.class_id_cache.get(class)) |mask| return mask;
+
+        var mask = MaskSet.initEmpty();
+
+        for (self.filters.items) |filter| {
+            if (filter.kind != .class) continue;
+            if (checkMatchInner(filter, class))
+                mask.set(filter._id);
+        }
+
+        try self.class_id_cache.put(class, mask);
+        return mask;
+    }
+
+    pub fn getDisabled(self: *Self) !struct { []const Filter, MaskSet } {
+        var mask = MaskSet.initEmpty();
         self._disabled_buf.clearRetainingCapacity();
         for (self.enabled.items, 0..) |en, i| {
             if (!en) {
+                mask.set(i);
                 try self._disabled_buf.append(self.filters.items[i]);
             }
         }
-        return self._disabled_buf.items;
+        return .{ self._disabled_buf.items, mask };
     }
 
     pub fn getPtr(self: *Self, name: []const u8) ?*bool {
@@ -99,6 +156,8 @@ pub const VisContext = struct {
     pub fn add(self: *Self, f: Filter) !void {
         const alloc = self.filters.allocator;
         var newf = f;
+        newf._id = @intCast(self.enabled.items.len);
+        if (newf._id >= MAX_VIS) return error.tooManyAutoVis;
         newf.name = try alloc.dupe(u8, f.name);
         newf.filter = try alloc.dupe(u8, f.filter);
         try self.filters.append(newf);
@@ -110,6 +169,8 @@ pub const VisContext = struct {
             self.filters.allocator.free(f.filter);
             self.filters.allocator.free(f.name);
         }
+        self.vpk_id_cache.deinit();
+        self.class_id_cache.deinit();
         self._disabled_buf.deinit();
         self.filters.deinit();
         self.enabled.deinit();

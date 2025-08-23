@@ -605,13 +605,33 @@ pub const Context = struct {
     pub fn rebuildAutoVis(self: *Self) !void {
         var timer = try std.time.Timer.start();
         defer std.debug.print("auto vis build in {d} ms\n", .{timer.read() / std.time.ns_per_ms});
-        //TODO HANDLE GROUPS PROPERLY
+        //TODO This is slow, some potential optimiziations:
+        //
+        //Worst case: hl2_amalgamated.ratmap, ReleaseSafe, rebuilding takes ~ 250 ms
+        //
+        // let old = last_build_disabled_set
+        // let new = this_disabled
+        // if new is subset of old
+        //  only iterate (.autovis_invisible) // Selection has been narrowed
+        //
+        //The string comparisons are the slowest part.
+        //
+        //create a cache_class_map
+        //if get_class  and entity
+        //  maps entity.class to a bitmask of autovis
+        //
+        //  rather than checking n disabled, 1 hashmap lookup and bit comparison
+        //
+        //Strings such as class should probably be replaced with a numeric for faster hashing
+        //
+        //Same can be done with vpk_ids
+        //
 
         var get_class = false;
         var get_texture = false;
         var get_model = false;
 
-        const disabled = try self.autovis.getDisabled();
+        const disabled, const dis_mask = try self.autovis.getDisabled();
         for (disabled) |dis| {
             switch (dis.kind) {
                 .class => get_class = true,
@@ -619,9 +639,9 @@ pub const Context = struct {
                 .model => get_model = true,
             }
         }
+
         var mod_name = std.ArrayList(u8).init(self.frame_arena.allocator());
         defer mod_name.deinit();
-
         var tex_name = std.ArrayList(u8).init(self.frame_arena.allocator());
         defer tex_name.deinit();
 
@@ -636,6 +656,7 @@ pub const Context = struct {
         var it = self.ecs.iterator(.bounding_box);
         const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted });
         while (it.next()) |_| {
+            var is_hidden = false;
             if (self.ecs.intersects(it.i, vis_mask))
                 continue;
 
@@ -648,46 +669,56 @@ pub const Context = struct {
 
             mod_name.clearRetainingCapacity();
             tex_name.clearRetainingCapacity();
-            const model = mblk: {
-                if (!get_model) break :mblk null;
-                const entity = ent orelse break :mblk null;
-                const mod_id = entity._model_id orelse break :mblk null;
-                const res = self.vpkctx.getResource(mod_id) orelse break :mblk null;
-                try mod_name.appendSlice(res);
-                break :mblk mod_name.items;
-            };
+            mblk: {
+                if (!get_model) break :mblk;
+                const entity = ent orelse break :mblk;
+                const mod_id = entity._model_id orelse break :mblk;
+
+                const mask = try self.autovis.getCachedMask(mod_id, &self.vpkctx);
+                if (mask.intersectWith(dis_mask).mask != 0)
+                    is_hidden = true;
+            }
             const texture = mblk: {
-                if (!get_texture) break :mblk null;
+                if (!get_texture or is_hidden) break :mblk null;
                 const sol = solid orelse break :mblk null;
                 if (sol.sides.items.len == 0) break :mblk null;
                 //just use the first side
                 const side = sol.sides.items[0];
-                if (side.tex_id != 0) {
-                    for (sol.sides.items) |oside| { //Ensure all sides have the same texture
-                        if (oside.tex_id != side.tex_id)
-                            break :mblk null;
-                    }
-                    const res = self.vpkctx.getResource(side.tex_id) orelse break :mblk null;
-                    try tex_name.appendSlice(res);
-                    break :mblk tex_name.items;
-                } else if (side.material.len > 0) {
+                if (side.tex_id == 0) {
                     try tex_name.appendSlice(side.material);
                     break :mblk tex_name.items;
                 }
+
+                for (sol.sides.items) |oside| { //Ensure all sides have the same texture
+                    if (oside.tex_id != side.tex_id)
+                        break :mblk null;
+                }
+
+                const mask = try self.autovis.getCachedMask(side.tex_id, &self.vpkctx);
+                if (mask.intersectWith(dis_mask).mask != 0)
+                    is_hidden = true;
                 break :mblk null;
             };
-            const class = if (ent) |entity| entity.class else null;
+
+            if (!is_hidden and ent != null) {
+                const mask = try self.autovis.getCachedClassMask(ent.?.class);
+                if (mask.intersectWith(dis_mask).mask != 0)
+                    is_hidden = true;
+            }
 
             check_match_timer.reset();
 
-            var is_hidden = false;
-            check_disabled: for (disabled) |dis| {
-                if (newvis.checkMatch(dis, class, texture, model)) {
-                    self.ecs.attachComponent(it.i, .autovis_invisible, .{}) catch break :check_disabled;
-                    is_hidden = true;
-                    break :check_disabled;
+            if (!is_hidden) {
+                check_disabled: for (disabled) |dis| {
+                    if (newvis.checkMatch(dis, null, texture, null)) {
+                        is_hidden = true;
+                        break :check_disabled;
+                    }
                 }
             }
+
+            if (is_hidden)
+                self.ecs.attachComponent(it.i, .autovis_invisible, .{}) catch {};
 
             check_match_time += check_match_timer.read();
 

@@ -163,6 +163,7 @@ pub const PauseWindow = struct {
     fn buildTabs(win_vt: *iArea, vt: *iArea, tab: []const u8, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("area", win_vt));
         const eql = std.mem.eql;
+        const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "visgroup")) {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
             buildVisGroups(self, gui, vt, sp2[0]);
@@ -208,7 +209,6 @@ pub const PauseWindow = struct {
                 }));
         }
         if (eql(u8, tab, "graphics")) {
-            const St = Wg.StaticSlider.build;
             var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = vt.area };
             const ps = &self.editor.draw_state.planes;
             const ed = self.editor;
@@ -323,7 +323,7 @@ pub const PauseWindow = struct {
             if (guis.label(vt, gui, win, ly.getArea(), "New group type", .{})) |ar|
                 vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.editor.edit_state.default_group_entity, .{}));
             if (guis.label(vt, gui, win, ly.getArea(), "Entity render distance", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &ds.tog.model_render_dist, 64, 1024 * 10, .{ .nudge = 256 }));
+                vt.addChildOpt(gui, win, St(gui, ar, &ds.tog.model_render_dist, .{ .min = 64, .max = 1024 * 10, .default = 1024 }));
             if (false) {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
                 vt.addChildOpt(gui, win, Wg.Slider.build(gui, hy.getArea(), &ds.cam_near_plane, 1, 512, .{ .nudge = 1 }));
