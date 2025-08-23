@@ -2,6 +2,7 @@ const std = @import("std");
 const builtin = @import("builtin");
 const IS_DEBUG = builtin.mode == .Debug;
 const util = @import("util.zig");
+const colors = @import("colors.zig").colors;
 
 const graph = @import("graph");
 const Rec = graph.Rec;
@@ -111,7 +112,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         return .exit;
     win.pumpEvents(.wait);
     win.grabMouse(false);
-    try draw.begin(0x3d8891ff, win.screen_dimensions.toF());
+    try draw.begin(colors.clear, win.screen_dimensions.toF());
     draw.real_screen_dimensions = win.screen_dimensions.toF();
     try editor.update(win);
 
@@ -482,7 +483,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try editor.update(&win);
         //TODO move this back to POSONE once we can render 3dview to any fb
         //this is here so editor.update can create a thumbnail from backbuffer before its cleared
-        try draw.begin(0x3d8891ff, win.screen_dimensions.toF());
+        try draw.begin(colors.clear, win.screen_dimensions.toF());
 
         { //Hacks to update gui
             const new_id = editor.selection.getGroupOwnerExclusive(&editor.groups);

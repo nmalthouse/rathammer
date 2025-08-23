@@ -35,44 +35,26 @@ pub const SparseSet = graph.SparseSet;
 const Comp = graph.Ecs.Component;
 /// Component fields begining with an _ are not serialized
 // This is a bit messy currently.
+const EmptyT = struct {
+    pub const ECS_NO_SERIAL = void;
+    pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
+        return .{};
+    }
+};
 pub const EcsT = graph.Ecs.Registry(&.{
     Comp("group", Groups.Group),
     Comp("bounding_box", AABB),
     Comp("solid", Solid),
     Comp("entity", Entity),
+
     Comp("displacements", Displacements),
     Comp("key_values", KeyValues),
     Comp("editor_info", EditorInfo),
-    Comp("autovis_invisible", struct {
-        pub const ECS_NO_SERIAL = void;
-        pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
-            return .{};
-        }
-    }),
-    Comp("invisible", struct {
-        pub const ECS_NO_SERIAL = void;
-        pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
-            return .{};
-        }
-    }),
-    Comp("deleted", struct {
-        pub const ECS_NO_SERIAL = void;
-        pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
-            return .{};
-        }
-    }),
     Comp("connections", Connections),
-    //TODO is this shit even used. delete
-    Comp("ladder_translate_hull", struct {
-        //For the ladder entity.
-        //We need to put two bb's that are far from the actual entity
-        //Just need one bb that exists as bb
-        ladder_ent: ?EcsT.Id = null,
-        pub const ECS_NO_SERIAL = void;
-        pub fn dupe(_: *@This(), _: anytype, _: anytype) !@This() {
-            return .{};
-        }
-    }),
+
+    Comp("autovis_invisible", EmptyT),
+    Comp("invisible", EmptyT),
+    Comp("deleted", EmptyT),
 });
 
 /// Groups are used to group entities together. Any entities can be grouped but it is mainly used for brush entities

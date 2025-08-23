@@ -4,6 +4,7 @@ const Vec3 = graph.za.Vec3;
 const Mat4 = graph.za.Mat4;
 const SparseSet = graph.SparseSet;
 const meshutil = graph.meshutil;
+const colors = @import("colors.zig").colors;
 const vmf = @import("vmf.zig");
 const vdf = @import("vdf.zig");
 const vpk = @import("vpk.zig");
@@ -32,6 +33,7 @@ const NotifyCtx = @import("notify.zig").NotifyCtx;
 const Selection = @import("selection.zig");
 const VisGroups = @import("visgroup.zig");
 const newvis = @import("newvis.zig");
+const Layer = @import("layer.zig");
 const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
 const ecs = @import("ecs.zig");
 const json_map = @import("json_map.zig");
@@ -137,6 +139,7 @@ pub const Context = struct {
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     visgroups: VisGroups,
     autovis: newvis.VisContext,
+    layers: Layer.Context,
 
     shell: *shell.CommandCtx,
 
@@ -343,6 +346,7 @@ pub const Context = struct {
             .vpkctx = try vpk.Context.init(alloc),
             .visgroups = VisGroups.init(alloc),
             .autovis = newvis.VisContext.init(alloc),
+            .layers = try Layer.Context.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
             .scratch_buf = std.ArrayList(u8).init(alloc),
@@ -468,6 +472,7 @@ pub const Context = struct {
         self.classtrack.deinit();
         self.visgroups.deinit();
         self.autovis.deinit();
+        self.layers.deinit();
         self.tools.deinit();
         self.panes.deinit();
         self.tool_res_map.deinit();
@@ -1271,7 +1276,7 @@ pub const Context = struct {
             const n = if (i < self.config.keys.tool.items.len) self.config.keys.tool.items[i].b.nameFull(&buf) else "NONE";
             draw.textClipped(rec, "{s}", .{n}, .{ .px_size = fh, .font = font, .color = 0xff }, .left);
             if (tool_index == i) {
-                draw.rectBorder(rec, 3, 0x00ff00ff);
+                draw.rectBorder(rec, 3, colors.selected);
             }
         }
     }
@@ -1364,7 +1369,7 @@ pub const Context = struct {
     pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8) !void {
         self.edit_state.map_version += 1;
         var timer = try std.time.Timer.start();
-        try self.notify("saving: {s}{s}", .{ path, basename }, 0xfca73fff);
+        try self.notify("saving: {s}{s}", .{ path, basename }, colors.tentative);
 
         const name = try self.printScratch("{s}{s}.ratmap", .{ path, basename });
         //TODO make copy of existing map incase something goes wrong
@@ -1374,7 +1379,7 @@ pub const Context = struct {
         var jwriter = std.ArrayList(u8).init(self.alloc);
 
         if (self.writeToJson(jwriter.writer())) {
-            try self.notify(" saved: {s}{s} in {d:.1}ms", .{ path, basename, timer.read() / std.time.ns_per_ms }, 0xff00ff);
+            try self.notify(" saved: {s}{s} in {d:.1}ms", .{ path, basename, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
 
@@ -1418,7 +1423,7 @@ pub const Context = struct {
             jwriter.deinit();
             out_file.close();
             log.err("writeToJson failed ! {}", .{err});
-            try self.notify("save failed!: {}", .{err}, 0xff0000ff);
+            try self.notify("save failed!: {}", .{err}, colors.bad);
         }
     }
 
@@ -1448,18 +1453,18 @@ pub const Context = struct {
                 defer bwr.flush() catch {};
                 self.writeToJson(bwr.writer()) catch |err| {
                     log.err("writeToJson failed ! {}", .{err});
-                    try self.notify("Autosave failed!: {}", .{err}, 0xff0000ff);
+                    try self.notify("Autosave failed!: {}", .{err}, colors.bad);
                 };
             } else |err| {
                 log.err("Autosave failed with error {}", .{err});
-                try self.notify("Autosave failed!: {}", .{err}, 0xff0000ff);
+                try self.notify("Autosave failed!: {}", .{err}, colors.bad);
             }
-            try self.notify("Autosaved: {s}", .{basename}, 0x00ff00ff);
+            try self.notify("Autosaved: {s}", .{basename}, colors.good);
         }
         if (win.isBindState(self.config.keys.save.b, .rising)) {
             if (self.loaded_map_name) |basename| {
                 self.saveAndNotify(basename, self.loaded_map_path orelse "") catch |err| {
-                    try self.notify("Failed saving map: {!}", .{err}, 0xff0000ff);
+                    try self.notify("Failed saving map: {!}", .{err}, colors.bad);
                 };
             } else {
                 try async_util.SdlFileData.spawn(self.alloc, &self.async_asset_load, .save_map);
@@ -1483,7 +1488,7 @@ pub const Context = struct {
                         &self.groups,
                         null,
                     )) {
-                        try self.notify("Exported map to vmf", .{}, 0x00ff00ff);
+                        try self.notify("Exported map to vmf", .{}, colors.good);
 
                         try async_util.MapCompile.spawn(self.alloc, &self.async_asset_load, .{
                             .vmf = "dump.vmf",
@@ -1496,10 +1501,10 @@ pub const Context = struct {
                             .tmpdir = self.game_conf.mapbuilder.tmp_dir,
                         });
                     } else |err| {
-                        try self.notify("Failed exporting map to vmf {!}", .{err}, 0xff0000ff);
+                        try self.notify("Failed exporting map to vmf {!}", .{err}, colors.bad);
                     }
                 } else |err| {
-                    try self.notify("Failed saving map: {!}", .{err}, 0xff0000ff);
+                    try self.notify("Failed saving map: {!}", .{err}, colors.bad);
                 }
             }
         }
@@ -1645,7 +1650,7 @@ pub const LoadCtx = struct {
         }
         self.timer.reset();
         self.win.pumpEvents(.poll);
-        self.draw.begin(0x678caaff, self.win.screen_dimensions.toF()) catch return;
+        self.draw.begin(colors.splash_clear, self.win.screen_dimensions.toF()) catch return;
         //self.draw.text(.{ .x = 0, .y = 0 }, message, &self.font.font, 100, 0xffffffff);
         const perc: f32 = @as(f32, @floatFromInt(self.cb_count)) / @as(f32, @floatFromInt(self.expected_cb));
         self.drawSplash(perc, message);
@@ -1672,7 +1677,7 @@ pub const LoadCtx = struct {
             .left,
         );
         const p = @min(1, perc);
-        self.draw.rect(pbar.split(.vertical, pbar.w * p)[0], 0xf7a41dff);
+        self.draw.rect(pbar.split(.vertical, pbar.w * p)[0], colors.progress);
     }
 
     pub fn loadedSplash(self: *@This(), end: bool) !void {
@@ -1689,7 +1694,7 @@ pub const LoadCtx = struct {
             });
             graph.c.glEnable(graph.c.GL_BLEND);
             //graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
-            self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), 0x88);
+            self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
             self.drawSplash(1.0, fbs.getWritten());
             if (end)
                 self.draw_splash = false;

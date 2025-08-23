@@ -14,6 +14,8 @@ const label = guis.label;
 const async_util = @import("../async.zig");
 const VisGroup = @import("../visgroup.zig");
 const Config = @import("../config.zig");
+const Layer = @import("../layer.zig");
+
 pub const PauseWindow = struct {
     const Buttons = enum {
         unpause,
@@ -50,12 +52,15 @@ pub const PauseWindow = struct {
 
     tab_index: usize = 0,
 
+    layer_widget: Layer.GuiWidget,
+
     pub fn create(gui: *Gui, editor: *Context, app_cwd: std.fs.Dir) !*PauseWindow {
         const self = gui.create(@This());
         self.* = .{
             .area = iArea.init(gui, Rec(0, 0, 0, 0)),
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
+            .layer_widget = Layer.GuiWidget.init(&editor.layers),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
         };
         self.area.draw_fn = &draw;
@@ -166,7 +171,9 @@ pub const PauseWindow = struct {
         const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "visgroup")) {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
-            buildVisGroups(self, gui, vt, sp2[0]);
+            self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
+
+            //buildVisGroups(self, gui, vt, sp2[0]);
 
             var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
 
