@@ -603,30 +603,6 @@ pub const Context = struct {
     }
 
     pub fn rebuildAutoVis(self: *Self) !void {
-        var timer = try std.time.Timer.start();
-        defer std.debug.print("auto vis build in {d} ms\n", .{timer.read() / std.time.ns_per_ms});
-        //TODO This is slow, some potential optimiziations:
-        //
-        //Worst case: hl2_amalgamated.ratmap, ReleaseSafe, rebuilding takes ~ 250 ms
-        //
-        // let old = last_build_disabled_set
-        // let new = this_disabled
-        // if new is subset of old
-        //  only iterate (.autovis_invisible) // Selection has been narrowed
-        //
-        //The string comparisons are the slowest part.
-        //
-        //create a cache_class_map
-        //if get_class  and entity
-        //  maps entity.class to a bitmask of autovis
-        //
-        //  rather than checking n disabled, 1 hashmap lookup and bit comparison
-        //
-        //Strings such as class should probably be replaced with a numeric for faster hashing
-        //
-        //Same can be done with vpk_ids
-        //
-
         var get_class = false;
         var get_texture = false;
         var get_model = false;
@@ -648,10 +624,6 @@ pub const Context = struct {
         var groups_hidden = std.AutoHashMap(ecs.Groups.GroupId, void).init(self.frame_arena.allocator());
 
         var num_changed: usize = 0;
-
-        var check_match_time: u64 = 0;
-        var check_match_timer = try std.time.Timer.start();
-        defer std.debug.print("CHECK TIME {d} ms\n", .{check_match_time / std.time.ns_per_ms});
 
         var it = self.ecs.iterator(.bounding_box);
         const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted });
@@ -706,8 +678,6 @@ pub const Context = struct {
                     is_hidden = true;
             }
 
-            check_match_timer.reset();
-
             if (!is_hidden) {
                 check_disabled: for (disabled) |dis| {
                     if (newvis.checkMatch(dis, null, texture, null)) {
@@ -717,10 +687,12 @@ pub const Context = struct {
                 }
             }
 
-            if (is_hidden)
+            if (is_hidden) {
                 self.ecs.attachComponent(it.i, .autovis_invisible, .{}) catch {};
-
-            check_match_time += check_match_timer.read();
+                if (self.groups.getGroup(it.i)) |group_id| {
+                    try groups_hidden.put(group_id, {});
+                }
+            }
 
             if (is_hidden != was_hidden) {
                 num_changed += 1;
@@ -729,12 +701,6 @@ pub const Context = struct {
                         try s_ptr.removeFromMeshMap(it.i, self);
                     } else {
                         try s_ptr.rebuild(it.i, self);
-                    }
-                }
-
-                if (is_hidden) {
-                    if (self.groups.getGroup(it.i)) |group_id| {
-                        try groups_hidden.put(group_id, {});
                     }
                 }
             }
@@ -750,7 +716,6 @@ pub const Context = struct {
                 }
             }
         }
-        std.debug.print("Num changed {d}\n", .{num_changed});
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
