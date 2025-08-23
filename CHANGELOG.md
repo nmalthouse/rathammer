@@ -4,3 +4,4 @@
 * Display correct uv's while doing a face translate
 * Add option to compile with a http version checker
 * Set window title to map name on open. Fix segfault with sdl set window title.
+* fix combo search and scroll mismatch

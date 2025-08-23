@@ -22,11 +22,11 @@ const Wg = guis.Widget;
 const gridutil = @import("grid.zig");
 const toolutil = @import("tool_common.zig");
 
-pub usingnamespace @import("tools/cube_draw.zig");
-pub usingnamespace @import("tools/texture.zig");
-pub usingnamespace @import("tools/translate.zig");
-pub usingnamespace @import("tools/clipping.zig");
-pub usingnamespace @import("tools/vertex.zig");
+pub const CubeDraw = @import("tools/cube_draw.zig").CubeDraw;
+pub const TextureTool = @import("tools/texture.zig").TextureTool;
+pub const Translate = @import("tools/translate.zig").Translate;
+pub const Clipping = @import("tools/clipping.zig").Clipping;
+pub const VertexTranslate = @import("tools/vertex.zig").VertexTranslate;
 
 pub const Inspector = @import("windows/inspector.zig").InspectorWindow;
 pub const ToolRegistry = VtableReg(i3DTool);

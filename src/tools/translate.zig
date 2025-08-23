@@ -19,24 +19,23 @@ const edit = @import("../editor.zig");
 const Editor = edit.Context;
 const toolcom = @import("../tool_common.zig");
 
-pub const DrawCustomCtx = struct {
-    verts: []const Vec3,
-    quat: graph.za.Quat,
-    origin: Vec3,
-
-    pub fn vertOffset(s: @This(), vec: Vec3, side_index: u32, vert_index: u32) Vec3 {
-        _ = side_index;
-        _ = vert_index;
-        const v = vec.sub(s.origin);
-        const rot = s.quat.rotateVec(v);
-
-        const world = rot.add(s.origin).sub(vec);
-        return world;
-    }
-};
-
 pub const Translate = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
+    pub const DrawCustomCtx = struct {
+        verts: []const Vec3,
+        quat: graph.za.Quat,
+        origin: Vec3,
+
+        pub fn vertOffset(s: @This(), vec: Vec3, side_index: u32, vert_index: u32) Vec3 {
+            _ = side_index;
+            _ = vert_index;
+            const v = vec.sub(s.origin);
+            const rot = s.quat.rotateVec(v);
+
+            const world = rot.add(s.origin).sub(vec);
+            return world;
+        }
+    };
     vt: i3DTool,
 
     gizmo_rotation: gizmo2.Gizmo,
