@@ -69,9 +69,16 @@ pub const GuiWidget = struct {
         const bot_count = 3;
         const bot_h = item_h * bot_count;
         const sp = area.split(.horizontal, area.h - bot_h);
-        var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
+        {
+            var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
 
-        vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{}));
-        _ = self;
+            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{}));
+        }
+        {
+            var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[0] };
+            for (self.ctx.layers.items) |layer| {
+                vt.addChildOpt(gui, win, Wg.Text.build(gui, ly.getArea(), "{s}", .{layer.name}));
+            }
+        }
     }
 };

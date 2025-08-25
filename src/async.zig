@@ -337,7 +337,7 @@ pub const CheckVersionHttp_INCOMPLETE = struct {
             defer client.deinit();
             var header_buf: [1024]u8 = undefined;
 
-            const uri = "http://localhost:8000/version";
+            const uri = "http://nmalthouse.net:80/api/version";
 
             var req = try client.open(.GET, try std.Uri.parse(uri), .{ .server_header_buffer = &header_buf });
             defer req.deinit();

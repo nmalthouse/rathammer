@@ -456,8 +456,9 @@ pub const Context = struct {
         try self.autovis.add(.{ .name = "trigger", .filter = "trigger_", .kind = .class, .match = .startsWith });
         try self.autovis.add(.{ .name = "tools", .filter = "materials/tools", .kind = .texture, .match = .startsWith });
         try self.autovis.add(.{ .name = "func", .filter = "func", .kind = .class, .match = .startsWith });
-        try self.autovis.add(.{ .name = "models", .filter = "", .kind = .model, .match = .startsWith });
-        try self.autovis.add(.{ .name = "world", .filter = "", .kind = .class, .match = .startsWith, .invert = true });
+        try self.autovis.add(.{ .name = "skybox", .filter = "skybox.vmt", .kind = .texture, .match = .endsWith });
+        //try self.autovis.add(.{ .name = "models", .filter = "", .kind = .model, .match = .startsWith });
+        //try self.autovis.add(.{ .name = "world", .filter = "", .kind = .class, .match = .startsWith, .invert = true });
 
         if (comptime compile_conf.http_version_check) {
             if (self.config.enable_version_check and args.no_version_check == null) {
