@@ -8,7 +8,7 @@ RATOUT=distrib/appimagebuild
 rm -rf "$RATOUT"
 mkdir "$RATOUT"
 
-zig build -Doptimize=ReleaseSafe -Dcpu=x86_64 -Dcommit_hash=$(git rev-parse HEAD)
+zig build -Doptimize=ReleaseSafe -Dcpu=x86_64 -Dcommit_hash=$(git rev-parse HEAD) -Dhttp_version_check=true
 
 cp zig-out/bin/rathammer "$RATOUT"
 cp zig-out/bin/jsonmaptovmf "$RATOUT"
