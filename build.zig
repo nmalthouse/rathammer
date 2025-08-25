@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
     opts.addOption(bool, "time_profile", b.option(bool, "profile", "profile the time loading takes") orelse false);
     opts.addOption(bool, "dump_vpk", b.option(bool, "dumpvpk", "dump all vpk entries to text file") orelse false);
     opts.addOption(bool, "http_version_check", b.option(bool, "http_version_check", "Enable support for http version check") orelse false);
+    opts.addOption(?[]const u8, "http_version_check_url", b.option([]const u8, "http_version_check_url", "override url for version check") orelse null);
     opts.addOption([]const u8, "commit_hash", b.option([]const u8, "commit_hash", "Embed git hash in build") orelse "unspecified");
     hammer_exe.root_module.addOptions("config", opts);
 

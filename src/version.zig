@@ -1,8 +1,13 @@
 //Ensure this gets updated with build.zig.zon version
 const version_private = "0.0.5-pre";
+const builtin = @import("builtin");
 
 const std = @import("std");
 
+const sp = " ";
+pub const version_string = @tagName(builtin.mode) ++ sp ++
+    @tagName(builtin.target.os.tag) ++ sp ++
+    @tagName(builtin.target.cpu.arch) ++ sp ++ version_private;
 pub const version = blk: {
     const parsed = parseSemver(version_private) catch @compileError("Invalid sem ver: " ++ version_private);
     _ = parsed;

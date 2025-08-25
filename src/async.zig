@@ -337,9 +337,14 @@ pub const CheckVersionHttp_INCOMPLETE = struct {
             defer client.deinit();
             var header_buf: [1024]u8 = undefined;
 
-            const uri = "http://nmalthouse.net:80/api/version";
+            const default_uri = "http://nmalthouse.net:80/api/version";
+            const uri = compile_conf.http_version_check_url orelse default_uri;
 
-            var req = try client.open(.GET, try std.Uri.parse(uri), .{ .server_header_buffer = &header_buf });
+            var req = try client.open(.GET, try std.Uri.parse(uri), .{ .server_header_buffer = &header_buf, .headers = .{
+                .user_agent = .{
+                    .override = "zig " ++ version.version_string,
+                },
+            } });
             defer req.deinit();
 
             try req.send();
