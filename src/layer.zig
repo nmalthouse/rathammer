@@ -14,6 +14,8 @@ const Layer = struct {
     color: u32,
     name: []const u8,
     id: Id,
+
+    enabled: bool = true,
 };
 
 const log = std.log.scoped(.layer);
@@ -30,6 +32,8 @@ pub const Context = struct {
 
     layer_counter: Id = 0,
 
+    /// Bitmask that can be directly tested for visibility.
+    /// Toggling a parent layers "enabled" field doesn't affect child's "enabled" flag but does affect the 'disabled' state
     disabled: std.DynamicBitSetUnmanaged = .{},
 
     pub fn init(alloc: std.mem.Allocator) !Self {
@@ -107,8 +111,13 @@ pub const Context = struct {
         try wr.beginObject();
         try wr.objectField("name");
         try wr.write(layer.name);
+
         try wr.objectField("color");
         try wr.write(layer.color);
+
+        try wr.objectField("enabled");
+        try wr.write(layer.enabled);
+
         try wr.objectField("id");
         try wr.write(layer.id);
         try wr.objectField("children");
@@ -252,7 +261,8 @@ pub const GuiWidget = struct {
 
         var list = std.ArrayList(LayTemp).init(gui.alloc);
         defer list.deinit();
-        countNodes(self.ctx.root, &list, 0) catch return;
+        list.append(.{ .ptr = self.ctx.root, .depth = 0 }) catch return;
+        countNodes(self.ctx.root, &list, 1) catch return;
         if (index >= list.items.len) return;
         const item_h = gui.style.config.default_item_h;
         var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = ar.area };
@@ -265,6 +275,7 @@ pub const GuiWidget = struct {
                 .selected = (self.selected_ptr.* == item.ptr.id),
                 .id = item.ptr.id,
                 .parent = self,
+                .enabled = item.ptr.enabled,
             }));
         }
     }
@@ -306,6 +317,7 @@ const LayerWidget = struct {
         id: Id,
         selected: bool,
         parent: *GuiWidget,
+        enabled: bool,
     };
     vt: iArea,
 
@@ -322,7 +334,15 @@ const LayerWidget = struct {
         self.vt.draw_fn = &draw;
         self.vt.onclick = &onclick;
 
-        self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, area, opts.name, 0x0));
+        const sp = area.split(.vertical, area.h);
+
+        self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, sp[0], "", .{
+            .style = .check,
+            .cb_fn = check_cb,
+            .cb_vt = &self.vt,
+            .user_id = opts.id,
+        }, opts.enabled));
+        self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
         return &self.vt;
     }
@@ -339,6 +359,15 @@ const LayerWidget = struct {
         gui.alloc.destroy(self);
     }
 
+    pub fn check_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        if (self.opts.parent.ctx.getLayerFromId(@intCast(uid))) |lay| {
+            lay.enabled = checked;
+            _ = gui;
+            //vt.dirty(gui);
+        }
+    }
+
     pub fn onclick(vt: *iArea, cb: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         switch (cb.btn) {
@@ -349,7 +378,8 @@ const LayerWidget = struct {
             },
             .right => {
                 const bi = guis.Widget.BtnContextWindow.buttonId;
-                const r_win = guis.Widget.BtnContextWindow.create(cb.gui, cb.pos, .{
+                const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
+                const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
                         .{ bi("cancel"), "Cancel" },
                         .{ bi("move_selected"), "Move selected to layer" },
