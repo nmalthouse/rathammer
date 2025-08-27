@@ -545,6 +545,10 @@ pub const Context = struct {
         if (self.getComponent(duped, .entity)) |new_ent| {
             try new_ent.setClass(self, new_ent.class, duped);
         }
+        //a layer of 0 is implied
+        if (self.edit_state.selected_layer != 0) {
+            self.putComponent(duped, .layer, .{ .id = self.edit_state.selected_layer });
+        }
         return duped;
     }
 
