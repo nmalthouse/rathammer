@@ -75,6 +75,23 @@ pub const Context = struct {
         return lay;
     }
 
+    pub fn newLayer(self: *Self, name: []const u8, parent: Id) !*Layer {
+        const lay = self.getLayerFromId(parent) orelse return error.invalidParent;
+        const new_id = self.newLayerId();
+        const new = try createLayer(self.alloc, new_id, name);
+        try self.map.put(new_id, new);
+        try self.layers.append(self.alloc, new);
+        try lay.children.append(self.alloc, new);
+        return new;
+    }
+
+    pub fn setName(self: *Self, id: Id, name: []const u8) !void {
+        if (self.getLayerFromId(id)) |lay| {
+            self.alloc.free(lay.name);
+            lay.name = try self.alloc.dupe(u8, name);
+        }
+    }
+
     pub fn isDisabled(self: *Self, id: Id) bool {
         if (id >= self.disabled.bit_length) return false;
         return self.disabled.isSet(id);
@@ -124,7 +141,7 @@ pub const Context = struct {
 
         const new = try createLayer(self.alloc, layer.id, layer.name);
         try self.layers.append(self.alloc, new);
-        try self.map.put(0, new);
+        try self.map.put(layer.id, new);
 
         try parent.children.append(self.alloc, new);
 
@@ -139,29 +156,16 @@ pub const Context = struct {
                 return child.id;
         }
 
-        const new_id = self.newLayerId();
-        const new = try createLayer(self.alloc, new_id, name);
-
-        try self.map.put(new_id, new);
-        try self.layers.append(self.alloc, new);
-        return new_id;
+        return (try self.newLayer(name, self.root.id)).id;
     }
 
     pub fn buildMappingFromVmf(self: *Self, vmf_visgroups: []const vmf.VisGroup, parent: *Layer) !void {
         for (vmf_visgroups) |gr| {
             const vis_group_id: u8 = if (gr.visgroupid > MAX_VIS_GROUP_VMF or gr.visgroupid < 0) continue else @intCast(gr.visgroupid);
             if (!self.vmf_id_mapping.contains(vis_group_id)) {
-                const new_id = self.newLayerId();
-                if (new_id > MAX_VIS_GROUP_VMF)
-                    return error.tooManyVisgroups;
-                try self.vmf_id_mapping.put(vis_group_id, new_id);
+                const new = try self.newLayer(gr.name, parent.id);
 
-                const new = try createLayer(self.alloc, new_id, gr.name);
-
-                try self.layers.append(self.alloc, new);
-                try self.map.put(new_id, new);
-
-                try parent.children.append(self.alloc, new);
+                try self.vmf_id_mapping.put(vis_group_id, new.id);
                 //std.debug.print("PUtting visgroup {s}\n", .{gr.name});
                 try self.buildMappingFromVmf(gr.visgroup, new);
             } else {
@@ -199,6 +203,7 @@ const iWindow = guis.iWindow;
 const iArea = guis.iArea;
 pub const GuiWidget = struct {
     const Self = @This();
+    const bi = guis.Widget.BtnContextWindow.buttonId;
     const LayTemp = struct {
         ptr: *Layer,
         depth: Id,
@@ -220,7 +225,17 @@ pub const GuiWidget = struct {
         {
             var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
 
-            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{}));
+            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{
+                .cb_vt = &self.vt,
+                .cb_fn = btnCb,
+                .id = bi("new_group"),
+            }));
+            vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{
+                .commit_vt = &self.vt,
+                .init_string = if (self.ctx.getLayerFromId(self.selected_ptr.*)) |l| l.name else "",
+                .commit_cb = textCb,
+                .user_id = bi("set_name"),
+            }));
         }
 
         vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
@@ -251,6 +266,28 @@ pub const GuiWidget = struct {
                 .id = item.ptr.id,
                 .parent = self,
             }));
+        }
+    }
+
+    fn textCb(vt: *iArea, _: *Gui, new: []const u8, id: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (id) {
+            bi("set_name") => {
+                self.ctx.setName(self.selected_ptr.*, new) catch {};
+            },
+            else => {},
+        }
+    }
+
+    fn btnCb(vt: *iArea, id: guis.Uid, _: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (id) {
+            bi("new_group") => {
+                _ = self.ctx.newLayer("new layer", self.selected_ptr.*) catch {};
+
+                win.needs_rebuild = true;
+            },
+            else => {},
         }
     }
 
@@ -292,8 +329,7 @@ const LayerWidget = struct {
 
     pub fn draw(vt: *iArea, d: guis.DrawState) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        const col: u32 = if (self.opts.selected) 0x0000ffff else 0xff0000ff;
-        //d.style.config.colors.background;
+        const col: u32 = if (self.opts.selected) 0x6097dbff else d.style.config.colors.background;
         d.ctx.rect(vt.area, col);
     }
 
@@ -315,6 +351,7 @@ const LayerWidget = struct {
                 const bi = guis.Widget.BtnContextWindow.buttonId;
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, cb.pos, .{
                     .buttons = &.{
+                        .{ bi("cancel"), "Cancel" },
                         .{ bi("move_selected"), "Move selected to layer" },
                         .{ bi("delete"), "Delete layer" },
                         .{ bi("select_all"), "Select contained" },
