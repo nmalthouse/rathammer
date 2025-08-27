@@ -526,6 +526,20 @@ pub const Context = struct {
         return self.ecs.getPtr(index, comp) catch null;
     }
 
+    pub fn putComponent(self: *Self, index: EcsT.Id, comptime comp: EcsT.Components, val: EcsT.Fields[@intFromEnum(comp)].ftype) void {
+        const ent = self.ecs.getEntity(index) catch return;
+        const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
+        if (self.ecs.intersects(index, vis_mask)) return;
+        if (!ent.isSet(@intFromEnum(comp))) {
+            self.ecs.attach(index, comp, val) catch return;
+            return;
+        }
+
+        if (self.ecs.getPtr(index, comp) catch null) |ptr| {
+            ptr.* = val;
+        }
+    }
+
     pub fn dupeEntity(self: *Self, ent: EcsT.Id) !EcsT.Id {
         const duped = try self.ecs.dupeEntity(ent);
         if (self.getComponent(duped, .entity)) |new_ent| {

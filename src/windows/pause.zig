@@ -59,7 +59,7 @@ pub const PauseWindow = struct {
             .area = iArea.init(gui, Rec(0, 0, 0, 0)),
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
-            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer),
+            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
         };
         self.area.draw_fn = &draw;

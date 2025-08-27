@@ -3,6 +3,7 @@ const ArrayList = std.ArrayListUnmanaged;
 const vmf = @import("vmf.zig");
 const ROOT_LAYER_NAME = "world";
 const json_map = @import("json_map.zig");
+const edit = @import("editor.zig");
 
 /// Rathammer supports up to 2**16 visgroups but hammer does not
 pub const MAX_VIS_GROUP_VMF = 128;
@@ -218,12 +219,13 @@ pub const GuiWidget = struct {
         depth: Id,
     };
     ctx: *Context,
+    editor: *edit.Context,
     vt: iArea = undefined,
 
     selected_ptr: *Id,
 
-    pub fn init(ctx: *Context, selected_ptr: *Id) Self {
-        return .{ .ctx = ctx, .selected_ptr = selected_ptr };
+    pub fn init(ctx: *Context, selected_ptr: *Id, editor: *edit.Context) Self {
+        return .{ .ctx = ctx, .selected_ptr = selected_ptr, .editor = editor };
     }
 
     pub fn build(self: *Self, gui: *Gui, win: *iWindow, vt: *iArea, area: graph.Rect) !void {
@@ -310,6 +312,11 @@ pub const GuiWidget = struct {
     }
 };
 
+/// How will entity groups and layers be handled?
+/// Owner entitie's layers have no effect on owned entities layer.
+///
+/// So you could put half a func_detail in one layer, half in another.
+///
 const LayerWidget = struct {
     const Opts = struct {
         name: []const u8,
@@ -364,7 +371,6 @@ const LayerWidget = struct {
         if (self.opts.parent.ctx.getLayerFromId(@intCast(uid))) |lay| {
             lay.enabled = checked;
             _ = gui;
-            //vt.dirty(gui);
         }
     }
 
@@ -381,12 +387,12 @@ const LayerWidget = struct {
                 const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
-                        .{ bi("cancel"), "Cancel" },
+                        .{ bi("cancel"), "Cancel !indicates placeholder" },
                         .{ bi("move_selected"), "Move selected to layer" },
-                        .{ bi("delete"), "Delete layer" },
-                        .{ bi("select_all"), "Select contained" },
-                        .{ bi("duplicate"), "Duplicate layer" },
-                        .{ bi("add_child"), "add child group" },
+                        .{ bi("delete"), "!Delete layer" },
+                        .{ bi("select_all"), "Add to selection" },
+                        .{ bi("duplicate"), "!Duplicate layer" },
+                        .{ bi("add_child"), "!add child group" },
                     },
                     .btn_cb = rightClickMenuBtn,
                     .btn_vt = vt,
@@ -398,13 +404,27 @@ const LayerWidget = struct {
 
     fn rightClickMenuBtn(vt: *iArea, id: guis.Uid, gui: *Gui, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        _ = self;
         vt.dirty(gui);
         const bi = guis.Widget.BtnContextWindow.buttonId;
-        _ = bi;
         switch (id) {
-            //bi("copy") => setClipboard(self.codepoints.allocator, self.getSelectionSlice()) catch return,
-            //bi("paste") => self.paste() catch return,
+            bi("select_all") => {
+                const ed = self.opts.parent.editor;
+                ed.selection.setToMulti();
+
+                var it = ed.editIterator(.layer);
+                while (it.next()) |item| {
+                    if (item.id == self.opts.id) {
+                        ed.selection.tryAddMulti(it.i) catch return;
+                    }
+                }
+            },
+            bi("move_selected") => {
+                const ed = self.opts.parent.editor;
+                const slice = ed.selection.getSlice();
+                for (slice) |sel| {
+                    ed.putComponent(sel, .layer, .{ .id = self.opts.id });
+                }
+            },
             else => {},
         }
     }

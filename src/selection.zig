@@ -102,6 +102,7 @@ pub fn tryRemoveMulti(self: *Self, id: Id) void {
 }
 
 pub fn tryAddMulti(self: *Self, id: Id) !void {
+    //TODO no n^2 please, thanks.
     if (std.mem.indexOfScalar(Id, self.multi.items, id)) |_| {
         return;
     }
