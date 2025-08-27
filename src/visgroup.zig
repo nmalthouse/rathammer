@@ -9,15 +9,6 @@ pub const VisGroupId = u8;
 pub const MAX_VIS_GROUP = 128;
 pub const BitSetT = std.bit_set.StaticBitSet(MAX_VIS_GROUP);
 
-pub const AutoVis = enum {
-    world,
-    point_ent,
-    brush_ent,
-    trigger,
-    prop,
-    func_detail,
-};
-
 pub const Group = struct {
     name: []const u8,
     color: u32,

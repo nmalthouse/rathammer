@@ -31,7 +31,6 @@ const util = @import("util.zig");
 const Autosaver = @import("autosave.zig").Autosaver;
 const NotifyCtx = @import("notify.zig").NotifyCtx;
 const Selection = @import("selection.zig");
-const VisGroups = @import("visgroup.zig");
 const newvis = @import("newvis.zig");
 const Layer = @import("layer.zig");
 const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
@@ -137,7 +136,6 @@ pub const Context = struct {
     /// Used to track tool txtures, TODO turn this into transparent_map, sticking all $alphatest and $translucent in here for
     /// alpha draw ordering
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
-    visgroups: VisGroups,
     autovis: newvis.VisContext,
     layers: Layer.Context,
 
@@ -344,7 +342,6 @@ pub const Context = struct {
             .csgctx = try csg.Context.init(alloc),
             .clipctx = clipper.ClipCtx.init(alloc),
             .vpkctx = try vpk.Context.init(alloc),
-            .visgroups = VisGroups.init(alloc),
             .autovis = newvis.VisContext.init(alloc),
             .layers = try Layer.Context.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
@@ -471,7 +468,6 @@ pub const Context = struct {
         self.asset.deinit();
 
         self.classtrack.deinit();
-        self.visgroups.deinit();
         self.autovis.deinit();
         self.layers.deinit();
         self.tools.deinit();
@@ -592,11 +588,9 @@ pub const Context = struct {
         }
         //IF
 
-        var it = self.ecs.iterator(.editor_info);
-        while (it.next()) |info| {
-            var copy = self.visgroups.disabled;
-            copy.setIntersection(info.vis_mask);
-            if (copy.findFirstSet() != null) {
+        var it = self.ecs.iterator(.layer);
+        while (it.next()) |lay| {
+            if (self.layers.isDisabled(lay.id)) {
                 self.ecs.attachComponent(it.i, .invisible, .{}) catch {}; // We discard error incase it is already attached
                 if (try self.ecs.getOptPtr(it.i, .solid)) |solid|
                     try solid.removeFromMeshMap(it.i, self);
@@ -747,7 +741,7 @@ pub const Context = struct {
             });
 
             try jwr.objectField("visgroup");
-            try self.visgroups.writeToJson(&jwr);
+            try self.layers.writeToJson(&jwr);
 
             try jwr.objectField("extra");
             {
@@ -922,10 +916,13 @@ pub const Context = struct {
 
     ///Given a csg defined solid, convert to mesh and store.
     pub fn putSolidFromVmf(self: *Self, solid: vmf.Solid, group_id: ?GroupId) !void {
-        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.visgroups.getOrPutTopLevelGroup(n) else null;
-        const vis_mask = if (vis_override) |vo| self.visgroups.getMask(&.{vo}) else try self.visgroups.getMaskFromEditorInfo(&solid.editor);
+        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
+        //const vis_mask = if (vis_override) |vo| self.layers.getMask(&.{vo}) else try self.layers.getMaskFromEditorInfo(&solid.editor);
+        const vis_id = vis_override orelse self.layers.getIdFromEditorInfo(&solid.editor);
         const new = try self.ecs.createEntity();
-        try self.ecs.attach(new, .editor_info, .{ .vis_mask = vis_mask });
+        if (vis_id) |vm| {
+            try self.ecs.attach(new, .layer, .{ .id = vm });
+        }
         const newsolid = try self.csgctx.genMesh2(
             solid.side,
             self.alloc,
@@ -1023,7 +1020,6 @@ pub const Context = struct {
 
     pub fn initNewMap(self: *Self) !void {
         try self.skybox.loadSky(try self.storeString("sky_day01_01"), &self.vpkctx);
-        try self.visgroups.putDefaultVisGroups();
         self.has_loaded_map = true;
     }
 
@@ -1108,7 +1104,6 @@ pub const Context = struct {
                 }
             } else |_| {}
         }
-        //try self.visgroups.putDefaultVisGroups();
     }
 
     fn loadJsonFile(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
@@ -1157,7 +1152,7 @@ pub const Context = struct {
             } else |_| {} //This data is not essential to parse
         }
 
-        try self.visgroups.insertVisgroupsFromJson(parsed.value.visgroup);
+        try self.layers.insertVisgroupsFromJson(parsed.value.visgroup);
 
         loadctx.cb("Building meshes");
         try self.rebuildAllDependentState();
@@ -1166,7 +1161,7 @@ pub const Context = struct {
     //TODO write a vmf -> json utility like jsonToVmf.zig
     //Then, only have a single function to load serialized data into engine "loadJson"
     fn loadVmf(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
-        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.visgroups.getOrPutTopLevelGroup(n) else null;
+        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
         self.has_loaded_map = true;
         if (false and self.has_loaded_map) {
             log.err("Map already loaded", .{});
@@ -1186,7 +1181,7 @@ pub const Context = struct {
         try self.setMapName(filename);
         const vmf_ = try vdf.fromValue(vmf.Vmf, &.{ .obj = &obj.value }, aa.allocator(), null);
         if (vis_override == null)
-            try self.visgroups.buildMappingFromVmf(vmf_.visgroups, null);
+            try self.layers.buildMappingFromVmf(vmf_.visgroups.visgroup, self.layers.root);
         try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
         {
             loadctx.expected_cb = vmf_.world.solid.len + vmf_.entity.len + 10;
@@ -1199,8 +1194,10 @@ pub const Context = struct {
                 loadctx.printCb("ent generated {d} / {d}", .{ ei, vmf_.entity.len });
                 const new = try self.ecs.createEntity();
                 const group_id = if (ent.solid.len > 0) try self.groups.newGroup(new) else 0;
-                const vis_mask = if (vis_override) |vo| self.visgroups.getMask(&.{vo}) else try self.visgroups.getMaskFromEditorInfo(&ent.editor);
-                try self.ecs.attach(new, .editor_info, .{ .vis_mask = vis_mask });
+                const vis_id = vis_override orelse self.layers.getIdFromEditorInfo(&ent.editor);
+                if (vis_id) |vo| {
+                    try self.ecs.attach(new, .layer, .{ .id = vo });
+                }
                 for (ent.solid) |solid|
                     try self.putSolidFromVmf(solid, group_id);
                 {

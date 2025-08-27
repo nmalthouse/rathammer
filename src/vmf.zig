@@ -7,7 +7,7 @@ pub const Vmf = struct {
     world: World = .{},
     entity: []const Entity = &.{},
     viewsettings: ViewSettings = .{},
-    visgroups: []const VisGroup = &.{},
+    visgroups: VisGroup = .{},
 };
 
 pub const VersionInfo = struct {

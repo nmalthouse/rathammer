@@ -13,6 +13,7 @@ const thread_pool = @import("thread_pool.zig");
 const Editor = @import("editor.zig").Context;
 const DrawCtx = graph.ImmediateDrawingContext;
 const VisGroups = @import("visgroup.zig");
+const layer = @import("layer.zig");
 const prim_gen = @import("primitive_gen.zig");
 const csg = @import("csg.zig");
 pub const SparseSet = graph.SparseSet;
@@ -49,9 +50,10 @@ pub const EcsT = graph.Ecs.Registry(&.{
 
     Comp("displacements", Displacements),
     Comp("key_values", KeyValues),
-    Comp("editor_info", EditorInfo),
+    //Comp("editor_info", EditorInfo),
     Comp("connections", Connections),
 
+    Comp("layer", Layer),
     Comp("autovis_invisible", EmptyT),
     Comp("invisible", EmptyT),
     Comp("deleted", EmptyT),
@@ -1600,6 +1602,14 @@ pub const EditorInfo = struct {
         if (mask_count != 2)
             @compileError("fix this lol");
         try jw.print("\"{x}_{x}\"", .{ self.vis_mask.masks[0], self.vis_mask.masks[1] });
+    }
+};
+
+pub const Layer = struct {
+    id: layer.Id = 0,
+
+    pub fn dupe(a: *@This(), _: anytype, _: anytype) !@This() {
+        return a.*;
     }
 };
 

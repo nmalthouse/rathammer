@@ -138,6 +138,10 @@ pub fn loadJson(
         outer: while (it.next()) |data| {
             if (std.mem.eql(u8, "id", data.key_ptr.*)) continue;
             if (std.mem.eql(u8, "owned_group", data.key_ptr.*)) continue;
+
+            //Deprecated
+            if (std.mem.eql(u8, "editor_info", data.key_ptr.*)) continue;
+
             inline for (ecs.EcsT.Fields, 0..) |field, f_i| {
                 if (std.mem.eql(u8, field.name, data.key_ptr.*)) {
                     const comp = try readComponentFromJson(ctx, data.value_ptr.*, field.ftype, vpkctx);
