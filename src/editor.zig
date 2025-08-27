@@ -224,6 +224,8 @@ pub const Context = struct {
         rmouse: ButtonState = .low,
         mpos: graph.Vec2f = undefined,
         inspector_pane_id: usize = 100000,
+
+        selected_layer: Layer.Id = 0,
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 

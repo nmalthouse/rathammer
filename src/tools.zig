@@ -438,6 +438,7 @@ pub const PlaceEntity = struct {
                     ._sprite = null,
                 });
                 try self.ecs.attach(new, .bounding_box, bb);
+                try self.ecs.attach(new, .layer, .{ .id = self.edit_state.selected_layer });
 
                 var kvs = ecs.KeyValues.init(self.alloc);
                 if (model_id) |mid| {

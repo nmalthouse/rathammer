@@ -325,6 +325,7 @@ pub const CubeDraw = struct {
                 }
                 try ed.ecs.attach(new, .solid, newsolid);
                 try ed.ecs.attach(new, .bounding_box, .{});
+                try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
                 const solid_ptr = try ed.ecs.getPtr(new, .solid);
                 try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
                 {

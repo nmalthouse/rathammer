@@ -12,7 +12,6 @@ const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const async_util = @import("../async.zig");
-const VisGroup = @import("../visgroup.zig");
 const Config = @import("../config.zig");
 const Layer = @import("../layer.zig");
 
@@ -60,7 +59,7 @@ pub const PauseWindow = struct {
             .area = iArea.init(gui, Rec(0, 0, 0, 0)),
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
-            .layer_widget = Layer.GuiWidget.init(&editor.layers),
+            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
         };
         self.area.draw_fn = &draw;
@@ -172,8 +171,6 @@ pub const PauseWindow = struct {
         if (eql(u8, tab, "visgroup")) {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
             self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
-
-            //buildVisGroups(self, gui, vt, sp2[0]);
 
             var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
 
@@ -410,7 +407,7 @@ pub const PauseWindow = struct {
 
 fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) void {
     const Helper = struct {
-        fn recur(vs: *VisGroup, vg: *VisGroup.Group, depth: usize, gui_: *Gui, vl: *guis.VerticalLayout, vt: *iArea, win: *iWindow) void {
+        fn recur(vs: void, vg: void.Group, depth: usize, gui_: *Gui, vl: *guis.VerticalLayout, vt: *iArea, win: *iWindow) void {
             vl.padding.left = @floatFromInt(depth * 20);
             const the_bool = !vs.disabled.isSet(vg.id);
 
@@ -446,7 +443,7 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) v
 
         fn commit_cb(user: *iArea, _: *Gui, val: bool, id: usize) void {
             const selfl: *PauseWindow = @alignCast(@fieldParentPtr("area", user));
-            if (id > VisGroup.MAX_VIS_GROUP) return;
+            if (id > 55) return;
             selfl.editor.visgroups.setValueCascade(@intCast(id), val);
             selfl.editor.rebuildVisGroups() catch return;
             selfl.vt.needs_rebuild = true;

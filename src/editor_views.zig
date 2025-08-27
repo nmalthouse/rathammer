@@ -16,7 +16,6 @@ const undo = @import("undo.zig");
 const tools = @import("tools.zig");
 const ecs = @import("ecs.zig");
 const eql = std.mem.eql;
-const VisGroup = @import("visgroup.zig");
 const Os9Gui = graph.Os9Gui;
 const Window = graph.SDL.Window;
 
@@ -503,6 +502,9 @@ pub fn draw3Dview(
         }
         if (self.draw_state.active_lights > 0) {
             mt.textFmt("Lights: {d}", .{self.draw_state.active_lights}, fh, col);
+        }
+        if (self.layers.getLayerFromId(self.edit_state.selected_layer)) |lay| {
+            mt.textFmt("Active layer: {s}", .{lay.name}, fh, col);
         }
         if (self.grid.isOne()) {
             mt.textFmt("grid: {d:.2}", .{self.grid.s.x()}, fh, col);

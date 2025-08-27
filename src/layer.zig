@@ -185,6 +185,10 @@ pub const Context = struct {
             self.printVis(child, depth + 2);
         }
     }
+
+    pub fn getLayerFromId(self: *const Self, id: Id) ?*Layer {
+        return self.map.get(id);
+    }
 };
 
 const graph = @import("graph");
@@ -195,10 +199,17 @@ const iWindow = guis.iWindow;
 const iArea = guis.iArea;
 pub const GuiWidget = struct {
     const Self = @This();
+    const LayTemp = struct {
+        ptr: *Layer,
+        depth: Id,
+    };
     ctx: *Context,
+    vt: iArea = undefined,
 
-    pub fn init(ctx: *Context) Self {
-        return .{ .ctx = ctx };
+    selected_ptr: *Id,
+
+    pub fn init(ctx: *Context, selected_ptr: *Id) Self {
+        return .{ .ctx = ctx, .selected_ptr = selected_ptr };
     }
 
     pub fn build(self: *Self, gui: *Gui, win: *iWindow, vt: *iArea, area: graph.Rect) !void {
@@ -212,19 +223,122 @@ pub const GuiWidget = struct {
             vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{}));
         }
 
-        {
-            var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[0] };
-            self.labelRecur(gui, win, &ly, vt, self.ctx.root);
-            //for (self.ctx.layers.items) |layer| {
-            //    vt.addChildOpt(gui, win, Wg.Text.build(gui, ly.getArea(), "{s}", .{layer.name}));
-            //}
+        vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
+            .build_cb = &buildList,
+            .build_vt = &self.vt,
+            .win = win,
+            .count = self.ctx.layers.items.len,
+            .item_h = gui.style.config.default_item_h,
+        }));
+    }
+
+    fn buildList(vt: *iArea, ar: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+
+        var list = std.ArrayList(LayTemp).init(gui.alloc);
+        defer list.deinit();
+        countNodes(self.ctx.root, &list, 0) catch return;
+        if (index >= list.items.len) return;
+        const item_h = gui.style.config.default_item_h;
+        var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = ar.area };
+        for (list.items[index..]) |item| {
+            const ar_p = ly.getArea() orelse continue;
+            const area = ar_p.split(.vertical, @as(f32, @floatFromInt(item.depth)) * item_h)[1];
+            ar.addChildOpt(gui, win, LayerWidget.build(gui, area, .{
+                .name = item.ptr.name,
+                .win = win,
+                .selected = (self.selected_ptr.* == item.ptr.id),
+                .id = item.ptr.id,
+                .parent = self,
+            }));
         }
     }
 
-    fn labelRecur(self: *Self, gui: *Gui, win: *iWindow, ly: anytype, vt: *iArea, lay: *Layer) void {
-        for (lay.children.items) |layer| {
-            vt.addChildOpt(gui, win, Wg.Text.build(gui, ly.getArea(), "{s}", .{layer.name}));
-            self.labelRecur(gui, win, ly, vt, layer);
+    fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), depth: Id) !void {
+        for (layer.children.items) |child| {
+            try list.append(.{ .ptr = child, .depth = depth });
+            try countNodes(child, list, depth + 1);
+        }
+    }
+};
+
+const LayerWidget = struct {
+    const Opts = struct {
+        name: []const u8,
+        win: *iWindow,
+        id: Id,
+        selected: bool,
+        parent: *GuiWidget,
+    };
+    vt: iArea,
+
+    opts: Opts,
+
+    pub fn build(gui: *Gui, area_o: ?graph.Rect, opts: Opts) ?*iArea {
+        const area = area_o orelse return null;
+        const self = gui.create(@This());
+        self.* = .{
+            .vt = iArea.init(gui, area),
+            .opts = opts,
+        };
+        self.vt.deinit_fn = &deinit;
+        self.vt.draw_fn = &draw;
+        self.vt.onclick = &onclick;
+
+        self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, area, opts.name, 0x0));
+
+        return &self.vt;
+    }
+
+    pub fn draw(vt: *iArea, d: guis.DrawState) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const col: u32 = if (self.opts.selected) 0x0000ffff else 0xff0000ff;
+        //d.style.config.colors.background;
+        d.ctx.rect(vt.area, col);
+    }
+
+    pub fn deinit(vt: *iArea, gui: *Gui, window: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = window;
+        gui.alloc.destroy(self);
+    }
+
+    pub fn onclick(vt: *iArea, cb: guis.MouseCbState, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (cb.btn) {
+            else => {},
+            .left => {
+                self.opts.parent.selected_ptr.* = self.opts.id;
+                win.needs_rebuild = true;
+            },
+            .right => {
+                const bi = guis.Widget.BtnContextWindow.buttonId;
+                const r_win = guis.Widget.BtnContextWindow.create(cb.gui, cb.pos, .{
+                    .buttons = &.{
+                        .{ bi("move_selected"), "Move selected to layer" },
+                        .{ bi("delete"), "Delete layer" },
+                        .{ bi("select_all"), "Select contained" },
+                        .{ bi("duplicate"), "Duplicate layer" },
+                        .{ bi("add_child"), "add child group" },
+                    },
+                    .btn_cb = rightClickMenuBtn,
+                    .btn_vt = vt,
+                }) catch return;
+                cb.gui.setTransientWindow(r_win);
+            },
+        }
+    }
+
+    fn rightClickMenuBtn(vt: *iArea, id: guis.Uid, gui: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+        vt.dirty(gui);
+        const bi = guis.Widget.BtnContextWindow.buttonId;
+        _ = bi;
+        switch (id) {
+            //bi("copy") => setClipboard(self.codepoints.allocator, self.getSelectionSlice()) catch return,
+            //bi("paste") => self.paste() catch return,
+            else => {},
         }
     }
 };

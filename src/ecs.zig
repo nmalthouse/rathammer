@@ -12,7 +12,6 @@ const meshutil = graph.meshutil;
 const thread_pool = @import("thread_pool.zig");
 const Editor = @import("editor.zig").Context;
 const DrawCtx = graph.ImmediateDrawingContext;
-const VisGroups = @import("visgroup.zig");
 const layer = @import("layer.zig");
 const prim_gen = @import("primitive_gen.zig");
 const csg = @import("csg.zig");
@@ -50,7 +49,6 @@ pub const EcsT = graph.Ecs.Registry(&.{
 
     Comp("displacements", Displacements),
     Comp("key_values", KeyValues),
-    //Comp("editor_info", EditorInfo),
     Comp("connections", Connections),
 
     Comp("layer", Layer),
@@ -1563,45 +1561,6 @@ pub const Displacement = struct {
         for (self._index.items) |ind| {
             try batch.indicies.append(ind + @as(u32, @intCast(offset)));
         }
-    }
-};
-
-/// An explination of how visgroups work in RatHammer.
-/// entities can optionally have a EditorInfo component attached.
-/// This vis_mask is a bitmask which indexes into the Editor.visgroups masks.
-///
-/// When the active visgroups change the editor iterates all editor_info components and attached an "invisible" component.
-/// Care must be taken to access components by editor.getComponent rather than the registery methods as
-/// getComponent returns null for invisible entites.
-/// The exact same mechanism is used for deletion of entities, a "deleted" component is attached and removed, rather than actually deleting things.
-pub const EditorInfo = struct {
-    //pub const ECS_NO_SERIAL = void;
-    vis_mask: VisGroups.BitSetT = VisGroups.BitSetT.initEmpty(),
-
-    pub fn dupe(a: *@This(), _: anytype, _: anytype) !@This() {
-        return a.*;
-    }
-
-    pub fn initFromJson(v: std.json.Value, _: anytype) !@This() {
-        if (v != .string) return error.invalidEditorInfo;
-
-        const str = v.string;
-        if (std.mem.indexOfScalar(u8, str, '_')) |ind| {
-            var bits = @This(){ .vis_mask = VisGroups.BitSetT.initEmpty() };
-            const first = try std.fmt.parseInt(VisGroups.BitSetT.MaskInt, str[0..ind], 16);
-            const second = try std.fmt.parseInt(VisGroups.BitSetT.MaskInt, str[ind + 1 ..], 16);
-            bits.vis_mask.masks[0] = first;
-            bits.vis_mask.masks[1] = second;
-            return bits;
-        }
-
-        return error.invalidEditorInfo;
-    }
-    pub fn serial(self: @This(), _: *Editor, jw: anytype, _: EcsT.Id) !void {
-        const mask_count = self.vis_mask.masks.len;
-        if (mask_count != 2)
-            @compileError("fix this lol");
-        try jw.print("\"{x}_{x}\"", .{ self.vis_mask.masks[0], self.vis_mask.masks[1] });
     }
 };
 

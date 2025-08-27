@@ -12,7 +12,6 @@ const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const async_util = @import("../async.zig");
-const VisGroup = @import("../visgroup.zig");
 pub const LaunchWindow = struct {
     const Buttons = enum {
         quit,
