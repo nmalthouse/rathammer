@@ -20,6 +20,10 @@ pub fn parseStruct(comptime T: type, endian: std.builtin.Endian, r: anytype) !T 
                     const int = try r.readInt(u32, endian);
                     return @bitCast(int);
                 },
+                f64 => {
+                    const int = try r.readInt(u64, endian);
+                    return @bitCast(int);
+                },
                 else => @compileError("bad float"),
             }
         },

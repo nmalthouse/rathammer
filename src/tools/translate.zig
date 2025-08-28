@@ -164,7 +164,7 @@ pub const Translate = struct {
                         const cc = util3d.cubeFromBounds(bounds[0], bounds[1]);
                         td.draw.cube(cc[0], cc[1], 0x2222_22dd);
                         if (editor.edit_state.rmouse == .rising) {
-                            var it = editor.ecs.iterator(.bounding_box);
+                            var it = editor.editIterator(.bounding_box);
                             while (it.next()) |item| {
                                 if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
                                     _ = editor.selection.put(it.i, editor) catch return;

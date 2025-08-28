@@ -74,7 +74,8 @@ pub const Snap = struct {
     }
 
     pub fn snap1(value: f32, snap: f32) f32 {
-        if (snap < 1) return value;
+        const MIN_SNAP = 0.001;
+        if (snap < MIN_SNAP) return value;
         return @round(value / snap) * snap;
     }
 

@@ -35,6 +35,43 @@ const Studiohdr_02 = struct {
     flags: u32,
 };
 
+const AnimDesc = struct {
+    bp: u32,
+    name_offset: u32,
+    fps: f32,
+    flags: u32,
+    num_frame: u32,
+    num_movement: u32,
+    movement_offset: u32,
+
+    padding: [6]u32,
+
+    anim_block: u32,
+    anim_offset: u32,
+    num_ik_rule: u32,
+    ik_rule_offset: u32,
+    anim_block_ik_rule_index: u32,
+
+    num_local_hier: u32,
+    local_hier_offset: u32,
+
+    section_offset: u32,
+    section_frames: u32,
+
+    frame_span: u16,
+    frame_count: u16,
+    frame_offset: u32,
+
+    frame_stalltime: f32,
+};
+
+const Anim = struct {
+    bone: u8,
+    flags: u8,
+
+    next_offset: u16,
+};
+
 const Studiohdr_03 = struct {
     bone_count: u32, // Number of data sections (of type mstudiobone_t)
     bone_offset: u32, // Offset of first data section
@@ -276,6 +313,35 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     try setFbs(&fbs, h3.skinreference_index);
     for (0..h3.skinreference_count) |_| {
         print("crass {d}\n", .{try r.readInt(i16, .little)});
+    }
+
+    if (false) {
+        std.debug.print("NUMBER OF ANIMDESC {d}\n", .{h3.localanim_count});
+        try setFbs(&fbs, h3.localanim_offset);
+        for (0..h3.localanim_count) |_| {
+            const start = fbs.pos;
+            const animdesc = try parseStruct(AnimDesc, .little, r);
+            const name: [*c]const u8 = &slice[start + animdesc.name_offset];
+            std.debug.print("ANIM_NAME {s} and index: {d}\n", .{ name, animdesc.anim_offset });
+            std.debug.print("NUM MOVEMENT {d}, {d}\n", .{ animdesc.num_movement, animdesc.movement_offset });
+            const st = fbs.pos;
+            defer fbs.pos = st;
+
+            //TODO support other methods of anim storage
+            if (animdesc.anim_offset != 0) {
+                try setFbs(&fbs, animdesc.anim_offset);
+                const anim = try parseStruct(Anim, .little, r);
+                try setFbs(&fbs, @sizeOf(Anim)); //fbs is now at pData
+                const V = struct {
+                    x: f32,
+                    y: f32,
+                    z: f32,
+                };
+                std.debug.print("FLAGS {b}\n", .{anim.flags});
+                const a = try parseStruct(V, .little, r);
+                std.debug.print("vec {any}\n", .{a});
+            }
+        }
     }
 
     try setFbs(&fbs, h3.bodypart_offset);
