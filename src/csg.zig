@@ -11,6 +11,7 @@ const vmf = @import("vmf.zig");
 const Side = vmf.Side;
 const editor = @import("editor.zig");
 const ecs = @import("ecs.zig");
+const limits = @import("limits.zig");
 const StringStorage = @import("string.zig").StringStorage;
 // This is a direct implementation of the quake method outlined in:
 // https://github.com/jakgor471/vmf-files_webgl
@@ -25,7 +26,7 @@ pub var gen_time: u64 = 0;
 pub const Context = struct {
     const Self = @This();
     const INIT_CAPACITY = 20;
-    const EPSILON: f64 = 2E-14;
+    const EPSILON: f64 = limits.csg_epsilon;
     const SideClass = enum {
         back,
         front,

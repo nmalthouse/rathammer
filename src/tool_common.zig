@@ -7,17 +7,17 @@ const Editor = @import("editor.zig").Context;
 const grid = @import("grid.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
 const Font = graph.FontUtil.PublicFontInterface;
+const limits = @import("limits.zig");
 const FMT1D = "{d}";
 //const FMT1D = "{d:.4}";
 const FMT3D = FMT1D ++ " " ++ FMT1D ++ " " ++ FMT1D;
 
 fn roundForDrawing(v: Vec3) Vec3 {
     var ret = v;
-    const DELTA = 0.0001;
     const vv: [3]f32 = v.data;
     for (vv, 0..) |d, i| {
         const ad = @round(d);
-        if (@abs(ad - d) < DELTA)
+        if (@abs(ad - d) < limits.delta_drawn)
             ret.data[i] = ad;
     }
     return ret;

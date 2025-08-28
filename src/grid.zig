@@ -1,6 +1,7 @@
 const std = @import("std");
 const graph = @import("graph");
 const Vec3 = graph.za.Vec3;
+const limits = @import("limits.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
 const util3d = @import("util_3d.zig");
 //Get on the grid
@@ -8,8 +9,8 @@ const util3d = @import("util_3d.zig");
 pub const Snap = struct {
     s: Vec3,
 
-    min: Vec3 = Vec3.set(1),
-    max: Vec3 = Vec3.set(4096),
+    min: Vec3 = Vec3.set(limits.min_grid),
+    max: Vec3 = Vec3.set(limits.max_grid),
 
     pub fn double(self: *@This()) void {
         self.s = self.s.scale(2);
@@ -74,8 +75,7 @@ pub const Snap = struct {
     }
 
     pub fn snap1(value: f32, snap: f32) f32 {
-        const MIN_SNAP = 0.001;
-        if (snap < MIN_SNAP) return value;
+        if (snap < limits.min_snap) return value;
         return @round(value / snap) * snap;
     }
 

@@ -507,7 +507,7 @@ pub fn draw3Dview(
             mt.textFmt("Active layer: {s}", .{lay.name}, fh, col);
         }
         if (self.grid.isOne()) {
-            mt.textFmt("grid: {d:.2}", .{self.grid.s.x()}, fh, col);
+            mt.textFmt("grid: {d}", .{self.grid.s.x()}, fh, col);
         } else {
             mt.textFmt("grid: {d:.2} {d:.2} {d:.2}", .{ self.grid.s.x(), self.grid.s.y(), self.grid.s.z() }, fh, col);
         }

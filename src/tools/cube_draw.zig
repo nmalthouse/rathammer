@@ -19,6 +19,7 @@ const snapV3 = util3d.snapV3;
 const prim_gen = @import("../primitive_gen.zig");
 const toolutil = @import("../tool_common.zig");
 const grid = @import("../grid.zig");
+const limits = @import("../limits.zig");
 
 pub const CubeDraw = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -57,7 +58,7 @@ pub const CubeDraw = struct {
         run: f32 = 12,
     } = .{},
 
-    min_volume: f32 = 1,
+    min_volume: f32 = limits.min_volume,
     snap_height: bool = true,
     custom_height: f32 = 16,
     state: enum { start, planar, finished } = .start,
