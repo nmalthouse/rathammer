@@ -980,8 +980,21 @@ pub const Solid = struct {
             side.v.trans = side.v.trans - (vec.dot(side.v.axis)) / side.v.scale;
 
             if (rot) |quat| {
-                side.u.axis = quat.rotateVec(side.u.axis);
-                side.v.axis = quat.rotateVec(side.v.axis);
+                const pos = rot_origin.scale(-1);
+
+                const pos_r = quat.rotateVec(pos.sub(rot_origin)).add(rot_origin);
+
+                const new_u_axis = quat.rotateVec(side.u.axis);
+                const new_v_axis = quat.rotateVec(side.v.axis);
+
+                const u_trans_r = pos.dot(side.u.axis) / side.u.scale + side.u.trans - pos_r.dot(new_u_axis) / side.u.scale;
+                const v_trans_r = pos.dot(side.v.axis) / side.v.scale + side.v.trans - pos_r.dot(new_v_axis) / side.v.scale;
+
+                side.u.trans = u_trans_r;
+                side.v.trans = v_trans_r;
+
+                side.u.axis = new_u_axis;
+                side.v.axis = new_v_axis;
             }
         }
         try self.rebuild(id, editor);
