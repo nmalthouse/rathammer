@@ -1,6 +1,7 @@
 const std = @import("std");
 const graph = @import("graph");
 const StringStorage = @import("string.zig").StringStorage;
+const ArrayList = std.ArrayListUnmanaged;
 
 //TODO Specify a strict version of vdf where:
 // space and tab are only valid whitespace
@@ -19,20 +20,20 @@ pub const KV = struct {
 
 pub const Object = struct {
     const Self = @This();
-    list: std.ArrayList(KV),
+    list: ArrayList(KV) = .{},
 
     debug_visited: if (track_visited) bool else void = if (track_visited) false else {},
 
-    pub fn init(alloc: std.mem.Allocator) @This() {
-        return .{ .list = std.ArrayList(KV).init(alloc) };
+    pub fn init() @This() {
+        return .{};
     }
 
-    pub fn deinit(self: Self) void {
-        self.list.deinit();
+    pub fn deinit(self: *Self, alloc: std.mem.Allocator) void {
+        self.list.deinit(alloc);
     }
 
-    pub fn append(self: *Self, kv: KV) !void {
-        try self.list.append(kv);
+    pub fn append(self: *Self, alloc: std.mem.Allocator, kv: KV) !void {
+        try self.list.append(alloc, kv);
     }
 
     pub fn getFirst(self: *Self, key: []const u8) ?KV.Value {
@@ -345,12 +346,11 @@ pub fn parse(alloc: std.mem.Allocator, slice: []const u8) !struct {
     obj_list: std.ArrayList(*Object),
     arena: std.heap.ArenaAllocator,
     pub fn deinit(self: *@This()) void {
-        self.arena.deinit();
         for (self.obj_list.items) |item| {
             self.obj_list.allocator.destroy(item);
         }
         self.obj_list.deinit();
-        self.value.deinit();
+        self.arena.deinit();
     }
 } {
     var arena = std.heap.ArenaAllocator.init(alloc);
@@ -362,7 +362,7 @@ pub fn parse(alloc: std.mem.Allocator, slice: []const u8) !struct {
     var object_stack = std.ArrayList(*Object).init(alloc);
     defer object_stack.deinit();
 
-    var root_object = Object.init(alloc);
+    var root_object = Object.init();
     var root = &root_object;
 
     var it = VdfTokenIterator.init(slice, alloc);
@@ -380,8 +380,8 @@ pub fn parse(alloc: std.mem.Allocator, slice: []const u8) !struct {
                 }
 
                 const new_root = try alloc.create(Object);
-                new_root.* = Object.init(aa);
-                try root.append(.{ .key = key, .val = .{ .obj = new_root } });
+                new_root.* = Object.init();
+                try root.append(aa, .{ .key = key, .val = .{ .obj = new_root } });
                 try object_stack.append(root);
                 try object_list.append(new_root);
                 root = new_root;
@@ -397,7 +397,7 @@ pub fn parse(alloc: std.mem.Allocator, slice: []const u8) !struct {
                     token_state = .value;
                 },
                 .value => {
-                    try root.append(.{ .key = key, .val = .{ .literal = try aa.dupe(u8, token.ident) } });
+                    try root.append(aa, .{ .key = key, .val = .{ .literal = try aa.dupe(u8, token.ident) } });
                     token_state = .key;
                 },
             },
