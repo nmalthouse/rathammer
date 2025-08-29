@@ -16,6 +16,7 @@ pub const KV = struct {
 
     debug_visited: if (track_visited) bool else void = if (track_visited) false else {},
 };
+
 pub const Object = struct {
     const Self = @This();
     list: std.ArrayList(KV),
@@ -83,22 +84,6 @@ test "is array list" {
     const T = std.ArrayList(u8);
     try std.testing.expect(getArrayListChild(T) == u8);
     try std.testing.expect(getArrayListChild([]u8) == null);
-}
-
-pub fn countUnvisited(v: *const Object) usize {
-    var count: usize = 0;
-    if (!v.debug_visited) {
-        count += 1;
-        for (v.list.items) |*item| {
-            if (!item.debug_visited) {
-                count += 1;
-                std.debug.print("Not visit {s}\n", .{item.key});
-            }
-            if (item.val == .obj)
-                count += countUnvisited(item.val.obj);
-        }
-    }
-    return count;
 }
 
 const MAX_KVS = 512;
@@ -255,6 +240,8 @@ pub const VdfTokenIterator = struct {
     pub fn next(self: *Self) !?Token {
         const eql = std.mem.eql;
         self.token_buf.clearRetainingCapacity();
+        if (self.pos >= self.slice.len)
+            return null;
         while (self.pos < self.slice.len) {
             const byte = self.slice[self.pos];
             self.pos += 1;
@@ -345,7 +332,11 @@ pub const VdfTokenIterator = struct {
                 },
             }
         }
-        return null;
+        return switch (self.state) {
+            .none => null,
+            .quoted_ident => error.missingQuote,
+            .ident => return .{ .ident = self.token_buf.items },
+        };
     }
 };
 
@@ -411,8 +402,6 @@ pub fn parse(alloc: std.mem.Allocator, slice: []const u8) !struct {
                 },
             },
         }
-        //Parse versioninfo
-        //  expect a string or if a '{ then recur
     }
     return .{ .value = root_object, .arena = arena, .obj_list = object_list };
 }
@@ -440,7 +429,7 @@ test "parsing config" {
 
     var val = try parse(alloc, slice);
     defer val.deinit();
-    printObj(val.value, 0);
+    //printObj(val.value, 0);
 
     var aa = std.heap.ArenaAllocator.init(alloc);
     defer aa.deinit();
@@ -456,5 +445,50 @@ test "parsing config" {
             width_px: i32,
         },
     }, &.{ .obj = &val.value }, aa.allocator(), null);
-    std.debug.print("{any}\n", .{conf});
+    _ = try conf;
+    //std.debug.print("{any}\n", .{conf});
+}
+
+const TestingTokenizer = struct {
+    slice: []const u8,
+    tests: []const VdfTokenIterator.Token,
+};
+
+test "tokenizer" {
+    const OB = VdfTokenIterator.Token{ .object_begin = {} };
+    const OE = VdfTokenIterator.Token{ .object_end = {} };
+    const alloc = std.testing.allocator;
+    const ex = std.testing.expectEqualDeep;
+
+    const test1: []const TestingTokenizer = &.{
+        .{
+            .slice = "hello world",
+            .tests = &.{ .{ .ident = "hello" }, .{ .ident = "world" } },
+        },
+        .{
+            .slice =
+            \\hello { here is
+            \\}
+            \\
+            ,
+            .tests = &.{ .{ .ident = "hello" }, OB, .{ .ident = "here" }, .{ .ident = "is" }, OE },
+        },
+    };
+
+    {
+        var it = VdfTokenIterator.init(test1[1].slice, alloc);
+        defer it.deinit();
+        while (try it.next()) |p|
+            std.debug.print("{any}\n", .{p});
+    }
+
+    for (test1) |tt| {
+        var it = VdfTokenIterator.init(tt.slice, alloc);
+        defer it.deinit();
+
+        for (tt.tests) |t2| {
+            try ex(t2, try it.next());
+            //try ex(VdfTokenIterator.Token{ .ident = "world" }, try it.next());
+        }
+    }
 }
