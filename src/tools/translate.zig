@@ -268,6 +268,11 @@ pub const Translate = struct {
                         const new_rot = util3d.extEulerToQuat(angle);
                         const ang = new_rot.mul(old_rot).extractEulerAngles();
                         copy_ent.angle = snapV3(Vec3.new(ang.y(), ang.z(), ang.x()), tool.angle_snap);
+
+                        const pos_v = copy_ent.origin.sub(origin);
+                        const quat = util3d.extEulerToQuat(snapV3(angle, tool.angle_snap));
+                        copy_ent.origin = quat.rotateVec(pos_v).add(origin);
+
                         try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true });
 
                         if (commit) {

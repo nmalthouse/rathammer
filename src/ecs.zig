@@ -975,13 +975,14 @@ pub const Solid = struct {
                 vert.* = vert.add(vec);
             }
         }
+        var pos = rot_origin.scale(-1);
+        if (pos.length() > 0.1)
+            pos = Vec3.new(1, 0, 0);
         for (self.sides.items) |*side| {
             side.u.trans = side.u.trans - (vec.dot(side.u.axis)) / side.u.scale;
             side.v.trans = side.v.trans - (vec.dot(side.v.axis)) / side.v.scale;
 
             if (rot) |quat| {
-                const pos = rot_origin.scale(-1);
-
                 const pos_r = quat.rotateVec(pos.sub(rot_origin)).add(rot_origin);
 
                 const new_u_axis = quat.rotateVec(side.u.axis);

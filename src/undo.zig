@@ -207,8 +207,14 @@ pub const UndoTranslate = struct {
         }
         if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
             ent.setOrigin(editor, self.id, ent.origin.add(self.vec.scale(-1))) catch return;
-            if (self.angle_delta) |angd|
+            if (self.angle_delta) |angd| {
                 ent.setAngle(editor, self.id, ent.angle.sub(angd)) catch return;
+                if (quat) |qq| {
+                    const pos_v = ent.origin.sub(self.rot_origin);
+                    const new_o = qq.rotateVec(pos_v).add(self.rot_origin);
+                    ent.setOrigin(editor, self.id, new_o) catch return;
+                }
+            }
         }
         if (editor.ecs.getOptPtr(self.id, .displacements) catch return) |disps| {
             if (quat) |qq| {
@@ -226,8 +232,15 @@ pub const UndoTranslate = struct {
         }
         if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
             ent.setOrigin(editor, self.id, ent.origin.add(self.vec)) catch return;
-            if (self.angle_delta) |angd|
+            if (self.angle_delta) |angd| {
                 ent.setAngle(editor, self.id, ent.angle.add(angd)) catch return;
+
+                if (quat) |qq| {
+                    const pos_v = ent.origin.sub(self.rot_origin);
+                    const new_o = qq.rotateVec(pos_v).add(self.rot_origin);
+                    ent.setOrigin(editor, self.id, new_o) catch return;
+                }
+            }
         }
         if (editor.ecs.getOptPtr(self.id, .displacements) catch return) |disps| {
             if (quat) |qq| {
