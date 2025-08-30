@@ -550,3 +550,175 @@ test "test_vmf" {
     try ct.nextTag(.newline);
     try ct.nextTag(.open_bracket);
 }
+
+pub fn getArrayListChild(comptime T: type) ?type {
+    const in = @typeInfo(T);
+    if (in != .@"struct")
+        return null;
+    if (@hasDecl(T, "Slice")) {
+        const info = @typeInfo(T.Slice);
+        if (info == .pointer and info.pointer.size == .slice) {
+            const t = std.ArrayList(info.pointer.child);
+            if (T == t)
+                return info.pointer.child;
+        }
+    }
+    return null;
+}
+
+pub const KVMap = std.StringHashMap([]const u8);
+const MAX_KVS = 512;
+const KVT = std.bit_set.StaticBitSet(MAX_KVS);
+threadlocal var from_value_visit_tracker = KVT.initEmpty();
+const StringStorage = @import("string.zig").StringStorage;
+pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, alloc: std.mem.Allocator, strings: ?*StringStorage) !T {
+    const info = @typeInfo(T);
+    switch (info) {
+        .@"struct" => |s| {
+            if (std.meta.hasFn(T, "parseVdf")) {
+                return try T.parseVdf(value, alloc, strings);
+            }
+
+            //IF hasField vdf_generic then
+            //add any fields that were not visted to vdf_generic
+            var ret: T = undefined;
+            if (value.* != .obj) {
+                return error.broken;
+            }
+            const DO_REST = @hasField(T, "rest_kvs");
+            if (DO_REST) {
+                ret.rest_kvs = KVMap.init(alloc);
+                from_value_visit_tracker = KVT.initEmpty();
+                if (value.obj.list.items.len > MAX_KVS)
+                    return error.tooManyKeys;
+            }
+            inline for (s.fields) |f| {
+                const f_id = try parsed.stringId(f.name);
+                if (f.type == KVMap) {} else {
+                    const child_info = @typeInfo(f.type);
+                    const is_alist = getArrayListChild(f.type);
+                    const do_many = (is_alist != null) or (child_info == .pointer and child_info.pointer.size == .slice and child_info.pointer.child != u8);
+                    if (!do_many and f.default_value_ptr != null) {
+                        @field(ret, f.name) = @as(*const f.type, @alignCast(@ptrCast(f.default_value_ptr.?))).*;
+                    }
+                    const ar_c = is_alist orelse if (do_many) child_info.pointer.child else void;
+                    var vec = std.ArrayList(ar_c).init(alloc);
+
+                    for (value.obj.list.items, 0..) |*item, vi| {
+                        if (f_id == item.key) {
+                            if (do_many) {
+                                const val = fromValue(ar_c, parsed, &item.val, alloc, strings) catch blk: {
+                                    //std.debug.print("parse FAILED {any}\n", .{item.val});
+                                    break :blk null;
+                                };
+                                if (val) |v| {
+                                    try vec.append(v);
+                                    if (DO_REST)
+                                        from_value_visit_tracker.set(vi);
+                                }
+                            } else {
+                                //A regular struct field
+                                @field(ret, f.name) = fromValue(f.type, parsed, &item.val, alloc, strings) catch |err| {
+                                    std.debug.print("KEY: {s}\n", .{f.name});
+                                    return err;
+                                };
+                                if (DO_REST)
+                                    from_value_visit_tracker.set(vi);
+                                break;
+                            }
+                        }
+                    }
+                    if (do_many) {
+                        @field(ret, f.name) = if (is_alist != null) vec else vec.items;
+                    }
+                }
+            }
+            if (DO_REST) {
+                var it = from_value_visit_tracker.iterator(.{ .kind = .unset });
+                while (it.next()) |bit_i| {
+                    if (bit_i >= value.obj.list.items.len) break;
+                    const v = &value.obj.list.items[bit_i];
+                    if (v.val == .literal) {
+                        try ret.rest_kvs.put(v.key, v.val.literal);
+                    }
+                }
+            }
+
+            return ret;
+        },
+        .@"enum" => |en| {
+            return std.meta.stringToEnum(T, value.literal) orelse {
+                std.debug.print("Not a value for enum {s}\n", .{value.literal});
+                std.debug.print("Possible values:\n", .{});
+                inline for (en.fields) |fi| {
+                    std.debug.print("    {s}\n", .{fi.name});
+                }
+
+                return error.invalidEnumValue;
+            };
+        },
+        .int => return try std.fmt.parseInt(T, value.literal, 0),
+        .float => return try std.fmt.parseFloat(T, value.literal),
+        .bool => {
+            if (std.mem.eql(u8, "true", value.literal))
+                return true;
+            if (std.mem.eql(u8, "false", value.literal))
+                return false;
+            return error.invalidBool;
+        },
+        .pointer => |p| {
+            if (p.size != .slice or p.child != u8) @compileError("no ptr");
+            if (strings) |strs|
+                return try strs.store(value.literal);
+            return value.literal;
+        },
+        else => @compileError("not supported " ++ @typeName(T) ++ " " ++ @tagName(info)),
+    }
+    return undefined;
+}
+
+const TestStructInner = struct {
+    enum_: enum { one, two } = .one,
+    a: i32 = 0,
+    b: f32 = 0,
+    is: bool = false,
+    str: []const u8 = "",
+    num: []const u32 = &.{},
+};
+
+const TestStruct = struct {
+    hello: []const u8 = "",
+    obj: TestStructInner = .{},
+};
+
+const test_slice_auto =
+    \\hello world //Comment
+    \\obj {
+    \\enum_ two
+    \\a 33
+    \\b 1.1
+    \\is true
+    \\str cool
+    \\num 1
+    \\num 2
+    \\num 3
+    \\}
+;
+
+test "fromValue" {
+    const ex = std.testing.expectEqualDeep;
+    const alloc = std.testing.allocator;
+    var p = try parse(alloc, test_slice_auto, null, .{});
+    defer p.deinit();
+    var aa = std.heap.ArenaAllocator.init(alloc);
+    defer aa.deinit();
+    const a = try fromValue(TestStruct, &p, &.{ .obj = &p.value }, aa.allocator(), null);
+    try ex(TestStruct{ .hello = "world", .obj = .{
+        .enum_ = .two,
+        .a = 33,
+        .b = 1.1,
+        .is = true,
+        .str = "cool",
+        .num = &.{ 1, 2, 3 },
+    } }, a);
+}
