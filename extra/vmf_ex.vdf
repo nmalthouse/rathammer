@@ -1,0 +1,30 @@
+versioninfo
+{
+	"editorversion" "400"
+	"editorbuild" "2920"
+	"mapversion" "53"
+	"formatversion" "100"
+	"prefab" "0"
+}
+visgroups
+{
+	visgroup
+	{
+		"name" "Auto"
+		"visgroupid" "1"
+		"color" "153 142 199"
+		visgroup
+		{
+			"name" "Entities"
+			"visgroupid" "2"
+			"color" "226 123 88"
+		}
+	}
+}
+viewsettings
+{
+	"bSnapToGrid" "1"
+	"bShowGrid" "1"
+	"nGridSpacing" "32"
+	"bShow3DGrid" "0"
+}
