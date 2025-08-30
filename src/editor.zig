@@ -1195,11 +1195,11 @@ pub const Context = struct {
         const slice = try infile.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
         defer self.alloc.free(slice);
         var aa = std.heap.ArenaAllocator.init(self.alloc);
-        var obj = try vdf.parse(self.alloc, slice);
+        var obj = try vdf.parse(self.alloc, slice, null, .{});
         defer obj.deinit();
         loadctx.cb("vmf parsed");
         try self.setMapName(filename);
-        const vmf_ = try vdf.fromValue(vmf.Vmf, &.{ .obj = &obj.value }, aa.allocator(), null);
+        const vmf_ = try vdf.fromValue(vmf.Vmf, &obj, &.{ .obj = &obj.value }, aa.allocator(), null);
         if (vis_override == null)
             try self.layers.buildMappingFromVmf(vmf_.visgroups.visgroup, self.layers.root);
         try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
@@ -1230,7 +1230,8 @@ pub const Context = struct {
                         var it = ent.rest_kvs.iterator();
                         while (it.next()) |item| {
                             //We use the no notify method because all notifiable fields are absorbed by vmf.entity
-                            try kvs.putStringNoNotify(try self.storeString(item.key_ptr.*), item.value_ptr.*);
+                            const key = obj.stringFromId(item.key_ptr.*) orelse "";
+                            try kvs.putStringNoNotify(try self.storeString(key), item.value_ptr.*);
                         }
 
                         if (kvs.getString("model")) |model| {

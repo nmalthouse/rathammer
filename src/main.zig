@@ -357,6 +357,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     vpk.timer.log("Vpk dir");
 
     editor.draw_state.cam3d.fov = config.window.cam_fov;
+    loadctx.time = loadctx.gtimer.read();
 
     if (args.blank) |blank| {
         try editor.setMapName(blank);

@@ -55,15 +55,16 @@ pub const Connections = struct {
     is_init: bool = false,
     list: std.ArrayList(Connection) = undefined,
 
-    pub fn parseVdf(val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
+    pub fn parseVdf(p: *vdf.Parsed, val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
         if (val.* != .obj) return error.notGood;
 
         var ret = try std.ArrayList(Connection).initCapacity(alloc, val.obj.list.items.len);
         for (val.obj.list.items) |conn| {
             if (conn.val != .literal) return error.invalidConnection;
             var it = std.mem.tokenizeAny(u8, conn.val.literal, ",\x1b");
+            const conk = p.stringFromId(conn.key) orelse "";
             try ret.append(.{
-                .listen_event = conn.key,
+                .listen_event = conk,
                 .target = it.next() orelse "",
                 .input = it.next() orelse "",
                 .value = it.next() orelse "",
@@ -133,7 +134,7 @@ pub fn DispRowG(comptime T: type) type {
             return ret;
         }
 
-        pub fn parseVdf(val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
+        pub fn parseVdf(p: *vdf.Parsed, val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
             if (val.* == .literal)
                 return error.notgood;
             var ret = try std.ArrayList(T).initCapacity(alloc, val.obj.list.items.len);
@@ -150,9 +151,10 @@ pub fn DispRowG(comptime T: type) type {
                 if (num_norm != num_norm_def)
                     return error.invalidNormalsCount;
 
-                if (!std.mem.startsWith(u8, row.key, "row"))
+                const rk = p.stringFromId(row.key) orelse "";
+                if (!std.mem.startsWith(u8, rk, "row"))
                     return error.invalidNormalKey;
-                const row_index = try std.fmt.parseInt(u32, row.key["row".len..], 10);
+                const row_index = try std.fmt.parseInt(u32, rk["row".len..], 10);
 
                 for (0..num_norm) |norm_i| {
                     const g_i = row_index * num_norm + norm_i;
@@ -200,7 +202,7 @@ pub const Side = struct {
         translation: f64 = 0,
         scale: f64 = 0,
 
-        pub fn parseVdf(val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
+        pub fn parseVdf(_: *vdf.Parsed, val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
             if (val.* != .literal)
                 return error.notgood;
 
@@ -218,7 +220,7 @@ pub const Side = struct {
     };
     id: u32 = 0,
     plane: struct {
-        pub fn parseVdf(val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
+        pub fn parseVdf(_: *vdf.Parsed, val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
             if (val.* != .literal)
                 return error.notgood;
 
@@ -303,7 +305,7 @@ pub fn parseVec(
 const StringVec = struct {
     v: graph.za.Vec3 = graph.za.Vec3.zero(),
 
-    pub fn parseVdf(val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
+    pub fn parseVdf(_: *vdf.Parsed, val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
         if (val.* != .literal)
             return error.notgood;
         var it = std.mem.splitScalar(u8, val.literal, ' ');
@@ -319,7 +321,7 @@ const StringVec = struct {
 const StringVecBracket = struct {
     v: graph.za.Vec3,
 
-    pub fn parseVdf(val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
+    pub fn parseVdf(_: *vdf.Parsed, val: *const vdf.KV.Value, _: anytype, _: anytype) !@This() {
         if (val.* != .literal)
             return error.notgood;
         var i: usize = 0;

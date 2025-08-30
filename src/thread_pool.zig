@@ -235,7 +235,7 @@ pub const Context = struct {
                     .kind = .none,
                 });
             } else if (std.mem.eql(u8, names.ext, "vmt")) {
-                var obj = try vdf.parse(self.alloc, tt);
+                var obj = try vdf.parse(self.alloc, tt, null, .{});
                 defer obj.deinit();
                 //All vmt are a single root object with a shader name as key
                 var was_found = false;
@@ -251,7 +251,8 @@ pub const Context = struct {
                             .obj => |o| {
                                 for (extensions) |exten| {
                                     fallback_loop: for (fallback_keys) |fbkey| {
-                                        if (o.getFirst(fbkey)) |base| {
+                                        const id = try obj.stringId(fbkey);
+                                        if (o.getFirst(id)) |base| {
                                             if (base == .literal) {
                                                 const base_name = blk: {
                                                     if (base.literal.len == 0) break :blk base.literal;

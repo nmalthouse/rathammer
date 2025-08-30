@@ -95,7 +95,7 @@ pub const Config = struct {
     default_game: []const u8 = "",
     games: struct {
         map: std.StringHashMap(GameEntry),
-        pub fn parseVdf(v: *const vdf.KV.Value, alloc: std.mem.Allocator, strings_o: ?*StringStorage) !@This() {
+        pub fn parseVdf(p: *vdf.Parsed, v: *const vdf.KV.Value, alloc: std.mem.Allocator, strings_o: ?*StringStorage) !@This() {
             const strings = strings_o orelse return error.needStrings;
             var ret = @This(){
                 .map = std.StringHashMap(GameEntry).init(alloc),
@@ -103,9 +103,10 @@ pub const Config = struct {
             if (v.* == .literal)
                 return error.notgood;
             for (v.obj.list.items) |entry| {
+                const str = p.stringFromId(entry.key) orelse "";
                 try ret.map.put(
-                    try strings.store(entry.key),
-                    try vdf.fromValue(GameEntry, &entry.val, alloc, strings),
+                    try strings.store(str),
+                    try vdf.fromValue(GameEntry, p, &entry.val, alloc, strings),
                 );
             }
             return ret;
@@ -163,7 +164,7 @@ pub const ConfigCtx = struct {
 
 pub const Keybind = struct {
     b: graph.SDL.NewBind,
-    pub fn parseVdf(v: *const vdf.KV.Value, _: std.mem.Allocator, _: anytype) !@This() {
+    pub fn parseVdf(_: *vdf.Parsed, v: *const vdf.KV.Value, _: std.mem.Allocator, _: anytype) !@This() {
         if (v.* != .literal)
             return error.notgood;
 
@@ -257,7 +258,7 @@ pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []con
 }
 
 pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !ConfigCtx { //Load config
-    var val = try vdf.parse(alloc, slice);
+    var val = try vdf.parse(alloc, slice, null, .{});
     defer val.deinit();
 
     var ctx = ConfigCtx{
@@ -268,6 +269,7 @@ pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !ConfigCtx { //Lo
     //CONF MUST BE copyable IE no alloc
     const conf = try vdf.fromValue(
         Config,
+        &val,
         &.{ .obj = &val.value },
         alloc,
         &ctx.strings,

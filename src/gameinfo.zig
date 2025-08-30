@@ -25,7 +25,7 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
     };
     defer alloc.free(sl);
 
-    var obj = try vdf.parse(alloc, sl);
+    var obj = try vdf.parse(alloc, sl, null, .{});
     defer obj.deinit();
 
     var aa = std.heap.ArenaAllocator.init(alloc);
@@ -36,17 +36,18 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
             title: []const u8 = "",
             type: []const u8 = "",
         } = .{},
-    }, &.{ .obj = &obj.value }, aa.allocator(), null);
+    }, &obj, &.{ .obj = &obj.value }, aa.allocator(), null);
     log.info("Loading gameinfo {s} {s}", .{ gameinfo.gameinfo.game, gameinfo.gameinfo.title });
 
-    const fs = try obj.value.recursiveGetFirst(&.{ "gameinfo", "filesystem", "searchpaths" });
+    const fs = try obj.value.recursiveGetFirst(&obj, &.{ "gameinfo", "filesystem", "searchpaths" });
     if (fs != .obj)
         return error.invalidGameInfo;
     //vdf.printObj(fs.obj.*, 0);
     const startsWith = std.mem.startsWith;
     for (fs.obj.list.items) |entry| {
-        if (!shouldAdd(entry.key)) {
-            log.info("IGNORING gameinfo searchpath with key: {s}", .{entry.key});
+        const en = obj.stringFromId(entry.key) orelse "";
+        if (!shouldAdd(en)) {
+            log.info("IGNORING gameinfo searchpath with key: {s}", .{en});
             continue;
         }
         if (entry.val != .literal)
