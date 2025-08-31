@@ -97,9 +97,40 @@ pub const Context = struct {
         }
     }
 
+    pub fn setEnabled(self: *Self, id: Id, enable: bool) !void {
+        if (self.map.get(id)) |lay| {
+            lay.enabled = enable;
+            try self.calculateDisabled();
+        }
+    }
+
+    fn calculateDisabled(self: *Self) !void {
+        self.disabled.unsetAll();
+        try self.recurDisabledSet(self.root, false);
+    }
+
+    fn recurDisabledSet(self: *Self, layer: *const Layer, force_disable: bool) !void {
+        if (!layer.enabled or force_disable) {
+            try self.setDisabled(layer.id);
+            for (layer.children.items) |child| {
+                try self.recurDisabledSet(child, true);
+            }
+        } else {
+            for (layer.children.items) |child| {
+                try self.recurDisabledSet(child, false);
+            }
+        }
+    }
+
     pub fn isDisabled(self: *Self, id: Id) bool {
         if (id >= self.disabled.bit_length) return false;
         return self.disabled.isSet(id);
+    }
+
+    pub fn setDisabled(self: *Self, id: Id) !void {
+        if (id >= self.disabled.count())
+            try self.disabled.resize(self.alloc, @intCast(id + 1), false);
+        self.disabled.set(id);
     }
 
     pub fn writeToJson(self: *Self, wr: anytype) !void {
@@ -324,6 +355,7 @@ const LayerWidget = struct {
         id: Id,
         selected: bool,
         parent: *GuiWidget,
+        color: u32 = 0xffff00ff,
         enabled: bool,
     };
     vt: iArea,
@@ -358,6 +390,9 @@ const LayerWidget = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         const col: u32 = if (self.opts.selected) 0x6097dbff else d.style.config.colors.background;
         d.ctx.rect(vt.area, col);
+        const thi = 2;
+        const y = vt.area.y + vt.area.h - thi;
+        d.ctx.line(.{ .x = vt.area.x, .y = y }, .{ .x = vt.area.x + vt.area.w, .y = y }, self.opts.color, thi);
     }
 
     pub fn deinit(vt: *iArea, gui: *Gui, window: *iWindow) void {
@@ -368,10 +403,9 @@ const LayerWidget = struct {
 
     pub fn check_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        if (self.opts.parent.ctx.getLayerFromId(@intCast(uid))) |lay| {
-            lay.enabled = checked;
-            _ = gui;
-        }
+        self.opts.parent.ctx.setEnabled(@intCast(uid), checked) catch return;
+        self.opts.parent.editor.rebuildVisGroups() catch return;
+        _ = gui;
     }
 
     pub fn onclick(vt: *iArea, cb: guis.MouseCbState, win: *iWindow) void {
@@ -388,11 +422,11 @@ const LayerWidget = struct {
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
                         .{ bi("cancel"), "Cancel !indicates placeholder" },
-                        .{ bi("move_selected"), "Move selected to layer" },
+                        .{ bi("move_selected"), "Add selected" },
                         .{ bi("delete"), "!Delete layer" },
-                        .{ bi("select_all"), "Add to selection" },
+                        .{ bi("select_all"), "Select" },
                         .{ bi("duplicate"), "!Duplicate layer" },
-                        .{ bi("add_child"), "!add child group" },
+                        .{ bi("add_child"), "new child" },
                     },
                     .btn_cb = rightClickMenuBtn,
                     .btn_vt = vt,
@@ -424,6 +458,11 @@ const LayerWidget = struct {
                 for (slice) |sel| {
                     ed.putComponent(sel, .layer, .{ .id = self.opts.id });
                 }
+            },
+            bi("add_child") => {
+                const new = self.opts.parent.ctx.newLayer("New layer", self.opts.parent.selected_ptr.*) catch return;
+
+                self.opts.parent.selected_ptr.* = new.id;
             },
             else => {},
         }

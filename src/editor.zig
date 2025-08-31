@@ -210,6 +210,7 @@ pub const Context = struct {
     } = .{},
 
     edit_state: struct {
+        /// destroy 180 billion keyboard worth of pressing ctrl+s to overflow this
         map_version: u64 = 0, //Incremented every save
         autosaved_at_delta: u64 = 0, // Don't keep autosaving the same thing
         saved_at_delta: u64 = 0,
@@ -608,7 +609,7 @@ pub const Context = struct {
         }
         //IF
 
-        var it = self.ecs.iterator(.layer);
+        var it = self.editIterator(.layer);
         while (it.next()) |lay| {
             if (self.layers.isDisabled(lay.id)) {
                 self.ecs.attachComponent(it.i, .invisible, .{}) catch {}; // We discard error incase it is already attached
@@ -1157,6 +1158,7 @@ pub const Context = struct {
         try self.skybox.loadSky(try self.storeString(parsed.value.sky_name), &self.vpkctx);
         parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
         self.edit_state.map_version = parsed.value.editor.map_version;
+        log.info("Map version : {d}", .{self.edit_state.map_version});
         if (parsed.value.extra == .object) {
             const ex = &parsed.value.extra;
             if (std.json.parseFromValue(struct { recent_mat: [][]const u8 }, self.alloc, ex.*, .{})) |v| {

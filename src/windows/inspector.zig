@@ -15,6 +15,7 @@ const edit = @import("../editor.zig");
 const Context = edit.Context;
 const ptext = @import("widget_texture.zig");
 const fgd = @import("../fgd.zig");
+const Layer = @import("../layer.zig");
 //TODO
 // to get this to work we need to first add a getptr cb to all existing
 // widgets and use that to obtain our values.
@@ -48,12 +49,15 @@ pub const InspectorWindow = struct {
     selected_io_index: usize = 0,
     io_scroll_index: usize = 0,
 
+    layer_widget: Layer.GuiWidget,
+
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
             .area = iArea.init(gui, Rec(0, 0, 0, 0)),
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
+            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
             .id_kv_map = std.StringHashMap(usize).init(gui.alloc),
         };
@@ -136,12 +140,33 @@ pub const InspectorWindow = struct {
             a.addChildOpt(gui, vt, CB(gui, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null));
         }
         ly.pushRemaining();
-        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &.{ "props", "io", "tool" }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &.{ "props", "io", "tool", "layer" }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
     }
 
     fn buildTabs(user_vt: *iArea, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("area", user_vt));
         const eql = std.mem.eql;
+        if (eql(u8, tab_name, "layer")) {
+            const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
+            self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
+
+            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
+
+            for (self.editor.autovis.filters.items, 0..) |filter, i| {
+                vt.addChildOpt(
+                    gui,
+                    win,
+                    Wg.Checkbox.build(gui, ly.getArea(), filter.name, .{
+                        .cb_fn = &checkbox_cb_auto_vis,
+                        .cb_vt = win.area,
+                        .user_id = i,
+                    }, self.editor.autovis.enabled.items[i]),
+                );
+            }
+
+            //var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+            //vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome to visgroup", null));
+        }
         if (eql(u8, tab_name, "props")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
             {
@@ -227,6 +252,12 @@ pub const InspectorWindow = struct {
         }
     }
 
+    pub fn checkbox_cb_auto_vis(user: *iArea, _: *Gui, val: bool, id: usize) void {
+        const self: *InspectorWindow = @alignCast(@fieldParentPtr("area", user));
+        if (id >= self.editor.autovis.enabled.items.len) return;
+        self.editor.autovis.enabled.items[id] = val;
+        self.editor.rebuildAutoVis() catch return;
+    }
     fn misc_btn_cb(vt: *iArea, btn_id: usize, _: *Gui, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
         self.misc_btn_cbErr(btn_id) catch return;

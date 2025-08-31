@@ -158,7 +158,6 @@ pub const PauseWindow = struct {
         self.area.addChildOpt(gui, vt, Wg.Tabs.build(gui, inset, &.{
             "main",
             "keybinds",
-            "visgroup",
             "graphics",
             "mapprops",
         }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
@@ -168,27 +167,6 @@ pub const PauseWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("area", win_vt));
         const eql = std.mem.eql;
         const St = Wg.StaticSlider.build;
-        if (eql(u8, tab, "visgroup")) {
-            const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
-            self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
-
-            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
-
-            for (self.editor.autovis.filters.items, 0..) |filter, i| {
-                vt.addChildOpt(
-                    gui,
-                    win,
-                    Wg.Checkbox.build(gui, ly.getArea(), filter.name, .{
-                        .cb_fn = &checkbox_cb_auto_vis,
-                        .cb_vt = win.area,
-                        .user_id = i,
-                    }, self.editor.autovis.enabled.items[i]),
-                );
-            }
-
-            //var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
-            //vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome to visgroup", null));
-        }
         if (eql(u8, tab, "keybinds")) {
             const info = @typeInfo(@TypeOf(self.editor.config.keys));
             var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
