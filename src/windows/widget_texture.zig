@@ -72,6 +72,7 @@ pub const PollingTexture = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         const tex = self.ed.getTexture(self.vpk_id) catch return;
         const r = vt.area;
+        d.ctx.rect(r, d.style.config.colors.background); //Proper transparent, no overdraw on defer
         d.ctx.rectTexTint(r, tex.rect(), self.opts.tint, tex);
         if (self.text.len > 0) {
             const h = @min(d.gui.style.config.default_item_h, r.h);

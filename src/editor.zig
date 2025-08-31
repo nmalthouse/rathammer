@@ -1163,7 +1163,7 @@ pub const Context = struct {
                 defer v.deinit();
                 for (v.value.recent_mat) |mat| {
                     if (try self.vpkctx.resolveId(.{ .name = mat }, false)) |id| {
-                        try self.asset_browser.recent_mats.put(id.id);
+                        try self.asset_browser.recent_mats.append(id.id);
                     }
                 }
                 if (self.asset_browser.recent_mats.list.items.len > 0) {
