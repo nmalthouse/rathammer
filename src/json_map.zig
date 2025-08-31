@@ -75,8 +75,12 @@ pub const JsonCamera = struct {
         }
     }
 };
+// CHANGELOG for MAP_VERSION
+// 0.1.0 :
+//      * deprecate editor_info component
+//      * Add Layer component, see ecs.Layer
 
-pub const CURRENT_MAP_VERSION = "0.0.2";
+pub const CURRENT_MAP_VERSION = "0.1.0";
 pub const JsonEditor = struct {
     map_json_version: []const u8 = "0.0.0",
     map_version: u64 = 0,
