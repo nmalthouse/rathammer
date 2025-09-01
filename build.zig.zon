@@ -53,6 +53,10 @@
         //    // actually used.
         //    .lazy = false,
         //},
+        .uuid = .{
+            .url = "https://github.com/r4gus/uuid-zig/archive/refs/tags/0.3.2.tar.gz",
+            .hash = "uuid-0.3.2-oOieIY54AACgyWA1nI8rtVBRqHwAg2DPnuKiM2FycatZ",
+        },
     },
 
     // Specifies the set of files and directories that are included in this package.

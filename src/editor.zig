@@ -12,6 +12,7 @@ const csg = @import("csg.zig");
 const vtf = @import("vtf.zig");
 const fgd = @import("fgd.zig");
 const vvd = @import("vvd.zig");
+const uuid = @import("uuidlib");
 const clipper = @import("clip_solid.zig");
 const gameinfo = @import("gameinfo.zig");
 const profile = @import("profile.zig");
@@ -214,6 +215,7 @@ pub const Context = struct {
         map_version: u64 = 0, //Incremented every save
         autosaved_at_delta: u64 = 0, // Don't keep autosaving the same thing
         saved_at_delta: u64 = 0,
+        map_uuid: u128 = 0,
         //Used to get a rising edge to set window title
         was_saved: bool = true,
 
@@ -753,11 +755,16 @@ pub const Context = struct {
         var jwr = std.json.writeStream(writer, .{ .whitespace = .indent_1 });
         try jwr.beginObject();
         {
+            if (self.edit_state.map_uuid == 0) {
+                self.edit_state.map_uuid = uuid.v4.new();
+            }
+
             try jwr.objectField("editor");
             try jwr.write(json_map.JsonEditor{
                 .cam = json_map.JsonCamera.fromCam(self.draw_state.cam3d),
                 .map_json_version = json_map.CURRENT_MAP_VERSION,
                 .map_version = self.edit_state.map_version,
+                .uuid = self.edit_state.map_uuid,
                 .editor_version = version,
             });
 
@@ -1158,6 +1165,7 @@ pub const Context = struct {
         try self.skybox.loadSky(try self.storeString(parsed.value.sky_name), &self.vpkctx);
         parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
         self.edit_state.map_version = parsed.value.editor.map_version;
+        self.edit_state.map_uuid = parsed.value.editor.uuid;
         log.info("Map version : {d}", .{self.edit_state.map_version});
         if (parsed.value.extra == .object) {
             const ex = &parsed.value.extra;

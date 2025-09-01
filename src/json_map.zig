@@ -79,12 +79,16 @@ pub const JsonCamera = struct {
 // 0.1.0 :
 //      * deprecate editor_info component
 //      * Add Layer component, see ecs.Layer
+// 0.1.1 :
+//      * Add optional uuid field (default value 0) 0 values get replaced with a uuid on save
 
-pub const CURRENT_MAP_VERSION = "0.1.0";
+pub const CURRENT_MAP_VERSION = "0.1.1";
+
 pub const JsonEditor = struct {
     map_json_version: []const u8 = "0.0.0",
     map_version: u64 = 0,
     editor_version: []const u8 = "0.0.0",
+    uuid: u128 = 0,
     cam: JsonCamera,
 };
 

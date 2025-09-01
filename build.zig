@@ -29,8 +29,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     const ratdep = b.dependency("ratgraph", .{ .target = target, .optimize = optimize });
+    const uuid_dep = b.dependency("uuid", .{ .target = target, .optimize = optimize });
+    const uuidmod = uuid_dep.module("uuid");
     const ratmod = ratdep.module("ratgraph");
     hammer_exe.root_module.addImport("graph", ratmod);
+    hammer_exe.root_module.addImport("uuidlib", uuidmod);
     jsonToVmf.root_module.addImport("graph", ratmod);
     mapbuilder.root_module.addImport("graph", ratmod);
 
