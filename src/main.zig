@@ -507,6 +507,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         ws.doTheSliders(win.mouse.pos, win.mouse.delta, win.mouse.left);
         try ws.setWorkspaceAndArea(editor.draw_state.tab_index, winrect);
 
+        for (config.keys.inspector_tab.items, 0..) |bind, ind| {
+            if (ind >= InspectorWindow.tabs.len)
+                break;
+
+            if (win.isBindState(bind.b, .rising))
+                inspector_win.setTab(ind);
+        }
+
         for (ws.getTab()) |out| {
             const pane_area = out[0];
             const pane = out[1] orelse continue;

@@ -59,6 +59,10 @@ keys {
     cube_draw_plane_up      scancode:x
     cube_draw_plane_down    scancode:z
 
+    inspector_tab F1 //Order maps to tab order, currently "props, io, tool, layer"
+    inspector_tab F2
+    inspector_tab F3
+    inspector_tab F4
 
     mouse_capture   scancode:left_shift
 }

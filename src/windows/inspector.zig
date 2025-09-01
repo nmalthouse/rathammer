@@ -23,6 +23,7 @@ const Layer = @import("../layer.zig");
 // old selection to new for example.
 // or, we have the editor.selection emit an event.
 pub const InspectorWindow = struct {
+    pub const tabs = [_][]const u8{ "props", "io", "tool", "layer" };
     const Self = @This();
     const MiscBtn = enum {
         ungroup,
@@ -140,7 +141,7 @@ pub const InspectorWindow = struct {
             a.addChildOpt(gui, vt, CB(gui, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null));
         }
         ly.pushRemaining();
-        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &.{ "props", "io", "tool", "layer" }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &tabs, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
     }
 
     fn buildTabs(user_vt: *iArea, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {

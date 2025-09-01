@@ -81,6 +81,8 @@ pub const Config = struct {
         redo: Keybind = .{ .b = KC(.s, 0) },
 
         clip_commit: Keybind = .{ .b = SC(.RETURN, 0) },
+
+        inspector_tab: std.ArrayList(Keybind),
     },
     window: struct {
         height_px: i32 = 600,
@@ -158,6 +160,7 @@ pub const ConfigCtx = struct {
         self.config.games.map.deinit();
         self.config.keys.workspace.deinit();
         self.config.keys.tool.deinit();
+        self.config.keys.inspector_tab.deinit();
         self.strings.deinit();
     }
 };
