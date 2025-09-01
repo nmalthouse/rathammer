@@ -1393,9 +1393,10 @@ pub const Context = struct {
         try self.notify("saving: {s}{s}", .{ path, basename }, colors.tentative);
 
         const name = try self.printScratch("{s}{s}.ratmap", .{ path, basename });
+        //const copy_name = try self.printScratch("{s}{s}.ratmap.saving", .{ path, basename });
         //TODO make copy of existing map incase something goes wrong
 
-        const out_file = try std.fs.cwd().createFile(name, .{});
+        //const out_file = try std.fs.cwd().createFile(name, .{});
 
         var jwriter = std.ArrayList(u8).init(self.alloc);
 
@@ -1436,13 +1437,16 @@ pub const Context = struct {
             try async_util.CompressAndSave.spawn(
                 self.alloc,
                 &self.async_asset_load,
-                jwriter,
-                out_file,
-                bmp,
+                .{
+                    .json_buffer = jwriter,
+                    .dir = try std.fs.cwd().openDir(".", .{}),
+                    .name = name,
+                    .thumbnail = bmp,
+                },
             );
         } else |err| {
             jwriter.deinit();
-            out_file.close();
+            //out_file.close();
             log.err("writeToJson failed ! {}", .{err});
             try self.notify("save failed!: {}", .{err}, colors.bad);
         }

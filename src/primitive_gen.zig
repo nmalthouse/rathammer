@@ -501,14 +501,3 @@ pub fn uvSphere(alloc: std.mem.Allocator, param: struct {
 
     return prim;
 }
-
-test {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-    std.debug.print("\n", .{});
-    const outfile = try std.fs.cwd().createFile("/tmp/ass.obj", .{});
-    defer outfile.close();
-    //const prim = try stairs(alloc, .{ .z = 10, .width = 100, .height = 100, .rise = 5, .run = 10 });
-    const prim = try uvSphere(alloc, .{ .r = 10 });
-    try prim.toObj(outfile.writer());
-}

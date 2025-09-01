@@ -202,35 +202,45 @@ pub const MapCompile = struct {
 };
 
 pub const CompressAndSave = struct {
+    const Opts = struct {
+        dir: std.fs.Dir,
+        name: []const u8,
+        json_buffer: std.ArrayList(u8),
+        thumbnail: ?graph.Bitmap,
+    };
     job: thread_pool.iJob,
     pool_ptr: *thread_pool.Context,
 
     alloc: std.mem.Allocator,
     json_buf: std.ArrayList(u8),
 
-    file: std.fs.File,
+    dir: std.fs.Dir,
+    filename: []const u8,
     status: enum { failed, built, nothing } = .nothing,
     thumb: ?graph.Bitmap,
 
-    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, json_buffer: std.ArrayList(u8), file: std.fs.File, thumbnail: ?graph.Bitmap) !void {
+    //Closes the passed in dir handle
+    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, opts: Opts) !void {
         const self = try alloc.create(@This());
         self.* = .{
             .job = .{
                 .user_id = 0,
                 .onComplete = &onComplete,
             },
-            .thumb = thumbnail,
+            .thumb = opts.thumbnail,
             .alloc = alloc,
-            .json_buf = json_buffer,
+            .json_buf = opts.json_buffer,
             .pool_ptr = pool,
-            .file = file,
+            .dir = opts.dir,
+            .filename = try alloc.dupe(u8, opts.name),
         };
         try pool.spawnJob(workFunc, .{self});
     }
 
     pub fn destroy(self: *@This()) void {
         self.json_buf.deinit();
-        self.file.close();
+        self.dir.close();
+        self.alloc.free(self.filename);
         if (self.thumb) |th|
             th.deinit();
 
@@ -259,40 +269,63 @@ pub const CompressAndSave = struct {
             return;
         }
 
-        const wr = self.file.writer();
-        var bwr = std.io.bufferedWriter(wr);
-        defer bwr.flush() catch {};
+        var copy_name = std.ArrayList(u8).init(self.alloc);
+        defer copy_name.deinit();
+        copy_name.appendSlice(self.filename) catch return;
+        copy_name.appendSlice(".saving") catch return;
 
-        var tar_out = std.tar.writer(bwr.writer());
-
-        var comp_fbs = std.io.FixedBufferStream([]const u8){ .buffer = compressed.items, .pos = 0 };
-
-        if (self.thumb) |th| {
-            var qd = graph.c.qoi_desc{
-                .width = th.w,
-                .height = th.h,
-                .channels = 3,
-                .colorspace = graph.c.QOI_LINEAR,
+        {
+            const file = self.dir.createFile(copy_name.items, .{}) catch |err| {
+                log.err("unable to create file {s} aborting with {!}", .{ copy_name.items, err });
+                return;
             };
-            var qoi_len: c_int = 0;
-            if (graph.c.qoi_encode(&th.data.items[0], &qd, &qoi_len)) |qoi_data| {
-                const qoi_s: [*c]const u8 = @ptrCast(qoi_data);
-                const qlen: usize = if (qoi_len > 0) @intCast(qoi_len) else 0;
-                const slice: []const u8 = qoi_s[0..qlen];
-                var qfbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
-                tar_out.writeFileStream("thumbnail.qoi", qlen, qfbs.reader(), .{}) catch |err| {
-                    log.warn("unable to write thumbnail {!}", .{err});
-                };
-                graph.c.QOI_FREE(qoi_data);
-            }
-        }
+            defer file.close();
 
-        tar_out.writeFileStream("map.json.gz", comp_fbs.buffer.len, comp_fbs.reader(), .{}) catch |err| {
-            log.err("file write failed {!}", .{err});
-            self.status = .failed;
+            const wr = file.writer();
+            var bwr = std.io.bufferedWriter(wr);
+            defer bwr.flush() catch {};
+
+            var tar_out = std.tar.writer(bwr.writer());
+
+            var comp_fbs = std.io.FixedBufferStream([]const u8){ .buffer = compressed.items, .pos = 0 };
+
+            if (self.thumb) |th| {
+                var qd = graph.c.qoi_desc{
+                    .width = th.w,
+                    .height = th.h,
+                    .channels = 3,
+                    .colorspace = graph.c.QOI_LINEAR,
+                };
+                var qoi_len: c_int = 0;
+                if (graph.c.qoi_encode(&th.data.items[0], &qd, &qoi_len)) |qoi_data| {
+                    const qoi_s: [*c]const u8 = @ptrCast(qoi_data);
+                    const qlen: usize = if (qoi_len > 0) @intCast(qoi_len) else 0;
+                    const slice: []const u8 = qoi_s[0..qlen];
+                    var qfbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
+                    tar_out.writeFileStream("thumbnail.qoi", qlen, qfbs.reader(), .{}) catch |err| {
+                        log.warn("unable to write thumbnail {!}", .{err});
+                    };
+                    graph.c.QOI_FREE(qoi_data);
+                }
+            }
+
+            tar_out.writeFileStream("map.json.gz", comp_fbs.buffer.len, comp_fbs.reader(), .{}) catch |err| {
+                log.err("file write failed {!}", .{err});
+                self.status = .failed;
+                return;
+            };
+            self.status = .built;
+        }
+        // saving file was written, copy then delete
+        self.dir.copyFile(copy_name.items, self.dir, self.filename, .{}) catch |err| {
+            log.err("unable to copy {s} to {s} with {!}", .{ copy_name.items, self.filename, err });
             return;
         };
-        self.status = .built;
+
+        self.dir.deleteFile(copy_name.items) catch |err| {
+            log.err("unable to delete {s} with {!}", .{ copy_name.items, err });
+            return;
+        };
     }
 };
 
