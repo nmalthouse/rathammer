@@ -1,0 +1,122 @@
+/// Define editor actions
+const std = @import("std");
+const editor = @import("editor.zig");
+const ecs = @import("ecs.zig");
+const Undo = @import("undo.zig");
+const Vec3 = graph.za.Vec3;
+const graph = @import("graph");
+const Ed = editor.Context;
+const raycast = @import("raycast_solid.zig");
+const RaycastSlice = []const raycast.RcastItem;
+
+pub fn deleteSelected(ed: *Ed) !void {
+    const selection = ed.selection.getSlice();
+    const vis_mask = ecs.EcsT.getComponentMask(&.{ .invisible, .autovis_invisible });
+    if (selection.len > 0) {
+        const ustack = try ed.undoctx.pushNewFmt("deletion of {d} entities", .{selection.len});
+        for (selection) |id| {
+            if (ed.ecs.intersects(id, vis_mask))
+                continue;
+            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, id, .destroy));
+        }
+        Undo.applyRedo(ustack.items, ed);
+        ed.selection.clear();
+    }
+}
+
+pub fn hideSelected(ed: *Ed) !void {
+    const selected = ed.selection.getSlice();
+    for (selected) |sel| {
+        if (!(ed.ecs.hasComponent(sel, .invisible) catch continue)) {
+            ed.edit_state.manual_hidden_count += 1;
+            if (ed.getComponent(sel, .solid)) |solid| {
+                try solid.removeFromMeshMap(sel, ed);
+            }
+            ed.ecs.attachComponent(sel, .invisible, .{}) catch continue;
+        } else {
+            if (ed.edit_state.manual_hidden_count > 0) { //sanity check
+                ed.edit_state.manual_hidden_count -= 1;
+            }
+
+            _ = ed.ecs.removeComponent(sel, .invisible) catch continue;
+            if (ed.getComponent(sel, .solid)) |solid| {
+                try solid.rebuild(sel, ed);
+            }
+        }
+    }
+}
+
+pub fn undo(ed: *Ed) void {
+    ed.undoctx.undo(ed);
+}
+
+pub fn redo(ed: *Ed) void {
+    ed.undoctx.redo(ed);
+}
+
+pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
+    _ = try ed.Selection.put(id, ed);
+}
+
+pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !void {
+    const pot = ed.screenRay(screen_area, view);
+    var starting_point: ?Vec3 = null;
+    if (pot.len > 0) {
+        for (pot) |p| {
+            if (starting_point) |sp| {
+                const dist = sp.distance(p.point);
+                if (dist > ed.selection.options.nearby_distance) break;
+            }
+            if (try ed.selection.put(p.id, ed)) {
+                if (starting_point == null) starting_point = p.point;
+                if (ed.selection.options.select_nearby) {
+                    continue;
+                }
+                break;
+            }
+        }
+    }
+}
+
+pub fn groupSelection(ed: *Ed) !void {
+    if (ed.isBindState(ed.config.keys.group_selection.b, .rising)) {
+        var kit = ed.selection.groups.keyIterator();
+        var owner_count: usize = 0;
+        var last_owner: ?editor.EcsT.Id = null;
+        while (kit.next()) |group| {
+            if (ed.groups.getOwner(group.*)) |own| {
+                owner_count += 1;
+                last_owner = own;
+            }
+        }
+
+        const selection = ed.selection.getSlice();
+
+        if (owner_count > 1)
+            try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
+
+        if (selection.len > 0) {
+            const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
+            const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
+            var owner: ?ecs.EcsT.Id = null;
+            if (last_owner == null) {
+                if (ed.edit_state.default_group_entity != .none) {
+                    const new = try ed.ecs.createEntity();
+                    try ed.ecs.attach(new, .entity, .{
+                        .class = @tagName(ed.edit_state.default_group_entity),
+                    });
+                    owner = new;
+                }
+            }
+            const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
+            for (selection) |id| {
+                const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
+                try ustack.append(
+                    try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
+                );
+            }
+            Undo.applyRedo(ustack.items, ed);
+            try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
+        }
+    }
+}

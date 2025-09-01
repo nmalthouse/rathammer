@@ -18,6 +18,7 @@ const ecs = @import("ecs.zig");
 const eql = std.mem.eql;
 const Os9Gui = graph.Os9Gui;
 const Window = graph.SDL.Window;
+const action = @import("actions.zig");
 
 const panereg = @import("pane.zig");
 
@@ -307,35 +308,17 @@ pub fn draw3Dview(
     }
 
     if (self.isBindState(self.config.keys.undo.b, .rising)) {
-        self.undoctx.undo(self);
+        action.undo(self);
     }
     if (self.isBindState(self.config.keys.redo.b, .rising)) {
-        self.undoctx.redo(self);
+        action.redo(self);
     }
 
     if (self.isBindState(self.config.keys.toggle_select_mode.b, .rising))
         self.selection.toggle();
 
     if (self.isBindState(self.config.keys.hide_selected.b, .rising)) {
-        const selected = self.selection.getSlice();
-        for (selected) |sel| {
-            if (!(self.ecs.hasComponent(sel, .invisible) catch continue)) {
-                self.edit_state.manual_hidden_count += 1;
-                if (self.getComponent(sel, .solid)) |solid| {
-                    try solid.removeFromMeshMap(sel, self);
-                }
-                self.ecs.attachComponent(sel, .invisible, .{}) catch continue;
-            } else {
-                if (self.edit_state.manual_hidden_count > 0) { //sanity check
-                    self.edit_state.manual_hidden_count -= 1;
-                }
-
-                _ = self.ecs.removeComponent(sel, .invisible) catch continue;
-                if (self.getComponent(sel, .solid)) |solid| {
-                    try solid.rebuild(sel, self);
-                }
-            }
-        }
+        try action.hideSelected(self);
     }
 
     if (self.isBindState(self.config.keys.unhide_all.b, .rising)) {
@@ -344,78 +327,17 @@ pub fn draw3Dview(
     }
 
     if (self.isBindState(self.config.keys.select.b, .rising)) {
-        const pot = self.screenRay(screen_area, view_3d);
-        var starting_point: ?Vec3 = null;
-        if (pot.len > 0) {
-            for (pot) |p| {
-                if (starting_point) |sp| {
-                    const dist = sp.distance(p.point);
-                    if (dist > self.selection.options.nearby_distance) break;
-                }
-                if (try self.selection.put(p.id, self)) {
-                    if (starting_point == null) starting_point = p.point;
-                    if (self.selection.options.select_nearby) {
-                        continue;
-                    }
-                    break;
-                }
-            }
-        }
+        try action.selectRaycast(self, screen_area, view_3d);
     }
     if (self.isBindState(self.config.keys.clear_selection.b, .rising))
         self.selection.clear();
 
     if (self.isBindState(self.config.keys.group_selection.b, .rising)) {
-        var kit = self.selection.groups.keyIterator();
-        var owner_count: usize = 0;
-        var last_owner: ?Editor.EcsT.Id = null;
-        while (kit.next()) |group| {
-            if (self.groups.getOwner(group.*)) |own| {
-                owner_count += 1;
-                last_owner = own;
-            }
-        }
-
-        const selection = self.selection.getSlice();
-
-        if (owner_count > 1)
-            try self.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
-
-        if (selection.len > 0) {
-            const ustack = try self.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
-            const group = if (last_owner) |lo| self.groups.getGroup(lo) else null;
-            var owner: ?ecs.EcsT.Id = null;
-            if (last_owner == null) {
-                if (self.edit_state.default_group_entity != .none) {
-                    const new = try self.ecs.createEntity();
-                    try self.ecs.attach(new, .entity, .{
-                        .class = @tagName(self.edit_state.default_group_entity),
-                    });
-                    owner = new;
-                }
-            }
-            const new_group = if (group) |g| g else try self.groups.newGroup(owner);
-            for (selection) |id| {
-                const old = if (try self.ecs.getOpt(id, .group)) |g| g.id else 0;
-                try ustack.append(
-                    try undo.UndoChangeGroup.create(self.undoctx.alloc, old, new_group, id),
-                );
-            }
-            undo.applyRedo(ustack.items, self);
-            try self.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
-        }
+        try action.groupSelection(self);
     }
 
     if (self.isBindState(self.config.keys.delete_selected.b, .rising)) {
-        const selection = self.selection.getSlice();
-        if (selection.len > 0) {
-            const ustack = try self.undoctx.pushNewFmt("deletion of {d} entities", .{selection.len});
-            for (selection) |id| {
-                try ustack.append(try undo.UndoCreateDestroy.create(self.undoctx.alloc, id, .destroy));
-            }
-            undo.applyRedo(ustack.items, self);
-            self.selection.clear();
-        }
+        try action.deleteSelected(self);
     }
 
     const td = tools.ToolData{
