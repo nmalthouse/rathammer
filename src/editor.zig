@@ -1225,7 +1225,7 @@ pub const Context = struct {
             try self.layers.buildMappingFromVmf(vmf_.visgroups.visgroup, self.layers.root);
         try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
         {
-            loadctx.expected_cb = vmf_.world.solid.len + vmf_.entity.len + 10;
+            loadctx.addExpected(vmf_.world.solid.len + vmf_.entity.len + 10);
             var gen_timer = try std.time.Timer.start();
             for (vmf_.world.solid, 0..) |solid, si| {
                 try self.putSolidFromVmf(solid, null);
@@ -1655,24 +1655,10 @@ pub const Context = struct {
 };
 
 pub const LoadCtx = struct {
+    opt: ?LoadCtxReal = null,
 
-    //No need for high fps when loading. Only repaint this often.
-    refresh_period_ms: usize = 66,
-
-    buffer: [256]u8 = undefined,
-    timer: std.time.Timer,
-    draw: *graph.ImmediateDrawingContext,
-    win: *graph.SDL.Window,
-    font: *graph.Font,
-    splash: graph.Texture,
-    draw_splash: bool = true,
-    gtimer: std.time.Timer,
-    time: u64 = 0,
-
-    expected_cb: usize = 1, // these are used to update progress bar
-    cb_count: usize = 0,
-
-    pub fn printCb(self: *@This(), comptime fmt: []const u8, args: anytype) void {
+    pub fn printCb(oself: *@This(), comptime fmt: []const u8, args: anytype) void {
+        const self = &(oself.opt orelse return);
         self.cb_count += 1;
         if (self.timer.read() / std.time.ns_per_ms < self.refresh_period_ms) {
             return;
@@ -1680,14 +1666,16 @@ pub const LoadCtx = struct {
         self.cb_count -= 1;
         var fbs = std.io.FixedBufferStream([]u8){ .buffer = &self.buffer, .pos = 0 };
         fbs.writer().print(fmt, args) catch return;
-        self.cb(fbs.getWritten());
+        oself.cb(fbs.getWritten());
     }
 
-    pub fn addExpected(self: *@This(), addition: usize) void {
+    pub fn addExpected(oself: *@This(), addition: usize) void {
+        const self = &(oself.opt orelse return);
         self.expected_cb += addition;
     }
 
-    pub fn cb(self: *@This(), message: []const u8) void {
+    pub fn cb(oself: *@This(), message: []const u8) void {
+        const self = &(oself.opt orelse return);
         self.cb_count += 1;
         if (self.timer.read() / std.time.ns_per_ms < self.refresh_period_ms) {
             return;
@@ -1697,12 +1685,13 @@ pub const LoadCtx = struct {
         self.draw.begin(colors.splash_clear, self.win.screen_dimensions.toF()) catch return;
         //self.draw.text(.{ .x = 0, .y = 0 }, message, &self.font.font, 100, 0xffffffff);
         const perc: f32 = @as(f32, @floatFromInt(self.cb_count)) / @as(f32, @floatFromInt(self.expected_cb));
-        self.drawSplash(perc, message);
+        oself.drawSplash(perc, message);
         self.draw.end(null) catch return;
         self.win.swap(); //So the window doesn't look too broken while loading
     }
 
-    pub fn drawSplash(self: *@This(), perc: f32, message: []const u8) void {
+    pub fn drawSplash(oself: *@This(), perc: f32, message: []const u8) void {
+        const self = &(oself.opt orelse return);
         if (DISABLE_SPLASH)
             return;
         const cx = self.draw.screen_dimensions.x / 2;
@@ -1724,7 +1713,8 @@ pub const LoadCtx = struct {
         self.draw.rect(pbar.split(.vertical, pbar.w * p)[0], colors.progress);
     }
 
-    pub fn loadedSplash(self: *@This(), end: bool) !void {
+    pub fn loadedSplash(oself: *@This(), end: bool) !void {
+        const self = &(oself.opt orelse return);
         if (DISABLE_SPLASH)
             return;
         if (self.draw_splash) {
@@ -1739,11 +1729,48 @@ pub const LoadCtx = struct {
             graph.c.glEnable(graph.c.GL_BLEND);
             //graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
             self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
-            self.drawSplash(1.0, fbs.getWritten());
+            oself.drawSplash(1.0, fbs.getWritten());
             if (end)
                 self.draw_splash = false;
         }
     }
+
+    pub fn resetTime(self: *@This()) void {
+        if (self.opt) |*o| {
+            o.gtimer.reset();
+        }
+    }
+
+    pub fn setTime(self: *@This()) void {
+        if (self.opt) |*o| {
+            o.time = o.gtimer.read();
+        }
+    }
+
+    pub fn setDraw(self: *@This(), should: bool) void {
+        if (self.opt) |*o| {
+            o.draw_splash = should;
+        }
+    }
+};
+
+pub const LoadCtxReal = struct {
+
+    //No need for high fps when loading. Only repaint this often.
+    refresh_period_ms: usize = 66,
+
+    buffer: [256]u8 = undefined,
+    timer: std.time.Timer,
+    draw: *graph.ImmediateDrawingContext,
+    win: *graph.SDL.Window,
+    font: *graph.Font,
+    splash: graph.Texture,
+    draw_splash: bool = true,
+    gtimer: std.time.Timer,
+    time: u64 = 0,
+
+    expected_cb: usize = 1, // these are used to update progress bar
+    cb_count: usize = 0,
 };
 
 /// Returns the infamous pink and black checker texture.

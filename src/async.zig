@@ -92,9 +92,9 @@ pub const SdlFileData = struct {
                 }
             },
             .pick_map => {
-                edit.loadctx.draw_splash = true; // Renable it
+                edit.loadctx.setDraw(true); // Renable it
                 edit.paused = false;
-                edit.loadctx.gtimer.reset();
+                edit.loadctx.resetTime();
                 edit.loadMap(std.fs.cwd(), self.name_buffer.items, edit.loadctx) catch |err| {
                     std.debug.print("load failed because {!}\n", .{err});
                 };

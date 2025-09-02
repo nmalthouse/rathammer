@@ -256,7 +256,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer font.deinit();
     const splash = graph.Texture.initFromImgFile(alloc, app_cwd, "ratasset/small.png", .{}) catch edit.missingTexture();
 
-    var loadctx = edit.LoadCtx{
+    var loadctx = edit.LoadCtx{ .opt = .{
         .draw = &draw,
         .font = &font,
         .win = &win,
@@ -264,7 +264,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .timer = try std.time.Timer.start(),
         .gtimer = load_timer,
         .expected_cb = 100,
-    };
+    } };
 
     var time_init = try std.time.Timer.start();
 
@@ -341,9 +341,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     try gui.addWindow(&console_win.vt, Rec(0, 0, 800, 600));
 
     const main_3d_id = try editor.panes.add(try editor_view.Main3DView.create(editor.panes.alloc, &font.font, gui.style.config.text_h));
-    const main_2d_id = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .y));
-    const main_2d_id2 = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .x));
-    const main_2d_id3 = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .z));
+    const main_2d_id = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .y, &font.font));
+    const main_2d_id2 = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .x, &font.font));
+    const main_2d_id3 = try editor.panes.add(try Ctx2dView.create(editor.panes.alloc, .z, &font.font));
     const inspector_pane = try editor.panes.add(try panereg.GuiPane.create(editor.panes.alloc, &gui, &inspector_win.vt));
     const texture_pane = try editor.panes.add(try OldGuiPane.create(editor.panes.alloc, editor, .texture, &os9gui));
     const model_pane = try editor.panes.add(try OldGuiPane.create(editor.panes.alloc, editor, .model, &os9gui));
@@ -357,7 +357,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     vpk.timer.log("Vpk dir");
 
     editor.draw_state.cam3d.fov = config.window.cam_fov;
-    loadctx.time = loadctx.gtimer.read();
+    loadctx.setTime();
 
     if (args.blank) |blank| {
         try editor.setMapName(blank);
@@ -380,7 +380,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     //TODO with assets loaded dynamically, names might not be correct when saving before all loaded
 
-    loadctx.time = loadctx.gtimer.read();
+    loadctx.setTime();
 
     graph.c.glEnable(graph.c.GL_CULL_FACE);
     graph.c.glCullFace(graph.c.GL_BACK);

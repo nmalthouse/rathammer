@@ -18,6 +18,7 @@ pub const Ctx2dView = struct {
         .cam_area = graph.Rec(0, 0, 1000, 1000),
         .screen_area = graph.Rec(0, 0, 0, 0),
     },
+    font: *graph.FontUtil.PublicFontInterface,
 
     axis: Axis,
 
@@ -26,13 +27,14 @@ pub const Ctx2dView = struct {
         self.draw2dView(editor, screen_area, d.draw, pane_id) catch return;
     }
 
-    pub fn create(alloc: std.mem.Allocator, axis: Axis) !*iPane {
+    pub fn create(alloc: std.mem.Allocator, axis: Axis, font: *graph.FontUtil.PublicFontInterface) !*iPane {
         var ret = try alloc.create(@This());
         ret.* = .{
             .vt = .{
                 .deinit_fn = &@This().deinit,
                 .draw_fn = &@This().draw_fn,
             },
+            .font = font,
             .axis = axis,
         };
         return &ret.vt;
@@ -114,7 +116,7 @@ pub const Ctx2dView = struct {
             .view_3d = &view_3d,
             .cam2d = &self.cam,
             .draw = draw,
-            .text_param = .{ .px_size = 10, .color = 0xffff_ffff, .font = &ed.loadctx.font.font },
+            .text_param = .{ .px_size = 10, .color = 0xffff_ffff, .font = self.font },
         };
         if (ed.getCurrentTool()) |tool_vt| {
             const selected = ed.selection.getSlice();
