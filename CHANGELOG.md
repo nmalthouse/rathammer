@@ -12,3 +12,7 @@
 * Deprecated visgroups
 * Replaced visgroups with layer system
 * Make recent texture list operate sanely.
+* Add keys to switch inspector tab
+* Add an optional UUID field to json maps
+* Maps are written to "$MAPNAME.ratmap.saving" before being atomically moved to "$MAPNAME.ratamp"
+* Gracefully handle json maps with unknown components

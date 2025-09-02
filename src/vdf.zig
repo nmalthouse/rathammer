@@ -504,7 +504,7 @@ fn expectParseError(slice: []const u8, ex_err: anyerror, line_num: usize) !void 
     const exd = std.testing.expectEqual;
     const alloc = std.testing.allocator;
     var einfo = ErrorInfo{};
-    var p = parse(alloc, slice, &einfo, .{}) catch |err| {
+    var p = parse(alloc, slice, &einfo, .{ .strict_one_kv_per_line = true }) catch |err| {
         try exd(ex_err, err);
         try exd(line_num, einfo.line_number);
 
