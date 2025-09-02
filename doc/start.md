@@ -94,6 +94,8 @@ Clicking on any part of the selected brushes will let you do a "smart move" If y
 
 This smart move function means you can move objects along arbitrary planes, by creating a temporary solid with desired plane, moving along that plane with all selected, then deleting the temporary solid.
 
+The gizmo is always positioned on the centeroid of the last selected object. Rotatations are done about this point. This means you can specfiy an arbirary origin for rotations by creating a temporary object, selecting it last, then doing the rotation.
+
 ### Face translate tool.
 A Specialized tool for moving the faces of a single solid in an arbitrary direction. If more than one entity is selected it will draw a bounding box around all selected and allow you to scale them proportionally. 
 
