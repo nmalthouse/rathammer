@@ -271,6 +271,20 @@ pub const Context = struct {
         }
     }
 
+    // result stored in frame_arena
+    pub fn getMapFullPath(self: *Self) ?[]const u8 {
+        const lm = self.loaded_map_name orelse return null;
+        const lp = self.loaded_map_path orelse return null;
+
+        const aa = self.frame_arena.allocator();
+        const name = self.printScratch("{s}{s}.ratmap", .{ lp, lm }) catch return null;
+        const full_path = self.dirs.app_cwd.realpathAlloc(aa, name) catch |err| {
+            std.debug.print("Realpath failed with {!} on {s}\n", .{ err, name });
+            return null;
+        };
+        return full_path;
+    }
+
     pub fn setMapName(self: *Self, filename: []const u8) !void {
         const eql = std.mem.eql;
         const allowed_exts = [_][]const u8{
@@ -1094,44 +1108,41 @@ pub const Context = struct {
         }
 
         self.setWindowTitle(.{ "", self.loaded_map_name orelse "unnamed map" });
+    }
 
-        { //TODO MOVE TO SAVE MAP INSTEAD?
-            var recent = std.ArrayList([]const u8).init(self.alloc);
-            defer recent.deinit();
-            const aa = self.frame_arena.allocator();
-            const out_name = try path.realpathAlloc(aa, filename);
-            if (self.dirs.config.openFile("recent_maps.txt", .{})) |recent_list| { //Keep track of recent maps
-                defer recent_list.close();
+    pub fn addRecentMap(self: *Self, full_path: []const u8) !void {
+        var recent = std.ArrayList([]const u8).init(self.alloc);
+        defer recent.deinit();
+        const aa = self.frame_arena.allocator();
+        if (self.dirs.config.openFile("recent_maps.txt", .{})) |recent_list| { //Keep track of recent maps
+            defer recent_list.close();
 
-                const slice = try recent_list.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
-                defer self.alloc.free(slice);
-                var it = std.mem.tokenizeScalar(u8, slice, '\n');
-                while (it.next()) |filen| {
-                    if (std.fs.cwd().openFile(filen, .{})) |recent_map| {
-                        //const qoi_data = json_map.getFileFromTar(recent_map,"thumbnail.qoi") catch continue;
-                        recent_map.close();
-                        try recent.append(try aa.dupe(u8, filen));
-                    } else |_| {}
-                }
-            } else |_| {}
-
-            const out_ = out_name[0 .. out_name.len - ext.len];
-            const out_rat = try self.printScratch("{s}.ratmap", .{out_});
-            for (recent.items, 0..) |rec, i| {
-                if (std.mem.eql(u8, rec, out_rat)) {
-                    _ = recent.orderedRemove(i);
-                    break;
-                }
+            const slice = try recent_list.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
+            defer self.alloc.free(slice);
+            var it = std.mem.tokenizeScalar(u8, slice, '\n');
+            while (it.next()) |filen| {
+                if (std.fs.cwd().openFile(filen, .{})) |recent_map| {
+                    //const qoi_data = json_map.getFileFromTar(recent_map,"thumbnail.qoi") catch continue;
+                    recent_map.close();
+                    try recent.append(try aa.dupe(u8, filen));
+                } else |_| {}
             }
+        } else |_| {}
 
-            try recent.insert(0, out_rat);
-            if (self.dirs.config.createFile("recent_maps.txt", .{})) |recent_out| {
-                defer recent_out.close();
-                for (recent.items) |rec| {
-                    try recent_out.writer().print("{s}\n", .{rec});
-                }
-            } else |_| {}
+        for (recent.items, 0..) |rec, i| {
+            if (std.mem.eql(u8, rec, full_path)) {
+                _ = recent.orderedRemove(i);
+                break;
+            }
         }
+
+        try recent.insert(0, full_path);
+        if (self.dirs.config.createFile("recent_maps.txt", .{})) |recent_out| {
+            defer recent_out.close();
+            for (recent.items) |rec| {
+                try recent_out.writer().print("{s}\n", .{rec});
+            }
+        } else |_| {}
     }
 
     fn loadJsonFile(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {

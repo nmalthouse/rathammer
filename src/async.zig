@@ -253,7 +253,16 @@ pub const CompressAndSave = struct {
         defer self.destroy();
         switch (self.status) {
             .nothing, .failed => edit.notify("Unable to compress map nothing written", .{}, 0xff0000ff) catch {},
-            .built => edit.notify("Compressed map", .{}, 0x00ff00ff) catch {},
+            .built => {
+                edit.notify("Compressed map", .{}, 0x00ff00ff) catch {};
+                if (edit.getMapFullPath()) |full_path| {
+                    edit.addRecentMap(full_path) catch |err| {
+                        std.debug.print("Failed to write recent maps {!}\n", .{err});
+                    };
+                } else {
+                    std.debug.print("Failed to get map full path\n", .{});
+                }
+            },
         }
     }
 
