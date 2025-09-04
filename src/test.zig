@@ -59,4 +59,11 @@ test "editor init" {
     var loadctx = edit.LoadCtx{};
     var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &loadctx, &env, app_cwd, config_dir);
     defer editor.deinit();
+    win.pumpEvents(.poll);
+
+    try editor.setMapName("testmap");
+
+    try editor.initNewMap();
+
+    try editor.update(&win);
 }

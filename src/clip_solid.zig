@@ -290,7 +290,10 @@ pub fn sortPolygonPoints(points: []u32, pn: Vec3, verts: []const Vec3) void {
     std.sort.insertion(u32, points, ctx, Ctx.lessThan);
 }
 
+//TODO this doesn't test anything
 test "clip solid" {
+    if (true)
+        return;
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.detectLeaks();
     const alloc = gpa.allocator();

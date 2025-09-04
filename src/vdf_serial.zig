@@ -171,8 +171,9 @@ pub fn WriteVdf(out_stream_T: type) type {
 
 test {
     const alloc = std.testing.allocator;
-    const out = std.io.getStdOut();
-    const wr = out.writer();
+    var out = std.ArrayListUnmanaged(u8){};
+    defer out.deinit(alloc);
+    const wr = out.writer(alloc);
     var s = WriteVdf(@TypeOf(wr)).init(alloc, wr);
     defer s.deinit();
     try s.writeKey("hello");
@@ -182,7 +183,7 @@ test {
         try s.writeValue("val1");
 
         try s.writeKey("big key with  {} stuff");
-        try s.writeValue("another value\thLL");
+        try s.writeValue("another valuehLL");
 
         try s.writeKey("My object");
         try s.beginObject();
@@ -193,4 +194,17 @@ test {
         try s.endObject();
     }
     try s.endObject();
+
+    const expected =
+        \\hello {
+        \\    key1 val1
+        \\    "big key with  {} stuff" "another valuehLL"
+        \\    "My object" {
+        \\        Hello world
+        \\    }
+        \\}
+        \\
+    ;
+
+    try std.testing.expectEqualDeep(expected, out.items);
 }
