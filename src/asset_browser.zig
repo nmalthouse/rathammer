@@ -22,21 +22,22 @@ pub const DialogState = struct {
 
 pub const RecentsList = struct {
     max: usize = 16,
-    list: std.ArrayList(vpk.VpkResId),
+    alloc: std.mem.Allocator,
+    list: std.ArrayListUnmanaged(vpk.VpkResId) = .{},
 
     pub fn init(alloc: std.mem.Allocator, max: usize) @This() {
         return .{
-            .list = std.ArrayList(vpk.VpkResId).init(alloc),
+            .alloc = alloc,
             .max = max,
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.list.deinit();
+        self.list.deinit(self.alloc);
     }
 
     pub fn append(self: *@This(), id: vpk.VpkResId) !void {
-        try self.list.append(id);
+        try self.list.append(self.alloc, id);
     }
 
     pub fn put(self: *@This(), id: vpk.VpkResId) !void {
@@ -47,9 +48,9 @@ pub const RecentsList = struct {
             }
         }
 
-        try self.list.insert(0, id);
+        try self.list.insert(self.alloc, 0, id);
         if (self.list.items.len > self.max)
-            try self.list.resize(self.max);
+            try self.list.resize(self.alloc, self.max);
     }
 };
 

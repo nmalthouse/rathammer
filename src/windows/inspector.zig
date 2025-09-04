@@ -793,11 +793,11 @@ pub const InspectorWindow = struct {
         switch (id) {
             1 => { //Target
                 con.target.clearRetainingCapacity();
-                con.target.appendSlice(string) catch return;
+                con.target.appendSlice(con._alloc, string) catch return;
             },
             3 => {
                 con.value.clearRetainingCapacity();
-                con.value.appendSlice(string) catch return;
+                con.value.appendSlice(con._alloc, string) catch return;
             },
             4 => { //delay
                 const num = std.fmt.parseFloat(f32, string) catch return;

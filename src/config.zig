@@ -2,6 +2,7 @@ const std = @import("std");
 const vdf = @import("vdf.zig");
 const graph = @import("graph");
 const StringStorage = @import("string.zig").StringStorage;
+const ArrayList = std.ArrayListUnmanaged;
 
 // TODO all values should have a default value
 /// The user's 'config.vdf' maps directly into this structure
@@ -45,8 +46,8 @@ pub const Config = struct {
         focus_prop_tab: Keybind = .{ .b = SC(.G, 0) },
         focus_tool_tab: Keybind = .{ .b = SC(.T, 0) },
 
-        tool: std.ArrayList(Keybind),
-        workspace: std.ArrayList(Keybind),
+        tool: ArrayList(Keybind) = .{},
+        workspace: ArrayList(Keybind) = .{},
         save: Keybind = .{ .b = KC(.s, mask(&.{.CTRL})) },
         save_new: Keybind = .{ .b = KC(.s, mask(&.{ .CTRL, .SHIFT })) },
 
@@ -82,8 +83,8 @@ pub const Config = struct {
 
         clip_commit: Keybind = .{ .b = SC(.RETURN, 0) },
 
-        inspector_tab: std.ArrayList(Keybind),
-    },
+        inspector_tab: ArrayList(Keybind) = .{},
+    } = .{},
     window: struct {
         height_px: i32 = 600,
         width_px: i32 = 800,
@@ -133,7 +134,7 @@ pub const GameEntry = struct {
         output_dir: []const u8 = "",
         tmp_dir: []const u8 = TMP_DIR,
     };
-    gameinfo: std.ArrayList(GameInfo),
+    gameinfo: ArrayList(GameInfo) = .{},
 
     fgd_dir: []const u8,
     fgd: []const u8,
@@ -141,9 +142,9 @@ pub const GameEntry = struct {
     mapbuilder: MapBuilder,
 
     asset_browser_exclude: struct {
-        prefix: []const u8,
-        entry: std.ArrayList([]const u8),
-    },
+        prefix: []const u8 = "",
+        entry: ArrayList([]const u8) = .{},
+    } = .{},
 };
 
 pub const ConfigCtx = struct {
@@ -154,13 +155,13 @@ pub const ConfigCtx = struct {
     pub fn deinit(self: *@This()) void {
         var it = self.config.games.map.valueIterator();
         while (it.next()) |item| {
-            item.asset_browser_exclude.entry.deinit();
-            item.gameinfo.deinit();
+            item.asset_browser_exclude.entry.deinit(self.alloc);
+            item.gameinfo.deinit(self.alloc);
         }
         self.config.games.map.deinit();
-        self.config.keys.workspace.deinit();
-        self.config.keys.tool.deinit();
-        self.config.keys.inspector_tab.deinit();
+        self.config.keys.workspace.deinit(self.alloc);
+        self.config.keys.tool.deinit(self.alloc);
+        self.config.keys.inspector_tab.deinit(self.alloc);
         self.strings.deinit();
     }
 };

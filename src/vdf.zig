@@ -567,9 +567,12 @@ pub fn getArrayListChild(comptime T: type) ?type {
     if (@hasDecl(T, "Slice")) {
         const info = @typeInfo(T.Slice);
         if (info == .pointer and info.pointer.size == .slice) {
-            const t = std.ArrayList(info.pointer.child);
+            const t = std.ArrayListUnmanaged(info.pointer.child);
+            const managed = std.ArrayList(info.pointer.child);
             if (T == t)
                 return info.pointer.child;
+            if (T == managed)
+                @compileError("managed array list not supported " ++ @typeName(T));
         }
     }
     return null;
@@ -611,7 +614,7 @@ pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, allo
                         @field(ret, f.name) = @as(*const f.type, @alignCast(@ptrCast(f.default_value_ptr.?))).*;
                     }
                     const ar_c = is_alist orelse if (do_many) child_info.pointer.child else void;
-                    var vec = std.ArrayList(ar_c).init(alloc);
+                    var vec = std.ArrayListUnmanaged(ar_c){};
 
                     for (value.obj.list.items, 0..) |*item, vi| {
                         if (f_id == item.key) {
@@ -621,7 +624,7 @@ pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, allo
                                     break :blk null;
                                 };
                                 if (val) |v| {
-                                    try vec.append(v);
+                                    try vec.append(alloc, v);
                                     if (DO_REST)
                                         from_value_visit_tracker.set(vi);
                                 }

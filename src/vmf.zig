@@ -2,6 +2,7 @@
 const std = @import("std");
 const vdf = @import("vdf.zig");
 const graph = @import("graph");
+const ArrayList = std.ArrayListUnmanaged;
 
 pub const Vmf = struct {
     world: World = .{},
@@ -53,17 +54,17 @@ pub const Connection = struct {
 
 pub const Connections = struct {
     is_init: bool = false,
-    list: std.ArrayList(Connection) = undefined,
+    list: ArrayList(Connection) = .{},
 
     pub fn parseVdf(p: *vdf.Parsed, val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
         if (val.* != .obj) return error.notGood;
 
-        var ret = try std.ArrayList(Connection).initCapacity(alloc, val.obj.list.items.len);
+        var ret = try ArrayList(Connection).initCapacity(alloc, val.obj.list.items.len);
         for (val.obj.list.items) |conn| {
             if (conn.val != .literal) return error.invalidConnection;
             var it = std.mem.tokenizeAny(u8, conn.val.literal, ",\x1b");
             const conk = p.stringFromId(conn.key) orelse "";
-            try ret.append(.{
+            try ret.append(alloc, .{
                 .listen_event = conk,
                 .target = it.next() orelse "",
                 .input = it.next() orelse "",
@@ -124,20 +125,20 @@ pub const DispInfo = struct {
 };
 pub fn DispRowG(comptime T: type) type {
     return struct {
-        rows: std.ArrayList(T) = undefined,
+        rows: ArrayList(T) = .{},
         was_init: bool = false,
 
-        pub fn clone(self: *const @This(), alloc: std.mem.Allocator) !std.ArrayList(T) {
-            var ret = std.ArrayList(T).init(alloc);
+        pub fn clone(self: *const @This(), alloc: std.mem.Allocator) !ArrayList(T) {
+            var ret = ArrayList(T){};
             if (self.was_init)
-                try ret.appendSlice(self.rows.items);
+                try ret.appendSlice(alloc, self.rows.items);
             return ret;
         }
 
         pub fn parseVdf(p: *vdf.Parsed, val: *const vdf.KV.Value, alloc: std.mem.Allocator, _: anytype) !@This() {
             if (val.* == .literal)
                 return error.notgood;
-            var ret = try std.ArrayList(T).initCapacity(alloc, val.obj.list.items.len);
+            var ret = try std.ArrayListUnmanaged(T).initCapacity(alloc, val.obj.list.items.len);
             var num_norm_def: usize = 0;
             for (val.obj.list.items, 0..) |row, i| {
                 if (row.val != .literal)
@@ -146,7 +147,7 @@ pub fn DispRowG(comptime T: type) type {
                 var it = std.mem.splitScalar(u8, row.val.literal, ' ');
                 if (i == 0) {
                     num_norm_def = num_norm;
-                    try ret.resize(num_norm * num_norm);
+                    try ret.resize(alloc, num_norm * num_norm);
                 }
                 if (num_norm != num_norm_def)
                     return error.invalidNormalsCount;

@@ -114,7 +114,7 @@ const Mapper = struct {
     }
 
     pub fn buildSolid(self: *@This(), solid: *Solid, verts: []const Vec3) !void {
-        try solid.verts.resize(self.map.count());
+        try solid.verts.resize(solid._alloc, self.map.count());
         var it = self.map.iterator();
         while (it.next()) |item|
             solid.verts.items[item.value_ptr.*] = verts[item.key_ptr.*];
@@ -165,11 +165,11 @@ pub const ClipCtx = struct {
             m.map.deinit();
         self.vert_map.deinit();
         self.ret_verts.deinit();
-        self.split_side.index.deinit();
+        self.split_side.deinit();
     }
 
     pub fn putOne(self: *Self, i: u8, ind: u32) !void {
-        try self.sides[i].index.append(ind);
+        try self.sides[i].index.append(self.sides[i]._alloc, ind);
         try self.mappers[i].put(ind);
     }
 
@@ -194,7 +194,7 @@ pub const ClipCtx = struct {
         for (solid.sides.items) |*side| {
             for (&self.sides) |*s| {
                 s.* = try side.dupe();
-                try s.index.resize(0);
+                try s.index.resize(s._alloc, 0);
             }
             for (side.index.items, 0..) |vi, ii| {
                 const k = self.verts.items[vi];
@@ -217,7 +217,7 @@ pub const ClipCtx = struct {
                                 try self.vert_map.put(int, index);
                                 try self.ret_verts.append(int);
                                 // ! only put the vertex into new side once
-                                try self.split_side.index.append(index);
+                                try self.split_side.index.append(self.split_side._alloc, index);
                             }
                             const in = self.vert_map.get(int) orelse return error.broken;
                             try self.putBoth(in);
@@ -228,7 +228,7 @@ pub const ClipCtx = struct {
                     .on => {
                         if (!self.vert_map.contains(self.ret_verts.items[vi])) {
                             try self.vert_map.put(self.ret_verts.items[vi], 0);
-                            try self.split_side.index.append(vi);
+                            try self.split_side.index.append(self.split_side._alloc, vi);
                         }
                         try self.putBoth(vi);
                     },
@@ -236,7 +236,7 @@ pub const ClipCtx = struct {
             }
             for (&self.sides, 0..) |*s, i| {
                 if (s.index.items.len > 0) {
-                    try ret[i].sides.append(s.*);
+                    try ret[i].sides.append(ret[i]._alloc, s.*);
                 } else {
                     s.deinit();
                 }
@@ -250,10 +250,10 @@ pub const ClipCtx = struct {
             self.split_side.tex_id = tex_id orelse 0;
 
             self.split_side.resetUv(plane, false);
-            try ret[0].sides.append(try self.split_side.dupe());
+            try ret[0].sides.append(ret[0]._alloc, try self.split_side.dupe());
             var duped = try self.split_side.dupe();
             duped.flipNormal();
-            try ret[1].sides.append(duped);
+            try ret[1].sides.append(ret[1]._alloc, duped);
         }
         for (&self.mappers, 0..) |*m, i|
             try m.buildSolid(&ret[i], self.ret_verts.items);

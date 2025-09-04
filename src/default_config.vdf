@@ -7,6 +7,6 @@ games {
         base_dir "rat_custom"
         game_dir "rat_custom"
         fgd_dir  "rat_custom"
-        fgd      "rat.fgd"
+        fgd      "base.fgd"
     }
 }

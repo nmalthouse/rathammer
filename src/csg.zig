@@ -78,7 +78,7 @@ pub const Context = struct {
         const MAPSIZE = std.math.maxInt(i32);
         var timer = try std.time.Timer.start();
         var ret = ecs.Solid.init(alloc);
-        try ret.sides.resize(sides.len);
+        try ret.sides.resize(ret._alloc, sides.len);
 
         self.vecmap.clear();
 
@@ -112,7 +112,7 @@ pub const Context = struct {
 
             const tex = try edit.loadTextureFromVpk(side.material);
             ret.sides.items[si] = .{
-                .index = std.ArrayList(u32).init(alloc),
+                .index = std.ArrayListUnmanaged(u32){},
                 .material = try strstore.store(side.material),
                 .tex_id = tex.res_id,
                 .lightmapscale = side.lightmapscale,
@@ -134,11 +134,11 @@ pub const Context = struct {
             //try ret.sides.items[si].index.appendSlice(indexs);
             for (wind_a.items) |vert| {
                 const ind = try self.vecmap.put(vert.cast(f32));
-                try ret.sides.items[si].index.append(ind);
+                try ret.sides.items[si].index.append(ret._alloc, ind);
             }
             gen_time += timer.read();
         }
-        try ret.verts.appendSlice(self.vecmap.verts.items);
+        try ret.verts.appendSlice(ret._alloc, self.vecmap.verts.items);
         return ret;
     }
 
@@ -308,7 +308,7 @@ pub const Context = struct {
 
         const vper_row: u32 = (std.math.pow(u32, 2, disp.power) + 1);
         var verts = &disp._verts;
-        try verts.resize(vper_row * vper_row);
+        try verts.resize(disp._alloc, vper_row * vper_row);
         const t = 1.0 / (@as(f32, @floatFromInt(vper_row)) - 1); //In the paper, they don't subtract one, this would lead to incorrect lerp?
         const elev = disp.elevation;
         const helper = struct {
@@ -367,7 +367,7 @@ pub const Context = struct {
                 const in2: u32 = @intCast(((q_i + 1) * vper_row) + q_j);
                 const in3: u32 = @intCast(((q_i + 1) * vper_row) + q_j + 1);
 
-                try ind.appendSlice(&.{
+                try ind.appendSlice(disp._alloc, &.{
                     in1, in2, in0, in3, in2, in1,
                 });
                 left = !left;

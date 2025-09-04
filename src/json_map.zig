@@ -232,27 +232,30 @@ fn readComponentFromJson(ctx: InitFromJsonCtx, v: std.json.Value, T: type, vpkct
                 return try T.initFromJson(v, ctx);
             }
             if (vdf.getArrayListChild(T)) |child| {
-                var ret = std.ArrayList(child).init(ctx.alloc);
+                var ret = std.ArrayListUnmanaged(child){};
                 if (child == u8 and v == .string) {
-                    try ret.appendSlice(v.string);
+                    try ret.appendSlice(ctx.alloc, v.string);
                     return ret;
                 }
                 if (v == .null)
                     return ret;
                 if (v != .array) return error.value;
                 for (v.array.items) |item|
-                    try ret.append(try readComponentFromJson(ctx, item, child, vpkctx));
+                    try ret.append(ctx.alloc, try readComponentFromJson(ctx, item, child, vpkctx));
 
                 return ret;
             }
             if (v != .object) return error.value;
             var ret: T = .{};
             inline for (s.fields) |field| {
-                if (v.object.get(field.name)) |val| {
+                if (field.type == std.mem.Allocator) {
+                    @field(ret, field.name) = ctx.alloc;
+                } else if (field.name[0] == '_') { //Skip fields starting with _
+                } else if (v.object.get(field.name)) |val| {
                     @field(ret, field.name) = try readComponentFromJson(ctx, val, field.type, vpkctx);
                 } else {
                     if (vdf.getArrayListChild(field.type)) |child| {
-                        @field(ret, field.name) = std.ArrayList(child).init(ctx.alloc);
+                        @field(ret, field.name) = std.ArrayListUnmanaged(child){};
                     }
                     //@field(ret, field.name) = try readComponentFromJson(ctx, .{ .null = {} }, field.type, vpkctx);
                 }

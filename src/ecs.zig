@@ -17,6 +17,7 @@ const layer = @import("layer.zig");
 const prim_gen = @import("primitive_gen.zig");
 const csg = @import("csg.zig");
 pub const SparseSet = graph.SparseSet;
+const ArrayList = std.ArrayListUnmanaged;
 //Global TODO for ecs stuff
 //Many strings in kvs and connections are stored by editor.StringStorage
 //as they act as an enum value specified in the fgd.
@@ -515,7 +516,8 @@ pub const Side = struct {
     /// Used by displacement
     omit_from_batch: bool = false,
 
-    index: std.ArrayList(u32) = undefined,
+    _alloc: std.mem.Allocator = undefined,
+    index: ArrayList(u32) = .{},
     u: UVaxis = .{},
     v: UVaxis = .{},
     tex_id: vpk.VpkResId = 0,
@@ -529,13 +531,13 @@ pub const Side = struct {
     /// It is only used to keep track of textures that are missing, so they are persisted across save/load.
     /// the actual material assigned is stored in `tex_id`
     material: []const u8 = "",
-    pub fn deinit(self: @This()) void {
-        self.index.deinit();
+    pub fn deinit(self: *@This()) void {
+        self.index.deinit(self._alloc);
     }
 
     pub fn dupe(self: *@This()) !@This() {
         var ret = self.*;
-        ret.index = try self.index.clone();
+        ret.index = try self.index.clone(self._alloc);
         return ret;
     }
 
@@ -544,9 +546,7 @@ pub const Side = struct {
     }
 
     pub fn init(alloc: std.mem.Allocator) @This() {
-        return .{
-            .index = std.ArrayList(u32).init(alloc),
-        };
+        return .{ ._alloc = alloc };
     }
 
     pub fn normal(self: *const @This(), solid: *const Solid) Vec3 {
@@ -705,13 +705,14 @@ pub const Side = struct {
 
 pub const Solid = struct {
     const Self = @This();
-    sides: std.ArrayList(Side) = undefined,
-    verts: std.ArrayList(Vec3) = undefined,
+    _alloc: std.mem.Allocator = undefined,
+    sides: ArrayList(Side) = .{},
+    verts: ArrayList(Vec3) = .{},
 
     /// Bounding box is used during broad phase ray tracing
     /// they are recomputed along with vertex arrays
     pub fn init(alloc: std.mem.Allocator) Solid {
-        return .{ .sides = std.ArrayList(Side).init(alloc), .verts = std.ArrayList(Vec3).init(alloc) };
+        return .{ ._alloc = alloc };
     }
 
     //pub fn initFromJson(v: std.json.Value, editor: *Context) !@This() {
@@ -720,14 +721,14 @@ pub const Solid = struct {
     //}
 
     pub fn dupe(self: *const Self, _: anytype, _: anytype) !Self {
-        const ret_sides = try self.sides.clone();
+        const ret_sides = try self.sides.clone(self._alloc);
         for (ret_sides.items) |*side| {
-            const ind = try side.index.clone();
+            const ind = try side.index.clone(self._alloc);
             side.index = ind;
         }
         return .{
             .sides = ret_sides,
-            .verts = try self.verts.clone(),
+            .verts = try self.verts.clone(self._alloc),
         };
     }
 
@@ -748,13 +749,14 @@ pub const Solid = struct {
     pub fn initFromPrimitive(alloc: std.mem.Allocator, verts: []const Vec3, faces: []const std.ArrayList(u32), tex_id: vpk.VpkResId, offset: Vec3, rot: graph.za.Mat3) !Solid {
         var ret = init(alloc);
         for (verts) |v|
-            try ret.verts.append(rot.mulByVec3(v).add(offset));
+            try ret.verts.append(alloc, rot.mulByVec3(v).add(offset));
 
         for (faces) |face| {
-            var ind = std.ArrayList(u32).init(alloc);
-            try ind.appendSlice(face.items);
+            var ind = ArrayList(u32){};
+            try ind.appendSlice(alloc, face.items);
 
-            try ret.sides.append(.{
+            try ret.sides.append(alloc, .{
+                ._alloc = alloc,
                 .index = ind,
                 .u = .{},
                 .v = .{},
@@ -772,14 +774,15 @@ pub const Solid = struct {
 
     //Prune duplicate verticies and reindex
     pub fn optimizeMesh(self: *Self) !void {
-        var vmap = csg.VecMap.init(self.sides.allocator);
+        const alloc = self._alloc;
+        var vmap = csg.VecMap.init(alloc);
         defer vmap.deinit();
-        var new_sides = std.ArrayList(Side).init(self.sides.allocator);
+        var new_sides = ArrayList(Side){};
 
-        var index_map = std.AutoHashMap(u32, void).init(self.sides.allocator);
+        var index_map = std.AutoHashMap(u32, void).init(alloc);
         defer index_map.deinit();
-        var index = std.ArrayList(u32).init(self.sides.allocator);
-        defer index.deinit();
+        var index = ArrayList(u32){};
+        defer index.deinit(alloc);
 
         for (self.sides.items) |*side| {
             index_map.clearRetainingCapacity();
@@ -790,7 +793,7 @@ pub const Solid = struct {
             for (side.index.items) |ind| { //ensure each index unique
                 const res = try index_map.getOrPut(ind);
                 if (res.found_existing) {} else {
-                    try index.append(ind);
+                    try index.append(alloc, ind);
                 }
             }
             if (index.items.len < 3) { //Remove degenerate sides
@@ -798,23 +801,21 @@ pub const Solid = struct {
                 continue;
             }
             side.index.clearRetainingCapacity();
-            try side.index.appendSlice(index.items);
+            try side.index.appendSlice(alloc, index.items);
 
-            try new_sides.append(side.*);
+            try new_sides.append(self._alloc, side.*);
         }
-        self.sides.deinit();
+        self.sides.deinit(self._alloc);
         self.sides = new_sides;
         if (vmap.verts.items.len < self.verts.items.len) {
-            self.verts.shrinkAndFree(vmap.verts.items.len);
+            self.verts.shrinkAndFree(self._alloc, vmap.verts.items.len);
         }
-        try self.verts.resize(vmap.verts.items.len);
+        try self.verts.resize(self._alloc, vmap.verts.items.len);
         @memcpy(self.verts.items, vmap.verts.items);
     }
 
     pub fn initFromCube(alloc: std.mem.Allocator, v1: Vec3, v2: Vec3, tex_id: vpk.VpkResId) !Solid {
         var ret = init(alloc);
-        //const Va = std.ArrayList(Vec3);
-        //const Ia = std.ArrayList(u32);
         const cc = util3d.cubeFromBounds(v1, v2);
         const N = Vec3.new;
         const o = cc[0];
@@ -854,13 +855,14 @@ pub const Solid = struct {
             .{ N(1, 0, 0), N(0, 0, -1) },
             .{ N(-1, 0, 0), N(0, 0, -1) },
         };
-        try ret.verts.appendSlice(&verts);
+        try ret.verts.appendSlice(ret._alloc, &verts);
         for (vis, 0..) |face, i| {
-            var ind = std.ArrayList(u32).init(alloc);
+            var ind = ArrayList(u32){};
             //try ind.appendSlice(&.{ 1, 2, 0, 2, 3, 0 });
 
-            try ind.appendSlice(&face);
-            try ret.sides.append(.{
+            try ind.appendSlice(ret._alloc, &face);
+            try ret.sides.append(ret._alloc, .{
+                ._alloc = ret._alloc,
                 .index = ind,
                 .u = .{ .axis = Uvs[i][0], .trans = 0, .scale = 0.25 },
                 .v = .{ .axis = Uvs[i][1], .trans = 0, .scale = 0.25 },
@@ -879,10 +881,10 @@ pub const Solid = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.sides.items) |side|
+        for (self.sides.items) |*side|
             side.deinit();
-        self.sides.deinit();
-        self.verts.deinit();
+        self.sides.deinit(self._alloc);
+        self.verts.deinit(self._alloc);
     }
 
     pub fn recomputeBounds(self: *Self, aabb: *AABB) void {
@@ -1148,17 +1150,17 @@ pub const Solid = struct {
 
 pub const Displacements = struct {
     const Self = @This();
-    disps: std.ArrayList(Displacement) = undefined,
+    _alloc: std.mem.Allocator = undefined,
+    disps: ArrayList(Displacement) = .{},
 
     //Solid.sides index map into disps
-    sides: std.ArrayList(?usize) = undefined,
+    sides: ArrayList(?usize) = .{},
 
     pub fn init(alloc: std.mem.Allocator, side_count: usize) !Self {
         var ret = Self{
-            .disps = std.ArrayList(Displacement).init(alloc),
-            .sides = std.ArrayList(?usize).init(alloc),
+            ._alloc = alloc,
         };
-        try ret.sides.appendNTimes(null, side_count);
+        try ret.sides.appendNTimes(ret._alloc, null, side_count);
 
         return ret;
     }
@@ -1166,14 +1168,14 @@ pub const Displacements = struct {
     pub fn deinit(self: *Self) void {
         for (self.disps.items) |*disp|
             disp.deinit();
-        self.sides.deinit();
-        self.disps.deinit();
+        self.sides.deinit(self._alloc);
+        self.disps.deinit(self._alloc);
     }
 
     pub fn dupe(self: *Self, ecs: *EcsT, new_id: EcsT.Id) !Self {
         const ret = Self{
-            .disps = try self.disps.clone(),
-            .sides = try self.sides.clone(),
+            .disps = try self.disps.clone(self._alloc),
+            .sides = try self.sides.clone(self._alloc),
         };
         for (ret.disps.items) |*disp| {
             disp.* = try disp.dupe(ecs, new_id);
@@ -1200,10 +1202,10 @@ pub const Displacements = struct {
 
     pub fn put(self: *Self, disp: Displacement, side_id: usize) !void {
         if (side_id >= self.sides.items.len) {
-            try self.sides.appendNTimes(null, side_id - self.sides.items.len);
+            try self.sides.appendNTimes(self._alloc, null, side_id - self.sides.items.len);
         }
         const disp_index = self.disps.items.len;
-        try self.disps.append(disp);
+        try self.disps.append(self._alloc, disp);
         if (self.sides.items[side_id]) |ex_disp| {
             std.debug.print("CLOBBERING A DISPLACMENT, THIS MAY BE BAD\n", .{});
             self.disps.items[ex_disp].deinit();
@@ -1215,11 +1217,12 @@ pub const Displacements = struct {
 };
 
 pub const Displacement = struct {
-    pub const VectorRow = std.ArrayList(Vec3);
-    pub const ScalarRow = std.ArrayList(f32);
+    pub const VectorRow = ArrayList(Vec3);
+    pub const ScalarRow = ArrayList(f32);
     const Self = @This();
-    _verts: std.ArrayList(Vec3) = undefined,
-    _index: std.ArrayList(u32) = undefined,
+    _alloc: std.mem.Allocator = undefined,
+    _verts: ArrayList(Vec3) = .{},
+    _index: ArrayList(u32) = .{},
     tex_id: vpk.VpkResId = 0,
 
     //DEPRECATION
@@ -1228,11 +1231,11 @@ pub const Displacement = struct {
     vert_start_i: usize = 0,
     power: u32 = 0,
 
-    normals: VectorRow = undefined,
-    offsets: VectorRow = undefined,
-    normal_offsets: VectorRow = undefined,
-    dists: ScalarRow = undefined,
-    alphas: ScalarRow = undefined,
+    normals: VectorRow = .{},
+    offsets: VectorRow = .{},
+    normal_offsets: VectorRow = .{},
+    dists: ScalarRow = .{},
+    alphas: ScalarRow = .{},
 
     //start_pos: Vec3 = Vec3.zero(),
     elevation: f32 = 0,
@@ -1241,13 +1244,13 @@ pub const Displacement = struct {
 
     pub fn dupe(self: *Self, _: anytype, _: anytype) !Self {
         var ret = self.*;
-        ret._verts = try self._verts.clone();
-        ret._index = try self._index.clone();
-        ret.normals = try self.normals.clone();
-        ret.offsets = try self.offsets.clone();
-        ret.normal_offsets = try self.normal_offsets.clone();
-        ret.dists = try self.dists.clone();
-        ret.alphas = try self.alphas.clone();
+        ret._verts = try self._verts.clone(self._alloc);
+        ret._index = try self._index.clone(self._alloc);
+        ret.normals = try self.normals.clone(self._alloc);
+        ret.offsets = try self.offsets.clone(self._alloc);
+        ret.normal_offsets = try self.normal_offsets.clone(self._alloc);
+        ret.dists = try self.dists.clone(self._alloc);
+        ret.alphas = try self.alphas.clone(self._alloc);
 
         return ret;
     }
@@ -1261,32 +1264,28 @@ pub const Displacement = struct {
         const vper_row = vertsPerRow(power);
         const count = vper_row * vper_row;
         var ret = @This(){
-            ._verts = std.ArrayList(Vec3).init(alloc),
-            ._index = std.ArrayList(u32).init(alloc),
+            ._alloc = alloc,
+            ._verts = ArrayList(Vec3){},
+            ._index = ArrayList(u32){},
             .tex_id = tex_id,
             .parent_side_i = parent_s,
             .power = power,
-            .normals = VectorRow.init(alloc),
-            .offsets = VectorRow.init(alloc),
-            .normal_offsets = VectorRow.init(alloc),
-
-            .dists = ScalarRow.init(alloc),
-            .alphas = ScalarRow.init(alloc),
         };
 
-        try ret.normals.appendNTimes(normal, count);
-        try ret.offsets.appendNTimes(Vec3.zero(), count);
-        try ret.normal_offsets.appendNTimes(normal, count);
-        try ret.dists.appendNTimes(0, count);
-        try ret.alphas.appendNTimes(0, count);
+        try ret.normals.appendNTimes(alloc, normal, count);
+        try ret.offsets.appendNTimes(alloc, Vec3.zero(), count);
+        try ret.normal_offsets.appendNTimes(alloc, normal, count);
+        try ret.dists.appendNTimes(alloc, 0, count);
+        try ret.alphas.appendNTimes(alloc, 0, count);
 
         return ret;
     }
 
     pub fn initFromVmf(alloc: std.mem.Allocator, tex_id: vpk.VpkResId, parent_s: usize, dispinfo: *const vmf.DispInfo) !Self {
         var ret = Displacement{
-            ._verts = std.ArrayList(Vec3).init(alloc),
-            ._index = std.ArrayList(u32).init(alloc),
+            ._alloc = alloc,
+            ._verts = ArrayList(Vec3){},
+            ._index = ArrayList(u32){},
             .tex_id = tex_id,
             .parent_side_i = parent_s,
             .power = @intCast(dispinfo.power),
@@ -1303,20 +1302,20 @@ pub const Displacement = struct {
         const vper_row = vertsPerRow(ret.power);
         const vcount = vper_row * vper_row;
         const H = struct {
-            pub fn correctCount(count: usize, array: anytype, default: anytype) !void {
+            pub fn correctCount(count: usize, array: anytype, default: anytype, _alloc: std.mem.Allocator) !void {
                 if (array.items.len != count) {
                     std.debug.print("Displacment has invalid length, replacing\n", .{});
                     array.clearRetainingCapacity();
-                    try array.appendNTimes(default, count);
+                    try array.appendNTimes(_alloc, default, count);
                 }
             }
         };
 
-        try H.correctCount(vcount, &ret.normals, Vec3.new(0, 0, 1));
-        try H.correctCount(vcount, &ret.offsets, Vec3.new(0, 0, 0));
-        try H.correctCount(vcount, &ret.normal_offsets, Vec3.new(0, 0, 0));
-        try H.correctCount(vcount, &ret.dists, 0);
-        try H.correctCount(vcount, &ret.alphas, 0);
+        try H.correctCount(vcount, &ret.normals, Vec3.new(0, 0, 1), alloc);
+        try H.correctCount(vcount, &ret.offsets, Vec3.new(0, 0, 0), alloc);
+        try H.correctCount(vcount, &ret.normal_offsets, Vec3.new(0, 0, 0), alloc);
+        try H.correctCount(vcount, &ret.dists, 0, alloc);
+        try H.correctCount(vcount, &ret.alphas, 0, alloc);
 
         return ret;
     }
@@ -1367,53 +1366,54 @@ pub const Displacement = struct {
         self.power += 1;
         const vper_row = vertsPerRow(self.power);
 
-        var new_norms = VectorRow.init(self.normals.allocator);
-        try new_norms.resize(vper_row * vper_row);
+        const alloc = self._alloc;
+        var new_norms = VectorRow{};
+        try new_norms.resize(alloc, vper_row * vper_row);
         avgVert(Vec3, self.normals.items, new_norms.items, H.avgVec, old_v);
 
-        var new_off = VectorRow.init(self.normals.allocator);
-        try new_off.resize(vper_row * vper_row);
+        var new_off = VectorRow{};
+        try new_off.resize(alloc, vper_row * vper_row);
         avgVert(Vec3, self.offsets.items, new_off.items, H.avgVec, old_v);
 
-        var new_noff = VectorRow.init(self.normals.allocator);
-        try new_noff.resize(vper_row * vper_row);
+        var new_noff = VectorRow{};
+        try new_noff.resize(alloc, vper_row * vper_row);
         avgVert(Vec3, self.normal_offsets.items, new_noff.items, H.avgVec, old_v);
 
-        var new_dist = ScalarRow.init(self.normals.allocator);
-        try new_dist.resize(vper_row * vper_row);
+        var new_dist = ScalarRow{};
+        try new_dist.resize(alloc, vper_row * vper_row);
         avgVert(f32, self.dists.items, new_dist.items, H.avgFloat, old_v);
 
-        var new_alpha = ScalarRow.init(self.normals.allocator);
-        try new_alpha.resize(vper_row * vper_row);
+        var new_alpha = ScalarRow{};
+        try new_alpha.resize(alloc, vper_row * vper_row);
         avgVert(f32, self.alphas.items, new_alpha.items, H.avgFloat, old_v);
 
-        self.normals.deinit();
+        self.normals.deinit(alloc);
         self.normals = new_norms;
 
-        self.offsets.deinit();
+        self.offsets.deinit(alloc);
         self.offsets = new_off;
 
-        self.normal_offsets.deinit();
+        self.normal_offsets.deinit(alloc);
         self.normal_offsets = new_noff;
 
-        self.dists.deinit();
+        self.dists.deinit(alloc);
         self.dists = new_dist;
 
-        self.alphas.deinit();
+        self.alphas.deinit(alloc);
         self.alphas = new_alpha;
 
         try self.markForRebuild(id, ed);
     }
 
     pub fn deinit(self: *Self) void {
-        self._verts.deinit();
-        self._index.deinit();
+        self._verts.deinit(self._alloc);
+        self._index.deinit(self._alloc);
 
-        self.normals.deinit();
-        self.offsets.deinit();
-        self.normal_offsets.deinit();
-        self.dists.deinit();
-        self.alphas.deinit();
+        self.normals.deinit(self._alloc);
+        self.offsets.deinit(self._alloc);
+        self.normal_offsets.deinit(self._alloc);
+        self.dists.deinit(self._alloc);
+        self.alphas.deinit(self._alloc);
         //self.tri_tags.deinit();
     }
 
@@ -1808,37 +1808,32 @@ pub const KeyValues = struct {
 
 pub const Connection = struct {
     const Self = @This();
-    listen_event: []const u8, //Allocated by someone else (string storage)
+    listen_event: []const u8 = "", //Allocated by someone else (string storage)
 
-    target: std.ArrayList(u8),
-    input: []const u8, //Allocated by strstore
+    target: ArrayList(u8) = .{},
+    input: []const u8 = "", //Allocated by strstore
 
-    value: std.ArrayList(u8),
-    delay: f32,
-    fire_count: i32,
+    value: ArrayList(u8) = .{},
+    delay: f32 = 0,
+    fire_count: i32 = -1,
+
+    _alloc: std.mem.Allocator,
 
     pub fn deinit(self: *Self) void {
-        self.value.deinit();
-        self.target.deinit();
+        self.value.deinit(self._alloc);
+        self.target.deinit(self._alloc);
     }
 
     pub fn init(alloc: std.mem.Allocator) Self {
-        return .{
-            .target = std.ArrayList(u8).init(alloc),
-            .value = std.ArrayList(u8).init(alloc),
-            .listen_event = "",
-            .input = "",
-            .delay = 0,
-            .fire_count = -1,
-        };
+        return .{ ._alloc = alloc };
     }
 
     pub fn initFromVmf(alloc: std.mem.Allocator, con: vmf.Connection, str_store: anytype) !@This() {
         var ret = init(alloc);
         ret.listen_event = try str_store.store(con.listen_event);
-        try ret.target.appendSlice(con.target);
+        try ret.target.appendSlice(ret._alloc, con.target);
         ret.input = try str_store.store(con.input);
-        try ret.value.appendSlice(con.value);
+        try ret.value.appendSlice(ret._alloc, con.value);
         ret.delay = con.delay;
         ret.fire_count = con.fire_count;
         return ret;
@@ -1866,8 +1861,8 @@ pub const Connection = struct {
 
         ret.listen_event = try ctx.str_store.store(try H.getString(&v.object, "listen_event"));
         ret.input = try ctx.str_store.store(try H.getString(&v.object, "input"));
-        try ret.target.appendSlice(try H.getString(&v.object, "target"));
-        try ret.value.appendSlice(try H.getString(&v.object, "value"));
+        try ret.target.appendSlice(ctx.alloc, try H.getString(&v.object, "target"));
+        try ret.value.appendSlice(ctx.alloc, try H.getString(&v.object, "value"));
 
         ret.delay = try H.getNum(&v.object, "delay", ret.delay);
         ret.fire_count = try H.getNum(&v.object, "fire_count", ret.fire_count);
@@ -1878,21 +1873,22 @@ pub const Connection = struct {
 pub const Connections = struct {
     const Self = @This();
 
-    list: std.ArrayList(Connection) = undefined,
+    _alloc: std.mem.Allocator = undefined,
+    list: ArrayList(Connection) = .{},
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .list = std.ArrayList(Connection).init(alloc),
+            ._alloc = alloc,
         };
     }
 
     pub fn initFromVmf(alloc: std.mem.Allocator, con: *const vmf.Connections, strstore: anytype) !Self {
-        var ret = @This(){ .list = std.ArrayList(Connection).init(alloc) };
+        var ret = Connections{ ._alloc = alloc };
         if (!con.is_init)
             return ret;
 
         for (con.list.items) |co| {
-            try ret.list.append(try Connection.initFromVmf(alloc, co, strstore));
+            try ret.list.append(alloc, try Connection.initFromVmf(alloc, co, strstore));
         }
         return ret;
     }
@@ -1900,24 +1896,25 @@ pub const Connections = struct {
     pub fn deinit(self: *Self) void {
         for (self.list.items) |*item|
             item.deinit();
-        self.list.deinit();
+        self.list.deinit(self._alloc);
     }
 
     pub fn addEmpty(self: *Self) !void {
-        try self.list.append(Connection.init(self.list.allocator));
+        try self.list.append(self._alloc, Connection.init(self._alloc));
     }
 
     pub fn dupe(self: *Self, _: anytype, _: anytype) !Self {
-        var new = try self.list.clone();
+        var new = try self.list.clone(self._alloc);
         for (self.list.items, 0..) |old, i| {
             new.items[i] = .{
+                ._alloc = self._alloc,
                 //Explictly copy fields over to prevent bugs if alloced fields are added.
                 .listen_event = old.listen_event,
                 .input = old.input,
                 .delay = old.delay,
                 .fire_count = old.fire_count,
-                .value = try old.value.clone(),
-                .target = try old.target.clone(),
+                .value = try old.value.clone(self._alloc),
+                .target = try old.target.clone(self._alloc),
             };
         }
         return .{ .list = new };
