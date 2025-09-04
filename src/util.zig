@@ -65,7 +65,7 @@ pub fn getFileFromTar(alloc: std.mem.Allocator, fileo: std.fs.File, filename: []
         .file_name_buffer = &fname_buffer,
         .link_name_buffer = &lname_buffer,
     });
-    while (try tar_it.next()) |file| {
+    while (tar_it.next() catch null) |file| {
         if (std.mem.eql(u8, file.name, filename)) {
             return try file.reader().readAllAlloc(alloc, std.math.maxInt(usize));
         }

@@ -1077,7 +1077,7 @@ pub const Context = struct {
             .file_name_buffer = &fname_buffer,
             .link_name_buffer = &lname_buffer,
         });
-        while (try tar_it.next()) |file| {
+        while (tar_it.next() catch null) |file| {
             if (std.mem.eql(u8, file.name, "map.json.gz")) {
                 var unzipped = std.ArrayList(u8).init(self.alloc);
                 defer unzipped.deinit();
@@ -1085,9 +1085,11 @@ pub const Context = struct {
 
                 try self.loadJson(unzipped.items, loadctx, filename);
 
-                continue;
+                return;
             }
         }
+        log.err("map.json.gz was not found in ratmap {s}", .{filename});
+        return error.invalidTarRatmap;
     }
 
     pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
