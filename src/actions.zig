@@ -8,6 +8,7 @@ const graph = @import("graph");
 const Ed = editor.Context;
 const raycast = @import("raycast_solid.zig");
 const RaycastSlice = []const raycast.RcastItem;
+const vpk = @import("vpk.zig");
 
 pub fn deleteSelected(ed: *Ed) !void {
     const selection = ed.selection.getSlice();
@@ -46,6 +47,11 @@ pub fn hideSelected(ed: *Ed) !void {
     }
 }
 
+pub fn unhideAll(ed: *Ed) !void {
+    try ed.rebuildVisGroups();
+    ed.edit_state.manual_hidden_count = 0;
+}
+
 pub fn undo(ed: *Ed) void {
     ed.undoctx.undo(ed);
 }
@@ -55,7 +61,7 @@ pub fn redo(ed: *Ed) void {
 }
 
 pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
-    _ = try ed.Selection.put(id, ed);
+    _ = try ed.selection.put(id, ed);
 }
 
 pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !void {
@@ -119,4 +125,46 @@ pub fn groupSelection(ed: *Ed) !void {
             try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
         }
     }
+}
+
+const pgen = @import("primitive_gen.zig");
+const Primitive = pgen.Primitive;
+pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, center: Vec3, rot: graph.za.Mat3, select: bool) ![]const ecs.EcsT.Id {
+    const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
+    defer Undo.applyRedo(ustack.items, ed);
+    if (select) {
+        ed.selection.clear();
+        ed.selection.mode = .many;
+    }
+    const aa = ed.frame_arena.allocator();
+    var id_list = std.ArrayListUnmanaged(ecs.EcsT.Id){};
+    for (primitive.solids.items) |sol| {
+        if (ecs.Solid.initFromPrimitive(ed.alloc, primitive.verts.items, sol.items, tex_id, center, rot)) |newsolid| {
+            const new = try ed.ecs.createEntity();
+            try id_list.append(aa, new);
+            if (select) {
+                _ = try ed.selection.put(new, ed);
+            }
+            try ed.ecs.attach(new, .solid, newsolid);
+            try ed.ecs.attach(new, .bounding_box, .{});
+            try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
+            const solid_ptr = try ed.ecs.getPtr(new, .solid);
+            try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
+            {
+                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+            }
+        } else |a| {
+            std.debug.print("Invalid cube {!}\n", .{a});
+        }
+    }
+    return id_list.items;
+}
+
+pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: bool) !ecs.EcsT.Id {
+    const prim = try pgen.cube(ed.frame_arena.allocator(), .{ .size = ext });
+
+    const ids = try createSolid(ed, &prim, tex_id, pos, graph.za.Mat3.identity(), select);
+    if (ids.len != 1) return error.horrible;
+
+    return ids[0];
 }

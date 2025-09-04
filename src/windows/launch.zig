@@ -148,7 +148,7 @@ pub const LaunchWindow = struct {
             .new_map => {
                 self.vt.needs_rebuild = true;
                 const ed = self.editor;
-                ed.initNewMap() catch {
+                ed.initNewMap("sky_day01_01") catch {
                     std.debug.print("ERROR INIT NEW MAP\n", .{});
                 };
                 self.editor.paused = false;

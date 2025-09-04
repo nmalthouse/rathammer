@@ -321,10 +321,8 @@ pub fn draw3Dview(
         try action.hideSelected(self);
     }
 
-    if (self.isBindState(self.config.keys.unhide_all.b, .rising)) {
-        try self.rebuildVisGroups();
-        self.edit_state.manual_hidden_count = 0;
-    }
+    if (self.isBindState(self.config.keys.unhide_all.b, .rising))
+        try action.unhideAll(self);
 
     if (self.isBindState(self.config.keys.select.b, .rising)) {
         try action.selectRaycast(self, screen_area, view_3d);

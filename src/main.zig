@@ -362,7 +362,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     if (args.blank) |blank| {
         try editor.setMapName(blank);
-        try editor.initNewMap();
+        try editor.initNewMap("sky_day01_01");
     } else {
         if (args.map) |mapname| {
             try editor.loadMap(app_cwd, mapname, &loadctx);

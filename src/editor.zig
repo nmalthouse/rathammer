@@ -1060,8 +1060,9 @@ pub const Context = struct {
         }
     }
 
-    pub fn initNewMap(self: *Self) !void {
-        try self.skybox.loadSky(try self.storeString("sky_day01_01"), &self.vpkctx);
+    pub fn initNewMap(self: *Self, sky_name: []const u8) !void {
+        if (sky_name.len > 0)
+            try self.skybox.loadSky(try self.storeString(sky_name), &self.vpkctx);
         self.has_loaded_map = true;
     }
 

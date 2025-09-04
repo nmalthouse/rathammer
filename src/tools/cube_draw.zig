@@ -20,6 +20,7 @@ const prim_gen = @import("../primitive_gen.zig");
 const toolutil = @import("../tool_common.zig");
 const grid = @import("../grid.zig");
 const limits = @import("../limits.zig");
+const actions = @import("../actions.zig");
 
 pub const CubeDraw = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -311,42 +312,22 @@ pub const CubeDraw = struct {
 
     fn commitPrimitive(self: *@This(), ed: *Editor, center: Vec3, prim: *const prim_gen.Primitive, opts: struct { select: bool = false, rot: Mat3 }) !void {
         const vpk_id = ed.asset_browser.selected_mat_vpk_id orelse 0;
-        const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
-        defer undo.applyRedo(ustack.items, ed);
         self.last_height = @abs(self.start.z() - self.end.z());
-        if (opts.select) {
-            ed.selection.clear();
-            ed.selection.mode = .many;
-        }
-        for (prim.solids.items) |sol| {
-            if (ecs.Solid.initFromPrimitive(ed.alloc, prim.verts.items, sol.items, vpk_id, center, opts.rot)) |newsolid| {
-                const new = try ed.ecs.createEntity();
-                if (opts.select) {
-                    _ = try ed.selection.put(new, ed);
-                }
-                try ed.ecs.attach(new, .solid, newsolid);
-                try ed.ecs.attach(new, .bounding_box, .{});
-                try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
-                const solid_ptr = try ed.ecs.getPtr(new, .solid);
-                try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
-                {
-                    try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
-                }
-                switch (self.post_state) {
-                    .reset => self.state = .start,
-                    .switch_to_fast_face => {
-                        const tid = try ed.tools.getId(tools.FastFaceManip);
-                        ed.setTool(tid);
-                        try ed.selection.setToSingle(new);
-                    },
-                    .switch_to_translate => {
-                        const tid = try ed.tools.getId(tools.Translate);
-                        ed.setTool(tid); //Be carefull with this, it will call into self!
-                        try ed.selection.setToSingle(new);
-                    },
-                }
-            } else |a| {
-                std.debug.print("Invalid cube {!}\n", .{a});
+        const new_ids = try actions.createSolid(ed, prim, vpk_id, center, opts.rot, opts.select);
+        if (new_ids.len > 0) {
+            const new = new_ids[0];
+            switch (self.post_state) {
+                .reset => self.state = .start,
+                .switch_to_fast_face => {
+                    const tid = try ed.tools.getId(tools.FastFaceManip);
+                    ed.setTool(tid);
+                    try ed.selection.setToSingle(new);
+                },
+                .switch_to_translate => {
+                    const tid = try ed.tools.getId(tools.Translate);
+                    ed.setTool(tid); //Be carefull with this, it will call into self!
+                    try ed.selection.setToSingle(new);
+                },
             }
         }
     }

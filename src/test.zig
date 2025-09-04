@@ -22,13 +22,17 @@ pub const vdf = @import("vdf.zig");
 test {
     std.testing.refAllDecls(@This());
 }
+const edit = @import("editor.zig");
+const Editor = edit.Context;
+const vpk = @import("vpk.zig");
+const ecs = @import("ecs.zig");
 
 test "editor init" {
-    const edit = @import("editor.zig");
     const Conf = @import("config.zig");
-    const Editor = edit.Context;
     const graph = @import("graph");
     const app = @import("app.zig");
+    const actions = @import("actions.zig");
+    const Vec3 = graph.za.Vec3;
     const IS_DEBUG = false;
 
     const alloc = std.testing.allocator;
@@ -63,7 +67,40 @@ test "editor init" {
 
     try editor.setMapName("testmap");
 
-    try editor.initNewMap();
+    try editor.initNewMap("");
 
     try editor.update(&win);
+    const a = actions;
+    const tid = 0;
+
+    const cube1 = try actions.createCube(editor, Vec3.new(0, 0, 0), Vec3.new(1, 1, 1), 0, false);
+    try expectMeshMapContains(editor, 0, cube1); //Cube is drawn
+
+    {
+        //hide delete unhide -> should still exist
+        const cube2 = try actions.createCube(editor, Vec3.new(1, 1, 1), Vec3.new(1, 1, 1), 0, false);
+        try expectMeshMapContains(editor, 0, cube2);
+        try a.selectId(editor, cube2);
+        try a.hideSelected(editor);
+        try a.deleteSelected(editor);
+        try a.unhideAll(editor);
+
+        try expectMeshMapContains(editor, 0, cube2);
+        if (try editor.ecs.hasComponent(cube2, .deleted)) return error.deletion;
+    }
+
+    { //Bug 5:
+        const cu = try actions.createCube(editor, Vec3.new(1, 1, 1), Vec3.new(1, 1, 1), tid, false);
+        try a.selectId(editor, cu);
+        try a.deleteSelected(editor);
+        try a.unhideAll(editor);
+        if (expectMeshMapContains(editor, tid, cu)) {
+            return error.deletedUnhidden;
+        } else |_| {}
+    }
+}
+
+fn expectMeshMapContains(ed: *Editor, id: vpk.VpkResId, ent_id: ecs.EcsT.Id) !void {
+    const mb = ed.meshmap.get(id) orelse return error.noMeshMap;
+    _ = mb.contains.get(ent_id) orelse return error.meshMapDoesNotContain;
 }
