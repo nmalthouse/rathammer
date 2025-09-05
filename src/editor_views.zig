@@ -328,7 +328,7 @@ pub fn draw3Dview(
         try action.selectRaycast(self, screen_area, view_3d);
     }
     if (self.isBindState(self.config.keys.clear_selection.b, .rising))
-        self.selection.clear();
+        action.clearSelection(self);
 
     if (self.isBindState(self.config.keys.group_selection.b, .rising)) {
         try action.groupSelection(self);

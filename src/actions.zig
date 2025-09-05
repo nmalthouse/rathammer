@@ -85,45 +85,43 @@ pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !voi
 }
 
 pub fn groupSelection(ed: *Ed) !void {
-    if (ed.isBindState(ed.config.keys.group_selection.b, .rising)) {
-        var kit = ed.selection.groups.keyIterator();
-        var owner_count: usize = 0;
-        var last_owner: ?editor.EcsT.Id = null;
-        while (kit.next()) |group| {
-            if (ed.groups.getOwner(group.*)) |own| {
-                owner_count += 1;
-                last_owner = own;
+    var kit = ed.selection.groups.keyIterator();
+    var owner_count: usize = 0;
+    var last_owner: ?editor.EcsT.Id = null;
+    while (kit.next()) |group| {
+        if (ed.groups.getOwner(group.*)) |own| {
+            owner_count += 1;
+            last_owner = own;
+        }
+    }
+
+    const selection = ed.selection.getSlice();
+
+    if (owner_count > 1)
+        try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
+
+    if (selection.len > 0) {
+        const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
+        const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
+        var owner: ?ecs.EcsT.Id = null;
+        if (last_owner == null) {
+            if (ed.edit_state.default_group_entity != .none) {
+                const new = try ed.ecs.createEntity();
+                try ed.ecs.attach(new, .entity, .{
+                    .class = @tagName(ed.edit_state.default_group_entity),
+                });
+                owner = new;
             }
         }
-
-        const selection = ed.selection.getSlice();
-
-        if (owner_count > 1)
-            try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
-
-        if (selection.len > 0) {
-            const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
-            const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
-            var owner: ?ecs.EcsT.Id = null;
-            if (last_owner == null) {
-                if (ed.edit_state.default_group_entity != .none) {
-                    const new = try ed.ecs.createEntity();
-                    try ed.ecs.attach(new, .entity, .{
-                        .class = @tagName(ed.edit_state.default_group_entity),
-                    });
-                    owner = new;
-                }
-            }
-            const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
-            for (selection) |id| {
-                const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
-                try ustack.append(
-                    try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
-                );
-            }
-            Undo.applyRedo(ustack.items, ed);
-            try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
+        const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
+        for (selection) |id| {
+            const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
+            try ustack.append(
+                try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
+            );
         }
+        Undo.applyRedo(ustack.items, ed);
+        try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
     }
 }
 
@@ -167,4 +165,8 @@ pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: b
     if (ids.len != 1) return error.horrible;
 
     return ids[0];
+}
+
+pub fn clearSelection(ed: *Ed) void {
+    ed.selection.clear();
 }

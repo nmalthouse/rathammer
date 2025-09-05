@@ -66,7 +66,7 @@ test "editor init" {
         if (try editor.ecs.hasComponent(cube2, .deleted)) return error.deletion;
     }
 
-    { //Bug 5:
+    { //Bug 5: unhide causing deleted entities to reenter meshmap
         const cu = try actions.createCube(editor, Vec3.new(1, 1, 1), Vec3.new(1, 1, 1), tid, false);
         try a.selectId(editor, cu);
         try a.deleteSelected(editor);
@@ -74,6 +74,31 @@ test "editor init" {
         if (expectMeshMapContains(editor, tid, cu)) {
             return error.deletedUnhidden;
         } else |_| {}
+    }
+
+    { //BUG -> grouped entity marquee selection, even odd selection
+
+        a.clearSelection(editor);
+        editor.selection.setToMulti();
+        const cu1 = try actions.createCube(editor, Vec3.new(1, 1, 1), Vec3.new(1, 1, 1), tid, false);
+        const cu2 = try actions.createCube(editor, Vec3.new(3, 1, 1), Vec3.new(1, 1, 1), tid, false);
+        try a.selectId(editor, cu1);
+        try a.selectId(editor, cu2);
+
+        try std.testing.expectEqual(2, editor.selection.getSlice().len);
+        try a.groupSelection(editor);
+        a.clearSelection(editor);
+        editor.selection.mode = .one;
+
+        if (!try editor.ecs.hasComponent(cu1, .group)) return error.noGroup;
+        if (!try editor.ecs.hasComponent(cu2, .group)) return error.noGroup;
+
+        _ = try editor.selection.put(cu1, editor);
+        const sl = editor.selection.getSlice();
+
+        try std.testing.expectEqual(2, sl.len);
+        for (sl) |item|
+            if (item != cu1 and item != cu2) return error.invalidSelection;
     }
 }
 
