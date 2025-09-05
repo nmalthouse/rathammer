@@ -24,6 +24,7 @@ pub const VpkMapper = struct {
     pub fn deinit(self: *@This()) void {
         self.str_map.deinit();
         self.arena.deinit();
+        self.strings.deinit();
     }
 
     pub fn getResourceIdString(self: *@This(), str: []const u8, san: bool) !?vpk.VpkResId {
@@ -186,7 +187,7 @@ pub fn loadJson(
     //try self.rebuildAllMeshes();
 }
 
-fn readComponentFromJson(ctx: InitFromJsonCtx, v: std.json.Value, T: type, vpkctx: anytype) !T {
+pub fn readComponentFromJson(ctx: InitFromJsonCtx, v: std.json.Value, T: type, vpkctx: anytype) !T {
     const info = @typeInfo(T);
     switch (T) {
         []const u8 => {

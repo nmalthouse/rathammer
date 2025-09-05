@@ -7,6 +7,7 @@ pub const editor = @import("tests/editor.zig");
 pub const vdf_s = @import("tests/vdf.zig");
 pub const string = @import("string.zig");
 pub const vpk = @import("tests/vpk.zig");
+pub const jm = @import("tests/json_map.zig");
 
 //TODO tests for
 //clip_solid
