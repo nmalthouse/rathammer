@@ -5,6 +5,7 @@ pub const autosave = @import("autosave.zig");
 pub const vdf = @import("vdf.zig");
 pub const editor = @import("tests/editor.zig");
 pub const vdf_s = @import("tests/vdf.zig");
+pub const string = @import("string.zig");
 
 //TODO tests for
 //clip_solid

@@ -30,3 +30,16 @@ pub const StringStorage = struct {
         self.arena.deinit();
     }
 };
+
+test {
+    const alloc = std.testing.allocator;
+    var str = StringStorage.init(alloc);
+    defer str.deinit();
+    const hello = try str.store("hello");
+    const hello_jp = try str.store("今日は");
+
+    const hello2 = try str.store("hello");
+    try std.testing.expectEqual(hello2, hello);
+    const hello_jp2 = try str.store("今日は");
+    try std.testing.expectEqual(hello_jp2, hello_jp);
+}
