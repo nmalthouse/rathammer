@@ -3,11 +3,13 @@ pub const clip_solid = @import("clip_solid.zig");
 pub const prim_gen = @import("primitive_gen.zig");
 pub const autosave = @import("autosave.zig");
 pub const vdf = @import("vdf.zig");
+pub const string = @import("string.zig");
+
 pub const editor = @import("tests/editor.zig");
 pub const vdf_s = @import("tests/vdf.zig");
-pub const string = @import("string.zig");
 pub const vpk = @import("tests/vpk.zig");
 pub const jm = @import("tests/json_map.zig");
+pub const av = @import("tests/autovis.zig");
 
 //TODO tests for
 //clip_solid

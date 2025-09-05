@@ -33,21 +33,6 @@ fn checkMatchInner(f: Filter, class: []const u8) bool {
     return if (f.invert) !res else res;
 }
 
-test {
-    const ex = std.testing.expectEqual;
-
-    const f = Filter{
-        .name = "test",
-        .filter = "prop",
-        .kind = .class,
-        .match = .startsWith,
-    };
-
-    try ex(checkMatchInner(f, "prop_static"), true);
-    try ex(checkMatchInner(f, "prop"), true);
-    try ex(checkMatchInner(f, "pr"), false);
-}
-
 pub fn checkMatch(f: Filter, ent_class: ?[]const u8, texture: ?[]const u8, model: ?[]const u8) bool {
     const string: ?[]const u8 = switch (f.kind) {
         .class => ent_class,
@@ -60,12 +45,6 @@ pub fn checkMatch(f: Filter, ent_class: ?[]const u8, texture: ?[]const u8, model
         return f.invert;
     }
 }
-
-//const World = Filter{ .invert = true, .filter = "", .kind = .class, .match = .equals };
-//const Func = Filter{ .invert = false, .filter = "func", .kind = .class, .match = .startsWith };
-//const Prop = Filter{ .invert = false, .filter = "prop", .kind = .class, .match = .startsWith };
-//const Trigger = Filter{ .invert = false, .filter = "trigger", .kind = .class, .match = .startsWith };
-//const Tool = Filter{ .invert = false, .Filter = "materials/tools", .kind = .texture, .match = .startsWith };
 
 // After editor init, the set of vis are assumed static
 // TODO ensure they are static
@@ -176,3 +155,31 @@ pub const VisContext = struct {
         self.enabled.deinit();
     }
 };
+
+const test_filter = Filter{
+    .name = "test",
+    .filter = "prop",
+    .kind = .class,
+    .match = .startsWith,
+};
+test "inner" {
+    const ex = std.testing.expectEqual;
+
+    const f = test_filter;
+    try ex(true, checkMatchInner(f, "prop_static"));
+    try ex(true, checkMatchInner(f, "prop"));
+    try ex(false, checkMatchInner(f, "pr"));
+
+    try ex(true, checkMatch(f, "prop_static", "tex", "model"));
+    try ex(false, checkMatch(f, "_prop_dynamic", "tex", "model"));
+    try ex(true, checkMatch(f, "prop_dynamic", "tex", "model"));
+}
+
+test "context" {
+    const alloc = std.testing.allocator;
+    var ctx = VisContext.init(alloc);
+    defer ctx.deinit();
+
+    try ctx.add(test_filter);
+    try ctx.add(.{ .name = "my filter", .filter = "tools", .kind = .texture, .match = .startsWith });
+}

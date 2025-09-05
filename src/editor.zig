@@ -32,7 +32,7 @@ const util = @import("util.zig");
 const Autosaver = @import("autosave.zig").Autosaver;
 const NotifyCtx = @import("notify.zig").NotifyCtx;
 const Selection = @import("selection.zig");
-const newvis = @import("newvis.zig");
+const autovis = @import("autovis.zig");
 const Layer = @import("layer.zig");
 const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
 const ecs = @import("ecs.zig");
@@ -137,7 +137,7 @@ pub const Context = struct {
     /// Used to track tool txtures, TODO turn this into transparent_map, sticking all $alphatest and $translucent in here for
     /// alpha draw ordering
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
-    autovis: newvis.VisContext,
+    autovis: autovis.VisContext,
     layers: Layer.Context,
 
     shell: *shell.CommandCtx,
@@ -361,7 +361,7 @@ pub const Context = struct {
             .csgctx = try csg.Context.init(alloc),
             .clipctx = clipper.ClipCtx.init(alloc),
             .vpkctx = try vpk.Context.init(alloc),
-            .autovis = newvis.VisContext.init(alloc),
+            .autovis = autovis.VisContext.init(alloc),
             .layers = try Layer.Context.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
@@ -717,7 +717,7 @@ pub const Context = struct {
 
             if (!is_hidden) {
                 check_disabled: for (disabled) |dis| {
-                    if (newvis.checkMatch(dis, null, texture, null)) {
+                    if (autovis.checkMatch(dis, null, texture, null)) {
                         is_hidden = true;
                         break :check_disabled;
                     }
