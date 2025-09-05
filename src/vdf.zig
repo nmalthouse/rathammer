@@ -734,3 +734,25 @@ test "fromValue" {
         .num = &.{ 1, 2, 3 },
     } }, a);
 }
+
+test "fromValueArrayList" {
+    const testsl =
+        \\  a 1
+        \\  a 2
+        \\  a 3
+    ;
+    const ex = std.testing.expectEqualDeep;
+    const alloc = std.testing.allocator;
+    var p = try parse(alloc, testsl, null, .{});
+    defer p.deinit();
+    var aa = std.heap.ArenaAllocator.init(alloc);
+    defer aa.deinit();
+    const St = struct {
+        a: std.ArrayListUnmanaged(u32) = .{},
+        b: std.ArrayListUnmanaged(u32) = .{},
+    };
+    const a = try fromValue(St, &p, &.{ .obj = &p.value }, aa.allocator(), null);
+    try ex(&[_]u32{ 1, 2, 3 }, a.a.items);
+    try ex(&[_]u32{}, a.b.items);
+    try ex(0, a.b.capacity);
+}

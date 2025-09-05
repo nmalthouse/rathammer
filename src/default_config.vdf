@@ -1,4 +1,8 @@
 default_game rat_custom
+keys {
+    cam_forward scancode:W
+    
+}
 paths {
     steam_dir "."
 }
