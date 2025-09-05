@@ -112,6 +112,7 @@ pub const Context = struct {
 
             const tex = try edit.loadTextureFromVpk(side.material);
             ret.sides.items[si] = .{
+                ._alloc = ret._alloc,
                 .index = std.ArrayListUnmanaged(u32){},
                 .material = try strstore.store(side.material),
                 .tex_id = tex.res_id,

@@ -246,11 +246,13 @@ fn readComponentFromJson(ctx: InitFromJsonCtx, v: std.json.Value, T: type, vpkct
                 return ret;
             }
             if (v != .object) return error.value;
-            var ret: T = .{};
+
+            const has_alloc = @hasField(T, "_alloc");
+
+            var ret: T = if (has_alloc) .{ ._alloc = ctx.alloc } else .{};
+
             inline for (s.fields) |field| {
-                if (field.type == std.mem.Allocator) {
-                    @field(ret, field.name) = ctx.alloc;
-                } else if (field.name[0] == '_') { //Skip fields starting with _
+                if (field.name[0] == '_') { //Skip fields starting with _
                 } else if (v.object.get(field.name)) |val| {
                     @field(ret, field.name) = try readComponentFromJson(ctx, val, field.type, vpkctx);
                 } else {

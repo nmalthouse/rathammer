@@ -516,7 +516,7 @@ pub const Side = struct {
     /// Used by displacement
     omit_from_batch: bool = false,
 
-    _alloc: std.mem.Allocator = undefined,
+    _alloc: std.mem.Allocator,
     index: ArrayList(u32) = .{},
     u: UVaxis = .{},
     v: UVaxis = .{},
@@ -705,7 +705,7 @@ pub const Side = struct {
 
 pub const Solid = struct {
     const Self = @This();
-    _alloc: std.mem.Allocator = undefined,
+    _alloc: std.mem.Allocator,
     sides: ArrayList(Side) = .{},
     verts: ArrayList(Vec3) = .{},
 
@@ -1150,7 +1150,7 @@ pub const Solid = struct {
 
 pub const Displacements = struct {
     const Self = @This();
-    _alloc: std.mem.Allocator = undefined,
+    _alloc: std.mem.Allocator,
     disps: ArrayList(Displacement) = .{},
 
     //Solid.sides index map into disps
@@ -1221,7 +1221,7 @@ pub const Displacement = struct {
     pub const VectorRow = ArrayList(Vec3);
     pub const ScalarRow = ArrayList(f32);
     const Self = @This();
-    _alloc: std.mem.Allocator = undefined,
+    _alloc: std.mem.Allocator,
     _verts: ArrayList(Vec3) = .{},
     _index: ArrayList(u32) = .{},
     tex_id: vpk.VpkResId = 0,
@@ -1241,7 +1241,6 @@ pub const Displacement = struct {
     //start_pos: Vec3 = Vec3.zero(),
     elevation: f32 = 0,
     //TODO do the tri_tags?
-    //tri_tags: ScalarRow = undefined,
 
     pub fn dupe(self: *Self, _: anytype, _: anytype) !Self {
         var ret = self.*;
@@ -1858,7 +1857,7 @@ pub const Connection = struct {
 pub const Connections = struct {
     const Self = @This();
 
-    _alloc: std.mem.Allocator = undefined,
+    _alloc: std.mem.Allocator,
     list: ArrayList(Connection) = .{},
 
     pub fn init(alloc: std.mem.Allocator) Self {
@@ -1902,6 +1901,6 @@ pub const Connections = struct {
                 .target = try old.target.clone(self._alloc),
             };
         }
-        return .{ .list = new };
+        return .{ .list = new, ._alloc = self._alloc };
     }
 };
