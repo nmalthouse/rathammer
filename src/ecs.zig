@@ -722,11 +722,11 @@ pub const Solid = struct {
 
     pub fn dupe(self: *const Self, _: anytype, _: anytype) !Self {
         const ret_sides = try self.sides.clone(self._alloc);
-        for (ret_sides.items) |*side| {
-            const ind = try side.index.clone(self._alloc);
-            side.index = ind;
+        for (ret_sides.items, 0..) |*side, i| {
+            side.* = try self.sides.items[i].dupe();
         }
         return .{
+            ._alloc = self._alloc,
             .sides = ret_sides,
             .verts = try self.verts.clone(self._alloc),
         };
@@ -1174,6 +1174,7 @@ pub const Displacements = struct {
 
     pub fn dupe(self: *Self, ecs: *EcsT, new_id: EcsT.Id) !Self {
         const ret = Self{
+            ._alloc = self._alloc,
             .disps = try self.disps.clone(self._alloc),
             .sides = try self.sides.clone(self._alloc),
         };
@@ -1586,22 +1587,6 @@ pub const Layer = struct {
     }
 };
 
-//TODO Storing the damn strings
-//having hundreds of arraylists is probably slow.,
-//most kvs are small < 16bytes
-//on x64 an array list is 40bytes
-//for now just use array list
-//
-// Storing everything as a string keeps storage simple and makes direct copy and paste possible.
-// Manipulating strings as arrays of numbers is annoying however.
-// we need to make the gui have some keyboard input stuff.
-// selecting a widget using keyboard.
-// pasting into a widget
-//
-// user selects kv "_light"
-// a red box is drawn around widget to indicate focus.
-// user press ctrl-v with the string "255 255 255 800" in clipboard.
-// the relevant get filled out.
 pub const KeyValues = struct {
     const Value = struct {
         _string: std.ArrayList(u8),
