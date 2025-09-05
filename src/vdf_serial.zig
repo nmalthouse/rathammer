@@ -61,7 +61,8 @@ pub fn WriteVdf(out_stream_T: type) type {
         pub fn writeComment(self: *Self, comptime fmt: []const u8, args: anytype) !void {
             if (self.state != .expecting_key)
                 return error.invalidState;
-            try self.out_stream.print("//" ++ fmt, args);
+            try self.indent();
+            try self.out_stream.print("//" ++ fmt ++ "\n", args);
         }
 
         pub fn writeKey(self: *Self, key: []const u8) !void {
@@ -115,7 +116,7 @@ pub fn WriteVdf(out_stream_T: type) type {
         pub fn printValue(self: *Self, comptime fmt: []const u8, args: anytype) !void {
             if (self.state != .expecting_value)
                 return error.invalidState;
-            try self.out_stream.print(fmt, args);
+            try self.out_stream.print(fmt ++ "\n", args);
             self.state = .expecting_key;
         }
 
@@ -150,10 +151,10 @@ pub fn WriteVdf(out_stream_T: type) type {
         pub fn writeAnyValue(self: *Self, value: anytype) !void {
             const info = @typeInfo(@TypeOf(value));
             switch (info) {
-                .int, .comptime_int, .float => try self.printValue("\"{d}\"\n", .{value}),
+                .int, .comptime_int, .float => try self.printValue("\"{d}\"", .{value}),
                 .pointer => |p| {
                     if (p.child == u8) {
-                        try self.printValue("\"{s}\"\n", .{value});
+                        try self.printValue("\"{s}\"", .{value});
                         return;
                     }
                     @compileError("not supported on pointers " ++ @typeName(@TypeOf(value)) ++ " " ++ @typeName(p.child));
@@ -167,44 +168,4 @@ pub fn WriteVdf(out_stream_T: type) type {
             }
         }
     };
-}
-
-test {
-    const alloc = std.testing.allocator;
-    var out = std.ArrayListUnmanaged(u8){};
-    defer out.deinit(alloc);
-    const wr = out.writer(alloc);
-    var s = WriteVdf(@TypeOf(wr)).init(alloc, wr);
-    defer s.deinit();
-    try s.writeKey("hello");
-    try s.beginObject();
-    {
-        try s.writeKey("key1");
-        try s.writeValue("val1");
-
-        try s.writeKey("big key with  {} stuff");
-        try s.writeValue("another valuehLL");
-
-        try s.writeKey("My object");
-        try s.beginObject();
-        {
-            try s.writeKey("Hello");
-            try s.writeValue("world");
-        }
-        try s.endObject();
-    }
-    try s.endObject();
-
-    const expected =
-        \\hello {
-        \\    key1 val1
-        \\    "big key with  {} stuff" "another valuehLL"
-        \\    "My object" {
-        \\        Hello world
-        \\    }
-        \\}
-        \\
-    ;
-
-    try std.testing.expectEqualDeep(expected, out.items);
 }

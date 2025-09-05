@@ -4,6 +4,7 @@ pub const prim_gen = @import("primitive_gen.zig");
 pub const autosave = @import("autosave.zig");
 pub const vdf = @import("vdf.zig");
 pub const editor = @import("tests/editor.zig");
+pub const vdf_s = @import("tests/vdf.zig");
 
 //TODO tests for
 //clip_solid

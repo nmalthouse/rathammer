@@ -72,10 +72,10 @@ pub fn jsontovmf(
     var vr = vdf_serial.WriteVdf(@TypeOf(bb)).init(alloc, bb);
 
     {
-        try vr.writeComment("This vmf was created by RatHammer.\n", .{});
-        try vr.writeComment("It may not be compatible with official Valve tools.\n", .{});
-        try vr.writeComment("See: https://github.com/nmalthouse/rathammer\n", .{});
-        try vr.writeComment("rathammer_version  {s}\n", .{version.version});
+        try vr.writeComment("This vmf was created by RatHammer.", .{});
+        try vr.writeComment("It may not be compatible with official Valve tools.", .{});
+        try vr.writeComment("See: https://github.com/nmalthouse/rathammer", .{});
+        try vr.writeComment("rathammer_version  {s}", .{version.version});
         try vr.writeKv("versioninfo", vmf.VersionInfo{
             .editorversion = 400, // These numbers are taken from the sourcesdk maps
             .editorbuild = 2987,
@@ -145,7 +145,7 @@ pub fn jsontovmf(
                 // There may be owner entities which need to have a custom origin.
                 if (this_group == null) {
                     try vr.writeKey("origin");
-                    try vr.printValue("\"{d} {d} {d}\"\n", .{ ent.origin.x(), ent.origin.y(), ent.origin.z() });
+                    try vr.printValue("\"{d} {d} {d}\"", .{ ent.origin.x(), ent.origin.y(), ent.origin.z() });
                 }
 
                 try vr.writeKv("classname", ent.class);
@@ -170,7 +170,7 @@ pub fn jsontovmf(
                     {
                         //Format for vmf is
                         //listen_event   "target,input,value,delay,fire_count"
-                        const fmt = "\"{s},{s},{s},{d},{d}\"\n";
+                        const fmt = "\"{s},{s},{s},{d},{d}\"";
                         for (cons.list.items) |con| {
                             // empty kvs cause a segfault in vbsp lol
                             if (con.listen_event.len == 0) continue;
@@ -293,7 +293,7 @@ fn writeSolid(vr: anytype, ent_id: ecs.EcsT.Id, solid: *ecs.Solid, side_id_start
                     const v3 = solid.verts.items[inds[2]];
 
                     try vr.writeKey("plane");
-                    try vr.printValue("\"({d} {d} {d}) ({d} {d} {d}) ({d} {d} {d})\"\n", .{
+                    try vr.printValue("\"({d} {d} {d}) ({d} {d} {d}) ({d} {d} {d})\"", .{
                         v1.x(), v1.y(), v1.z(),
                         v2.x(), v2.y(), v2.z(),
                         v3.x(), v3.y(), v3.z(),
@@ -301,7 +301,7 @@ fn writeSolid(vr: anytype, ent_id: ecs.EcsT.Id, solid: *ecs.Solid, side_id_start
                 }
                 try vr.writeKv("material", sanatizeMaterialName(vpkmapper.getResource(side.tex_id) orelse ""));
                 try vr.writeKey("uaxis");
-                const uvfmt = "\"[{d} {d} {d} {d}] {d}\"\n";
+                const uvfmt = "\"[{d} {d} {d} {d}] {d}\"";
                 try vr.printValue(uvfmt, .{ side.u.axis.x(), side.u.axis.y(), side.u.axis.z(), side.u.trans, side.u.scale });
                 try vr.writeKey("vaxis");
                 try vr.printValue(uvfmt, .{ side.v.axis.x(), side.v.axis.y(), side.v.axis.z(), side.v.trans, side.v.scale });
@@ -328,7 +328,7 @@ fn writeDisp(vr: anytype, disp: *ecs.Displacement, solid: *ecs.Solid) !void {
     {
         try vr.writeKv("power", disp.power);
         try vr.writeKey("startposition");
-        try vr.printValue("\"[{d} {d} {d}]\"\n", .{ start_pos.x(), start_pos.y(), start_pos.z() });
+        try vr.printValue("\"[{d} {d} {d}]\"", .{ start_pos.x(), start_pos.y(), start_pos.z() });
         try vr.writeKv("elevation", disp.elevation);
         const vper_row = std.math.pow(u32, 2, disp.power) + 1;
         try vr.writeKey("normals");
