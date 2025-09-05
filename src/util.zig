@@ -72,3 +72,17 @@ pub fn getFileFromTar(alloc: std.mem.Allocator, fileo: std.fs.File, filename: []
     }
     return error.notFound;
 }
+
+pub const LoadCtxDummy = struct {
+    const Self = @This();
+
+    pub fn printCb(self: *Self, comptime fmt: []const u8, args: anytype) void {
+        _ = self;
+        _ = fmt;
+        _ = args;
+    }
+
+    pub fn cb(_: *Self, _: []const u8) void {}
+
+    pub fn addExpected(_: *Self, _: usize) void {}
+};

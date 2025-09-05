@@ -5,3 +5,5 @@ Half-Life\ 2
 *.json
 callgrind*
 *.vpk
+kcov-output
+.exrc

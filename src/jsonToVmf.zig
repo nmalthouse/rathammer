@@ -10,20 +10,7 @@ const version = @import("version.zig");
 
 const StringStorage = @import("string.zig").StringStorage;
 const json_map = @import("json_map.zig");
-
-const LoadCtx = struct {
-    const Self = @This();
-
-    pub fn printCb(self: *Self, comptime fmt: []const u8, args: anytype) void {
-        _ = self;
-        _ = fmt;
-        _ = args;
-    }
-
-    pub fn cb(_: *Self, _: []const u8) void {}
-
-    pub fn addExpected(_: *Self, _: usize) void {}
-};
+const LoadCtx = util.LoadCtxDummy;
 
 // all resources in rathammer maps are fully specified.
 // Vmf's expect materials/, decals/, to be omitted.
