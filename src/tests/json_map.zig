@@ -16,8 +16,8 @@ const Custom = struct {
     }
 };
 
+const ex = std.testing.expectEqualDeep;
 test {
-    const ex = std.testing.expectEqualDeep;
     const alloc = std.testing.allocator;
 
     var strings = Str.StringStorage.init(alloc);
@@ -76,4 +76,35 @@ test {
         .int = 32,
         .cc = .{ .int = 4 },
     }, comp);
+}
+
+test "array list" {
+    const alloc = std.testing.allocator;
+
+    var strings = Str.StringStorage.init(alloc);
+    defer strings.deinit();
+
+    const ctx = jm.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };
+    const St = struct {
+        _alloc: std.mem.Allocator, // <- allocates the array lists
+        arr1: std.ArrayListUnmanaged(u32) = .{},
+    };
+    const sl =
+        \\ {
+        \\ "arr1": [1,2,3]
+        \\
+        \\
+        \\
+        \\ }
+    ;
+
+    var parsed = try std.json.parseFromSlice(Value, alloc, sl, .{});
+    defer parsed.deinit();
+
+    var vpkctx = jm.VpkMapper.init(alloc);
+    defer vpkctx.deinit();
+    var comp = try jm.readComponentFromJson(ctx, parsed.value, St, &vpkctx);
+    try ex(&[_]u32{ 1, 2, 3 }, comp.arr1.items);
+
+    comp.arr1.deinit(comp._alloc);
 }
