@@ -24,7 +24,7 @@ pub const av = @import("tests/autovis.zig");
 //layer system
 //mdl loading - get animations working
 //primitive generation
-//seletion is important
+//selection is important
 
 test {
     std.testing.refAllDecls(@This());

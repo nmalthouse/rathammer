@@ -21,7 +21,11 @@ On Linux "$HOME/.local/share/Steam/steamapps/common"
 
 All games are defined inside of 'config.vdf'.
 
-To map for a different Source game or use it for custom levels, you must edit config.vdf and set the default_game appropriately
+On Linux the default config file is copied to "$XDG_CONFIG_DIR/rathammer/config.vdf". This defaults to $HOME/.config/rathammer/config.vdf.
+
+On Windows the config is loaded from the XDG_CONFIG_DIR if set, otherwise it just loads the config from cwd.
+
+To map for a different Source game or use it for custom levels, you must edit config.vdf and set the default_game appropriately.
 All paths for game configuration can be temporarily overridden with command line flags, use --help to see these.
 If Rathammer fails to start, read through the console output and look for lines like this:
 ```
@@ -38,7 +42,7 @@ If the scale of the gui is incorrect, set a custom display scale with the --disp
 This can be permanently set in the config.vdf window section.
 
 ## Editing
-Once you have successfully started RatHammer you will be greeted by a "pause menu", there are various global settings in here and documentation. Open and close the pause menu with 'Escape'
+Once you have successfully started RatHammer you will be greeted by a "pause menu", there are various global settings in here and documentation. Open and close the pause menu with 'Escape'.
 RatHammer was designed with 3D editing as the main form. There are 2d views but are relegated to speciality tasks that benefit from a orthographic view, such as alignment and selection of vertices in an axis aligned solid.
 
 Quick reference:

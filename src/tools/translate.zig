@@ -18,6 +18,7 @@ const graph = @import("graph");
 const edit = @import("../editor.zig");
 const Editor = edit.Context;
 const toolcom = @import("../tool_common.zig");
+const action = @import("../actions.zig");
 
 pub const Translate = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -163,14 +164,8 @@ pub const Translate = struct {
                         const bounds = self.bb_gizmo.aabbGizmo(&self.cube_draw.start, &self.cube_draw.end, rc, editor.edit_state.lmouse, editor.grid, draw_nd);
                         const cc = util3d.cubeFromBounds(bounds[0], bounds[1]);
                         td.draw.cube(cc[0], cc[1], 0x2222_22dd);
-                        if (editor.edit_state.rmouse == .rising) {
-                            var it = editor.editIterator(.bounding_box);
-                            while (it.next()) |item| {
-                                if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
-                                    _ = editor.selection.put(it.i, editor) catch return;
-                                }
-                            }
-                        }
+                        if (editor.edit_state.rmouse == .rising)
+                            try action.selectInBounds(editor, bounds);
                     },
                 }
             },

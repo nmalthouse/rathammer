@@ -9,6 +9,7 @@ const Ed = editor.Context;
 const raycast = @import("raycast_solid.zig");
 const RaycastSlice = []const raycast.RcastItem;
 const vpk = @import("vpk.zig");
+const util3d = @import("util_3d.zig");
 
 pub fn deleteSelected(ed: *Ed) !void {
     const selection = ed.selection.getSlice();
@@ -169,4 +170,16 @@ pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: b
 
 pub fn clearSelection(ed: *Ed) void {
     ed.selection.clear();
+}
+
+pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
+    //IF ignore groups is on, just add everything normally
+    //Otherwise, track which groups have been touched and only add/remove them once
+    //Second put?
+    var it = ed.editIterator(.bounding_box);
+    while (it.next()) |item| {
+        if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
+            _ = ed.selection.put(it.i, ed) catch return;
+        }
+    }
 }
