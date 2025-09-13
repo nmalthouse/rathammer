@@ -58,7 +58,7 @@ pub const InspectorWindow = struct {
             .area = iArea.init(gui, Rec(0, 0, 0, 0)),
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
-            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor),
+            .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
             .id_kv_map = std.StringHashMap(usize).init(gui.alloc),
         };

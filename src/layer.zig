@@ -252,11 +252,13 @@ pub const GuiWidget = struct {
     ctx: *Context,
     editor: *edit.Context,
     vt: iArea = undefined,
+    win: *iWindow,
+    scroll_index: usize = 0,
 
     selected_ptr: *Id,
 
-    pub fn init(ctx: *Context, selected_ptr: *Id, editor: *edit.Context) Self {
-        return .{ .ctx = ctx, .selected_ptr = selected_ptr, .editor = editor };
+    pub fn init(ctx: *Context, selected_ptr: *Id, editor: *edit.Context, win: *iWindow) Self {
+        return .{ .ctx = ctx, .selected_ptr = selected_ptr, .editor = editor, .win = win };
     }
 
     pub fn build(self: *Self, gui: *Gui, win: *iWindow, vt: *iArea, area: graph.Rect) !void {
@@ -267,7 +269,7 @@ pub const GuiWidget = struct {
         {
             var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
 
-            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New group", .{
+            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New layer", .{
                 .cb_vt = &self.vt,
                 .cb_fn = btnCb,
                 .id = bi("new_group"),
@@ -286,6 +288,7 @@ pub const GuiWidget = struct {
             .win = win,
             .count = self.ctx.layers.items.len,
             .item_h = gui.style.config.default_item_h,
+            .index_ptr = &self.scroll_index,
         }));
     }
 
@@ -318,6 +321,7 @@ pub const GuiWidget = struct {
         switch (id) {
             bi("set_name") => {
                 self.ctx.setName(self.selected_ptr.*, new) catch {};
+                self.win.needs_rebuild = true;
             },
             else => {},
         }
@@ -327,9 +331,10 @@ pub const GuiWidget = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         switch (id) {
             bi("new_group") => {
-                _ = self.ctx.newLayer("new layer", self.selected_ptr.*) catch {};
-
-                win.needs_rebuild = true;
+                if (self.ctx.newLayer("new layer", self.selected_ptr.*) catch null) |new_lay| {
+                    self.selected_ptr.* = new_lay.id;
+                    win.needs_rebuild = true;
+                }
             },
             else => {},
         }
@@ -421,11 +426,11 @@ const LayerWidget = struct {
                 const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
-                        .{ bi("cancel"), "Cancel !indicates placeholder" },
-                        .{ bi("move_selected"), "Add selected" },
-                        .{ bi("delete"), "!Delete layer" },
-                        .{ bi("select_all"), "Select" },
-                        .{ bi("duplicate"), "!Duplicate layer" },
+                        .{ bi("cancel"), "Cancel " },
+                        .{ bi("move_selected"), "Put selected" },
+                        //.{ bi("delete"), "!Delete layer" },
+                        .{ bi("select_all"), "Select contained" },
+                        //.{ bi("duplicate"), "!Duplicate layer" },
                         .{ bi("add_child"), "new child" },
                     },
                     .btn_cb = rightClickMenuBtn,
@@ -466,5 +471,6 @@ const LayerWidget = struct {
             },
             else => {},
         }
+        self.opts.win.needs_rebuild = true;
     }
 };
