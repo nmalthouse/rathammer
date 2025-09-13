@@ -613,7 +613,6 @@ pub const Context = struct {
     }
 
     pub fn rebuildVisGroups(self: *Self) !void {
-        std.debug.print("Rebuilding visgroups\n", .{});
         {
             var it = self.ecs.iterator(.invisible);
             while (it.next()) |_| {

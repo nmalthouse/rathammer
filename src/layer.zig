@@ -7,6 +7,11 @@ const edit = @import("editor.zig");
 const action = @import("actions.zig");
 const Undo = @import("undo.zig");
 
+//LAYER TODO
+//Indicate children are hidden
+//toggle child visiblity
+//ensure disabled mask is correct with deleted layers
+
 /// Rathammer supports up to 2**16 visgroups but hammer does not
 pub const MAX_VIS_GROUP_VMF = 128;
 
@@ -19,9 +24,11 @@ pub const Layer = struct {
     id: Id,
 
     enabled: bool = true,
+    collapse: bool = false,
 };
 
 const log = std.log.scoped(.layer);
+/// Layers are never destroyed. Deletion of a layer only removes the layer from the tree specifed by `root`.
 pub const Context = struct {
     const Self = @This();
     layers: ArrayList(*Layer) = .{},
@@ -111,29 +118,26 @@ pub const Context = struct {
         }
     }
 
-    pub fn setEnabled(self: *Self, id: Id, enable: bool) !void {
+    /// TODO set enabled state of a layer recursively apply to children
+    pub fn setEnabledCascade(self: *Self, id: Id, enable: bool) !void {
         if (self.map.get(id)) |lay| {
             lay.enabled = enable;
-            try self.calculateDisabled();
+            try self.recurDisable(lay, enable);
         }
     }
 
-    //TODO this needs to start with all disabled so deleted are omitted
-    fn calculateDisabled(self: *Self) !void {
-        self.disabled.unsetAll();
-        try self.recurDisabledSet(self.root, false);
+    pub fn setCollapse(self: *Self, id: Id, collapsed: bool) void {
+        if (self.map.get(id)) |lay| {
+            lay.collapse = collapsed;
+        }
     }
 
-    fn recurDisabledSet(self: *Self, layer: *const Layer, force_disable: bool) !void {
-        if (!layer.enabled or force_disable) {
-            try self.setDisabled(layer.id);
-            for (layer.children.items) |child| {
-                try self.recurDisabledSet(child, true);
-            }
-        } else {
-            for (layer.children.items) |child| {
-                try self.recurDisabledSet(child, false);
-            }
+    fn recurDisable(self: *Self, layer: *const Layer, enable: bool) !void {
+        //always disable layers, only enable layers if they are enabled
+        const en = if (enable) layer.enabled else false;
+        try self.setDisabled(layer.id, en);
+        for (layer.children.items) |child| {
+            try self.recurDisable(child, enable);
         }
     }
 
@@ -142,10 +146,10 @@ pub const Context = struct {
         return self.disabled.isSet(id);
     }
 
-    pub fn setDisabled(self: *Self, id: Id) !void {
-        if (id >= self.disabled.count())
+    pub fn setDisabled(self: *Self, id: Id, enable: bool) !void {
+        if (id >= self.disabled.bit_length)
             try self.disabled.resize(self.alloc, @intCast(id + 1), false);
-        self.disabled.set(id);
+        self.disabled.setValue(id, !enable);
     }
 
     pub fn writeToJson(self: *Self, wr: anytype) !void {
@@ -340,6 +344,8 @@ pub const GuiWidget = struct {
                 .id = item.ptr.id,
                 .parent = self,
                 .enabled = item.ptr.enabled,
+                .collapse = item.ptr.collapse,
+                .check_color = if (self.ctx.isDisabled(item.ptr.id)) 0x888888ff else 0xff,
             }));
         }
     }
@@ -369,6 +375,7 @@ pub const GuiWidget = struct {
     }
 
     fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), depth: Id) !void {
+        if (layer.collapse) return;
         for (layer.children.items) |child| {
             try list.append(.{ .ptr = child, .depth = depth });
             try countNodes(child, list, depth + 1);
@@ -390,10 +397,13 @@ const LayerWidget = struct {
         parent: *GuiWidget,
         color: u32 = 0xffff00ff,
         enabled: bool,
+        collapse: bool,
+        check_color: u32 = 0xff,
     };
     vt: iArea,
 
     opts: Opts,
+    right_click_id: ?Id = null,
 
     pub fn build(gui: *Gui, area_o: ?graph.Rect, opts: Opts) ?*iArea {
         const area = area_o orelse return null;
@@ -406,14 +416,25 @@ const LayerWidget = struct {
         self.vt.draw_fn = &draw;
         self.vt.onclick = &onclick;
 
-        const sp = area.split(.vertical, area.h);
+        const needs_dropdown = if (opts.parent.ctx.getLayerFromId(opts.id)) |lay| lay.children.items.len > 0 else false;
+        const sp = area.split(.vertical, area.h * if (needs_dropdown) @as(f32, 2) else @as(f32, 1));
+        const ch = sp[0].split(.vertical, area.h);
 
-        self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, sp[0], "", .{
+        self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[0], "", .{
             .style = .check,
             .cb_fn = check_cb,
             .cb_vt = &self.vt,
             .user_id = opts.id,
+            .cross_color = opts.check_color,
         }, opts.enabled));
+
+        if (needs_dropdown)
+            self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[1], "", .{
+                .style = .dropdown,
+                .cb_fn = collapse_cb,
+                .cb_vt = &self.vt,
+                .user_id = opts.id,
+            }, !opts.collapse));
         self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
         return &self.vt;
@@ -436,8 +457,16 @@ const LayerWidget = struct {
 
     pub fn check_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.opts.parent.ctx.setEnabled(@intCast(uid), checked) catch return;
+        self.opts.parent.ctx.setEnabledCascade(@intCast(uid), checked) catch return;
         self.opts.parent.editor.rebuildVisGroups() catch return;
+        self.opts.win.needs_rebuild = true;
+        _ = gui;
+    }
+
+    pub fn collapse_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        self.opts.parent.ctx.setCollapse(@intCast(uid), !checked);
+        self.opts.win.needs_rebuild = true;
         _ = gui;
     }
 
@@ -454,17 +483,18 @@ const LayerWidget = struct {
                 const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
-                        .{ bi("cancel"), "Cancel " },
-                        .{ bi("move_selected"), "-> Put selected" },
-                        .{ bi("select_all"), "<- Select contained" },
-                        .{ bi("delete"), "Delete layer" },
+                        .{ bi("cancel"), "cancel " },
+                        .{ bi("move_selected"), "-> put" },
+                        .{ bi("select_all"), "<- select" },
+                        .{ bi("delete"), "delete layer" },
                         .{ bi("merge"), "^ merge up" },
-                        .{ bi("duplicate"), "Duplicate layer" },
+                        .{ bi("duplicate"), "duplicate" },
                         .{ bi("add_child"), "new child" },
                     },
                     .btn_cb = rightClickMenuBtn,
                     .btn_vt = vt,
                 }) catch return;
+                self.right_click_id = self.opts.id;
                 cb.gui.setTransientWindow(r_win);
             },
         }
@@ -474,6 +504,7 @@ const LayerWidget = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.dirty(gui);
         const ed = self.opts.parent.editor;
+        const sel_id = self.right_click_id orelse return;
         const bi = guis.Widget.BtnContextWindow.buttonId;
         switch (id) {
             bi("select_all") => {
@@ -490,23 +521,23 @@ const LayerWidget = struct {
                 action.addSelectionToLayer(ed, self.opts.id) catch return;
             },
             bi("add_child") => {
-                if (action.createLayer(ed, self.opts.parent.selected_ptr.*, "new layer") catch null) |new_id| {
+                if (action.createLayer(ed, sel_id, "new layer") catch null) |new_id| {
                     self.opts.parent.selected_ptr.* = new_id;
                 }
             },
             bi("duplicate") => {
-                action.dupeLayer(ed, self.opts.parent.selected_ptr.*) catch return;
+                action.dupeLayer(ed, sel_id) catch return;
             },
             bi("delete") => {
-                if (action.deleteLayer(ed, self.opts.parent.selected_ptr.*) catch null) |new_selected| {
+                if (action.deleteLayer(ed, sel_id) catch null) |new_selected| {
                     self.opts.parent.selected_ptr.* = new_selected;
                 }
             },
             bi("merge") => {
                 const lays = self.opts.parent.ctx;
-                if (lays.getParent(lays.root, self.opts.parent.selected_ptr.*)) |parent| {
+                if (lays.getParent(lays.root, sel_id)) |parent| {
                     const merge_id = if (parent[1] > 0) parent[0].children.items[parent[1] - 1].id else parent[0].id;
-                    action.mergeLayer(ed, self.opts.parent.selected_ptr.*, merge_id) catch {};
+                    action.mergeLayer(ed, sel_id, merge_id) catch {};
                     self.opts.parent.selected_ptr.* = merge_id;
                 }
             },
