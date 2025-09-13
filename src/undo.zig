@@ -7,7 +7,8 @@ const vpk = @import("vpk.zig");
 const Vec3 = graph.za.Vec3;
 const ecs = @import("ecs.zig");
 const util3d = @import("util_3d.zig");
-const LayerId = @import("layer.zig").Id;
+const Lay = @import("layer.zig");
+const LayerId = Lay.Id;
 
 //Stack based undo,
 //we push operations onto the stack.
@@ -642,6 +643,71 @@ pub const UndoSetLayer = struct {
     pub fn redo(vt: *iUndo, editor: *Editor) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         set(editor, self.id, self.new);
+    }
+
+    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        alloc.destroy(self);
+    }
+};
+
+pub const UndoAttachLayer = struct {
+    const Kind = enum { attach, detach };
+
+    kind: Kind,
+
+    vt: iUndo,
+    layer: LayerId,
+
+    parent: LayerId,
+    child_index: usize,
+
+    pub fn create(alloc: std.mem.Allocator, layer: LayerId, parent: LayerId, child_index: usize, kind: Kind) !*iUndo {
+        var obj = try alloc.create(@This());
+        obj.* = .{
+            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
+            .child_index = child_index,
+            .parent = parent,
+            .layer = layer,
+            .kind = kind,
+        };
+        return &obj.vt;
+    }
+
+    pub fn undo(vt: *iUndo, ed: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (self.kind) {
+            .attach => self.undoCreate(ed),
+            .detach => self.redoCreate(ed),
+        }
+    }
+
+    pub fn redo(vt: *iUndo, ed: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (self.kind) {
+            .detach => self.undoCreate(ed),
+            .attach => self.redoCreate(ed),
+        }
+    }
+
+    pub fn undoCreate(self: *@This(), editor: *Editor) void {
+        const layers = &editor.layers;
+        const parent = layers.getLayerFromId(self.parent) orelse return;
+
+        if (self.child_index < parent.children.items.len) {
+            if (parent.children.items[self.child_index].id == self.layer) {
+                _ = parent.children.orderedRemove(self.child_index);
+            }
+        }
+    }
+
+    pub fn redoCreate(self: *@This(), editor: *Editor) void {
+        const layers = &editor.layers;
+        const parent = layers.getLayerFromId(self.parent) orelse return;
+        const child = layers.getLayerFromId(self.layer) orelse return;
+        if (self.child_index <= parent.children.items.len) {
+            parent.children.insert(layers.alloc, self.child_index, child) catch return;
+        }
     }
 
     pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {

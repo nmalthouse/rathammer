@@ -5,12 +5,13 @@ const ROOT_LAYER_NAME = "world";
 const json_map = @import("json_map.zig");
 const edit = @import("editor.zig");
 const action = @import("actions.zig");
+const Undo = @import("undo.zig");
 
 /// Rathammer supports up to 2**16 visgroups but hammer does not
 pub const MAX_VIS_GROUP_VMF = 128;
 
 pub const Id = u16;
-const Layer = struct {
+pub const Layer = struct {
     children: ArrayList(*Layer),
 
     color: u32,
@@ -81,13 +82,25 @@ pub const Context = struct {
         return lay;
     }
 
-    pub fn newLayer(self: *Self, name: []const u8, parent: Id) !*Layer {
+    pub fn newLayerUnattached(self: *Self, name: []const u8) !*Layer {
+        const new_id = self.newLayerId();
+        const new = try createLayer(self.alloc, new_id, name);
+        try self.map.put(new_id, new);
+        try self.layers.append(self.alloc, new);
+
+        return new;
+    }
+
+    pub fn newLayer(self: *Self, name: []const u8, parent: Id, opts: struct { insert_at: ?usize = null }) !*Layer {
         const lay = self.getLayerFromId(parent) orelse return error.invalidParent;
         const new_id = self.newLayerId();
         const new = try createLayer(self.alloc, new_id, name);
         try self.map.put(new_id, new);
         try self.layers.append(self.alloc, new);
-        try lay.children.append(self.alloc, new);
+
+        const new_child_index = @min(opts.insert_at orelse lay.children.items.len, lay.children.items.len);
+
+        try lay.children.insert(self.alloc, new_child_index, new);
         return new;
     }
 
@@ -105,6 +118,7 @@ pub const Context = struct {
         }
     }
 
+    //TODO this needs to start with all disabled so deleted are omitted
     fn calculateDisabled(self: *Self) !void {
         self.disabled.unsetAll();
         try self.recurDisabledSet(self.root, false);
@@ -198,14 +212,14 @@ pub const Context = struct {
                 return child.id;
         }
 
-        return (try self.newLayer(name, self.root.id)).id;
+        return (try self.newLayer(name, self.root.id, .{})).id;
     }
 
     pub fn buildMappingFromVmf(self: *Self, vmf_visgroups: []const vmf.VisGroup, parent: *Layer) !void {
         for (vmf_visgroups) |gr| {
             const vis_group_id: u8 = if (gr.visgroupid > MAX_VIS_GROUP_VMF or gr.visgroupid < 0) continue else @intCast(gr.visgroupid);
             if (!self.vmf_id_mapping.contains(vis_group_id)) {
-                const new = try self.newLayer(gr.name, parent.id);
+                const new = try self.newLayer(gr.name, parent.id, .{});
 
                 try self.vmf_id_mapping.put(vis_group_id, new.id);
                 //std.debug.print("PUtting visgroup {s}\n", .{gr.name});
@@ -234,6 +248,19 @@ pub const Context = struct {
 
     pub fn getLayerFromId(self: *const Self, id: Id) ?*Layer {
         return self.map.get(id);
+    }
+
+    /// Returns parent and index of id.
+    pub fn getParent(self: *Self, node: *Layer, id: Id) ?struct { *Layer, usize } {
+        for (node.children.items, 0..) |child, i| {
+            if (child.id == id) {
+                return .{ node, i };
+            }
+        }
+        for (node.children.items) |child| {
+            if (self.getParent(child, id)) |par| return par;
+        }
+        return null;
     }
 };
 
@@ -332,8 +359,8 @@ pub const GuiWidget = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         switch (id) {
             bi("new_group") => {
-                if (self.ctx.newLayer("new layer", self.selected_ptr.*) catch null) |new_lay| {
-                    self.selected_ptr.* = new_lay.id;
+                if (action.createLayer(self.editor, self.selected_ptr.*, "new layer") catch null) |new_id| {
+                    self.selected_ptr.* = new_id;
                     win.needs_rebuild = true;
                 }
             },
@@ -428,10 +455,11 @@ const LayerWidget = struct {
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = &.{
                         .{ bi("cancel"), "Cancel " },
-                        .{ bi("move_selected"), "Put selected" },
-                        //.{ bi("delete"), "!Delete layer" },
-                        .{ bi("select_all"), "Select contained" },
-                        //.{ bi("duplicate"), "!Duplicate layer" },
+                        .{ bi("move_selected"), "-> Put selected" },
+                        .{ bi("select_all"), "<- Select contained" },
+                        .{ bi("delete"), "Delete layer" },
+                        .{ bi("merge"), "^ merge up" },
+                        .{ bi("duplicate"), "Duplicate layer" },
                         .{ bi("add_child"), "new child" },
                     },
                     .btn_cb = rightClickMenuBtn,
@@ -445,10 +473,10 @@ const LayerWidget = struct {
     fn rightClickMenuBtn(vt: *iArea, id: guis.Uid, gui: *Gui, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.dirty(gui);
+        const ed = self.opts.parent.editor;
         const bi = guis.Widget.BtnContextWindow.buttonId;
         switch (id) {
             bi("select_all") => {
-                const ed = self.opts.parent.editor;
                 ed.selection.setToMulti();
 
                 var it = ed.editIterator(.layer);
@@ -459,12 +487,28 @@ const LayerWidget = struct {
                 }
             },
             bi("move_selected") => {
-                action.addSelectionToLayer(self.opts.parent.editor, self.opts.id) catch return;
+                action.addSelectionToLayer(ed, self.opts.id) catch return;
             },
             bi("add_child") => {
-                const new = self.opts.parent.ctx.newLayer("New layer", self.opts.parent.selected_ptr.*) catch return;
-
-                self.opts.parent.selected_ptr.* = new.id;
+                if (action.createLayer(ed, self.opts.parent.selected_ptr.*, "new layer") catch null) |new_id| {
+                    self.opts.parent.selected_ptr.* = new_id;
+                }
+            },
+            bi("duplicate") => {
+                action.dupeLayer(ed, self.opts.parent.selected_ptr.*) catch return;
+            },
+            bi("delete") => {
+                if (action.deleteLayer(ed, self.opts.parent.selected_ptr.*) catch null) |new_selected| {
+                    self.opts.parent.selected_ptr.* = new_selected;
+                }
+            },
+            bi("merge") => {
+                const lays = self.opts.parent.ctx;
+                if (lays.getParent(lays.root, self.opts.parent.selected_ptr.*)) |parent| {
+                    const merge_id = if (parent[1] > 0) parent[0].children.items[parent[1] - 1].id else parent[0].id;
+                    action.mergeLayer(ed, self.opts.parent.selected_ptr.*, merge_id) catch {};
+                    self.opts.parent.selected_ptr.* = merge_id;
+                }
             },
             else => {},
         }

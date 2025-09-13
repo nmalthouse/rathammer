@@ -197,3 +197,80 @@ pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
         Undo.applyRedo(ustack.items, ed);
     }
 }
+
+pub fn createLayer(ed: *Ed, parent_layer: LayerId, layer_name: []const u8) !LayerId {
+    if (ed.layers.newLayerUnattached(layer_name) catch null) |new_lay| {
+        const ustack = try ed.undoctx.pushNewFmt("Create layer", .{});
+        const parent = ed.layers.getLayerFromId(parent_layer) orelse return error.invalidParent;
+
+        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, new_lay.id, parent_layer, parent.children.items.len, .attach));
+        Undo.applyRedo(ustack.items, ed);
+        return new_lay.id;
+    }
+    return error.failedLayerCreate;
+}
+
+/// Returns sibling or parent id
+pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
+    // mark each item in layer as deleted,
+
+    if (ed.layers.getParent(ed.layers.root, layer)) |parent| {
+        const ustack = try ed.undoctx.pushNewFmt("delete layer", .{});
+
+        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, layer, parent[0].id, parent[1], .detach));
+
+        var it = ed.editIterator(.layer);
+        while (it.next()) |item| {
+            if (item.id == layer) {
+                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, it.i, .destroy));
+            }
+        }
+
+        Undo.applyRedo(ustack.items, ed);
+        if (parent[1] == 0) return parent[0].id;
+        return parent[0].children.items[parent[1] - 1].id;
+    }
+    return error.invalidParent;
+}
+
+//TODO This needs to be recursive
+pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
+    const layers = &ed.layers;
+    const current = layers.getLayerFromId(layer) orelse return;
+    const sel_layer = layer;
+    if (layers.getParent(layers.root, layer)) |parent| {
+        const new_name = ed.printScratch("{s}_dupe", .{current.name}) catch return;
+        const new = layers.newLayerUnattached(new_name) catch return;
+        const ustack = ed.undoctx.pushNewFmt("Dupe layer {s}", .{current.name}) catch return;
+        ustack.append(Undo.UndoAttachLayer.create(ed.undoctx.alloc, new.id, parent[0].id, parent[1] + 1, .attach) catch return) catch return;
+
+        var it = ed.editIterator(.layer);
+        while (it.next()) |item| {
+            if (item.id == sel_layer) {
+                const duped = ed.dupeEntity(it.i) catch return;
+                ed.putComponent(duped, .layer, .{ .id = new.id });
+                ustack.append(Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create) catch return) catch return;
+            }
+        }
+        Undo.applyRedo(ustack.items, ed);
+    }
+}
+
+pub fn mergeLayer(ed: *Ed, merge: LayerId, target_id: LayerId) !void {
+    // put undo set layer on all matching merge, delete merge;
+
+    const to_merge = ed.layers.getLayerFromId(merge) orelse return;
+    const target = ed.layers.getLayerFromId(target_id) orelse return;
+
+    const ustack = try ed.undoctx.pushNewFmt("Merge layer {s} into {s}", .{ to_merge.name, target.name });
+    var it = ed.editIterator(.layer);
+    while (it.next()) |item| {
+        if (item.id == merge) {
+            try ustack.append(try Undo.UndoSetLayer.create(ed.undoctx.alloc, it.i, item.id, target_id));
+        }
+    }
+    if (ed.layers.getParent(ed.layers.root, merge)) |parent| {
+        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, merge, parent[0].id, parent[1], .detach));
+    }
+    Undo.applyRedo(ustack.items, ed);
+}
