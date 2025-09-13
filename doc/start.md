@@ -159,12 +159,24 @@ There is no support yet for: (alpha blend, modifying normals (smoothing), sewing
 Under the tool tab when the translate tool is active, you will find options for grid size and selection mask.
 The angle snap can be set here. 
 
-### Visgroups 
-Visgroups are imported from vmf and can be selected or have visibility toggled from the pause tab.
+### Visgroups and Layers
+Rathammer will import vmf visgroup's as Layers. Each entity can only belong to a single layer. In Hammer this is not the case, so the first visgroup set for a Hammer entity is the visgroup it is put in when importing from vmf.
 
-There is currently no way to add objects to a visgroup.
+There are 2 systems for visibility. The AutoVis system, which groups entities based on some predicate. For example (ent.class starts with "prop_") or (solid.texture starts with "tools/skybox").
 
-In the future, a layer system for manually orginizing objects, coupled with a automatic vis grouping system will be added.
+These filters can be configured at runtime #TODO allow importing of filters
+
+The second system is the Layer system. Navigate to the Layer tab in the inspector.
+
+Clicking on a layer will highlight it blue and make it the 'active layer'. Any new objects you create or duplicate will be placed in the active layer. The checkbox on the left toggles visibility of each layer, the arrow allows collapsing of sub layers.
+
+Right click on any layer for the context menu, the layer does not need to be active. The possible operations include:
+* put - move all selected objects to this layer.
+* select - add all entities from this layer and its children to the selection.
+* duplicate - duplicate this layer and all of its children.
+* new child - create a new layer as a child.
+* delete - delete this layer and all of its children.
+* merge up - merge this layer and all of its children into the previous layer (nearest sibling or parent).
 
 ## Workspaces
 RatHammer has a few different workspaces.
