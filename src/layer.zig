@@ -78,6 +78,22 @@ pub const Context = struct {
         return self.layer_counter;
     }
 
+    /// Return bitset with ids below `lay` set. Caller must free result
+    pub fn gatherChildren(self: *const Self, alloc: std.mem.Allocator, lay: *const Layer) !struct { std.DynamicBitSetUnmanaged, []const Id } {
+        var ids = std.ArrayListUnmanaged(Id){};
+        try gatherChildrenRecur(&ids, lay, alloc);
+        var mask = try std.DynamicBitSetUnmanaged.initEmpty(alloc, self.layer_counter + 1);
+        for (ids.items) |id|
+            mask.set(id);
+        return .{ mask, try ids.toOwnedSlice(alloc) };
+    }
+
+    fn gatherChildrenRecur(list: *std.ArrayListUnmanaged(Id), lay: *const Layer, alloc: std.mem.Allocator) !void {
+        try list.append(alloc, lay.id);
+        for (lay.children.items) |child|
+            try gatherChildrenRecur(list, child, alloc);
+    }
+
     fn createLayer(alloc: std.mem.Allocator, id: Id, name: []const u8) !*Layer {
         const lay = try alloc.create(Layer);
         lay.* = .{
@@ -132,7 +148,7 @@ pub const Context = struct {
         }
     }
 
-    fn recurDisable(self: *Self, layer: *const Layer, enable: bool) !void {
+    pub fn recurDisable(self: *Self, layer: *const Layer, enable: bool) !void {
         //always disable layers, only enable layers if they are enabled
         const en = if (enable) layer.enabled else false;
         try self.setDisabled(layer.id, en);
@@ -481,16 +497,21 @@ const LayerWidget = struct {
             .right => {
                 const bi = guis.Widget.BtnContextWindow.buttonId;
                 const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
+                const aa = self.opts.parent.editor.frame_arena.allocator();
+                var btns = ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
+
+                btns.append(aa, .{ bi("cancel"), "cancel " }) catch {};
+                btns.append(aa, .{ bi("move_selected"), "-> put" }) catch {};
+                btns.append(aa, .{ bi("select_all"), "<- select" }) catch {};
+                btns.append(aa, .{ bi("duplicate"), "duplicate" }) catch {};
+                btns.append(aa, .{ bi("add_child"), "new child" }) catch {};
+                if (self.opts.id > 0) { //Root cannot be deleted or merged
+                    btns.append(aa, .{ bi("delete"), "delete layer" }) catch {};
+                    btns.append(aa, .{ bi("merge"), "^ merge up" }) catch {};
+                }
+
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
-                    .buttons = &.{
-                        .{ bi("cancel"), "cancel " },
-                        .{ bi("move_selected"), "-> put" },
-                        .{ bi("select_all"), "<- select" },
-                        .{ bi("delete"), "delete layer" },
-                        .{ bi("merge"), "^ merge up" },
-                        .{ bi("duplicate"), "duplicate" },
-                        .{ bi("add_child"), "new child" },
-                    },
+                    .buttons = btns.items,
                     .btn_cb = rightClickMenuBtn,
                     .btn_vt = vt,
                 }) catch return;
@@ -510,9 +531,12 @@ const LayerWidget = struct {
             bi("select_all") => {
                 ed.selection.setToMulti();
 
+                const aa = ed.frame_arena.allocator();
+                const mask = (ed.layers.gatherChildren(aa, ed.layers.getLayerFromId(sel_id) orelse return) catch return)[0];
+
                 var it = ed.editIterator(.layer);
                 while (it.next()) |item| {
-                    if (item.id == self.opts.id) {
+                    if (mask.isSet(item.id)) {
                         ed.selection.tryAddMulti(it.i) catch return;
                     }
                 }

@@ -576,7 +576,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{
-        .stack_trace_frames = if (IS_DEBUG) 8 else 0,
+        .stack_trace_frames = if (IS_DEBUG) 0 else 0,
     }){};
     const alloc = gpa.allocator();
     var arg_it = try std.process.argsWithAllocator(alloc);
@@ -605,6 +605,7 @@ pub fn main() !void {
     }
 
     try wrappedMain(alloc, args);
+    //TODO we need to wait for async save threads to join!!!!
 
     // if the application is quit while items are being loaded in the thread pool, we get spammed with memory leaks.
     // There is no benefit to ensuring those items are free'd on exit.

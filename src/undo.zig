@@ -694,8 +694,10 @@ pub const UndoAttachLayer = struct {
         const layers = &editor.layers;
         const parent = layers.getLayerFromId(self.parent) orelse return;
 
+        const child = layers.getLayerFromId(self.layer) orelse return;
         if (self.child_index < parent.children.items.len) {
             if (parent.children.items[self.child_index].id == self.layer) {
+                layers.recurDisable(child, false) catch {}; //disable all children
                 _ = parent.children.orderedRemove(self.child_index);
             }
         }
@@ -707,6 +709,7 @@ pub const UndoAttachLayer = struct {
         const child = layers.getLayerFromId(self.layer) orelse return;
         if (self.child_index <= parent.children.items.len) {
             parent.children.insert(layers.alloc, self.child_index, child) catch return;
+            layers.recurDisable(child, child.enabled) catch {};
         }
     }
 
