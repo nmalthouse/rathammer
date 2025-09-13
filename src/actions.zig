@@ -10,6 +10,7 @@ const raycast = @import("raycast_solid.zig");
 const RaycastSlice = []const raycast.RcastItem;
 const vpk = @import("vpk.zig");
 const util3d = @import("util_3d.zig");
+const LayerId = @import("layer.zig").Id;
 
 pub fn deleteSelected(ed: *Ed) !void {
     const selection = ed.selection.getSlice();
@@ -181,5 +182,18 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
         if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
             _ = ed.selection.put(it.i, ed) catch return;
         }
+    }
+}
+
+pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
+    const slice = ed.selection.getSlice();
+    if (slice.len > 0) {
+        const lay = ed.layers.getLayerFromId(lay_id) orelse return;
+        const ustack = try ed.undoctx.pushNewFmt("move {d} ent to '{s}'", .{ slice.len, lay.name });
+        for (slice) |sel| {
+            const old = if (ed.getComponent(sel, .layer)) |l| l.id else 0;
+            try ustack.append(try Undo.UndoSetLayer.create(ed.undoctx.alloc, sel, old, lay_id));
+        }
+        Undo.applyRedo(ustack.items, ed);
     }
 }

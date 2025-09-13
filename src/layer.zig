@@ -4,6 +4,7 @@ const vmf = @import("vmf.zig");
 const ROOT_LAYER_NAME = "world";
 const json_map = @import("json_map.zig");
 const edit = @import("editor.zig");
+const action = @import("actions.zig");
 
 /// Rathammer supports up to 2**16 visgroups but hammer does not
 pub const MAX_VIS_GROUP_VMF = 128;
@@ -458,11 +459,7 @@ const LayerWidget = struct {
                 }
             },
             bi("move_selected") => {
-                const ed = self.opts.parent.editor;
-                const slice = ed.selection.getSlice();
-                for (slice) |sel| {
-                    ed.putComponent(sel, .layer, .{ .id = self.opts.id });
-                }
+                action.addSelectionToLayer(self.opts.parent.editor, self.opts.id) catch return;
             },
             bi("add_child") => {
                 const new = self.opts.parent.ctx.newLayer("New layer", self.opts.parent.selected_ptr.*) catch return;

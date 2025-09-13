@@ -7,6 +7,7 @@ const vpk = @import("vpk.zig");
 const Vec3 = graph.za.Vec3;
 const ecs = @import("ecs.zig");
 const util3d = @import("util_3d.zig");
+const LayerId = @import("layer.zig").Id;
 
 //Stack based undo,
 //we push operations onto the stack.
@@ -600,6 +601,51 @@ pub const UndoDisplacmentModify = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         alloc.free(self.offset_offset);
         alloc.free(self.offset_index);
+        alloc.destroy(self);
+    }
+};
+
+pub const UndoSetLayer = struct {
+    vt: iUndo,
+
+    id: Id,
+    old: LayerId,
+    new: LayerId,
+
+    pub fn create(alloc: std.mem.Allocator, id: Id, old: LayerId, new: LayerId) !*iUndo {
+        var obj = try alloc.create(@This());
+        obj.* = .{
+            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
+            .id = id,
+            .old = old,
+            .new = new,
+        };
+        return &obj.vt;
+    }
+
+    fn set(editor: *Editor, id: Id, lay: LayerId) void {
+        const ent = editor.ecs.getEntity(id) catch return;
+        if (!ent.isSet(@intFromEnum(ecs.EcsT.Components.layer))) {
+            editor.ecs.attach(id, .layer, .{ .id = lay }) catch {};
+            return;
+        }
+
+        if (editor.ecs.getPtr(id, ecs.EcsT.Components.layer) catch null) |ptr|
+            ptr.* = .{ .id = lay };
+    }
+
+    pub fn undo(vt: *iUndo, editor: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        set(editor, self.id, self.old);
+    }
+
+    pub fn redo(vt: *iUndo, editor: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        set(editor, self.id, self.new);
+    }
+
+    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         alloc.destroy(self);
     }
 };
