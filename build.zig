@@ -83,7 +83,9 @@ pub fn build(b: *std.Build) void {
     exe_unit_tests.root_module.addImport("graph", ratmod);
     exe_unit_tests.root_module.addOptions("config", opts);
     exe_unit_tests.root_module.addImport("uuidlib", uuidmod);
-    exe_unit_tests.setExecCmd(&[_]?[]const u8{ "kcov", "--exclude-path=/usr/lib", "kcov-output", null });
+    const do_kcov = b.option(bool, "kcov", "run tests with kcov") orelse false;
+    if (do_kcov)
+        exe_unit_tests.setExecCmd(&[_]?[]const u8{ "kcov", "--exclude-path=/usr/lib", "kcov-output", null });
 
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
 

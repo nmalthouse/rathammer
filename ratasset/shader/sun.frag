@@ -38,7 +38,8 @@ float shadowCalculation(vec3 fp, vec3 norm){
     vec3 proj_coord = frag_pos_ls.xyz / frag_pos_ls.w;
     proj_coord = proj_coord * 0.5 + 0.5 ;
 
-    float bias = max(0.005 * (1.0 - dot(norm, light_dir)), 0.005);
+    float bb = 0.003; //0.005
+    float bias = max(bb * (1.0 - dot(norm, light_dir)), bb);
     const float bias_mod = 0.1;
     bias *= 1 / (cascadePlaneDistances[layer] * bias_mod);
 
