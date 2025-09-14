@@ -304,3 +304,18 @@ pub fn mergeLayer(ed: *Ed, merge: LayerId, target_id: LayerId) !void {
     }
     Undo.applyRedo(ustack.items, ed);
 }
+
+pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: usize) !void {
+    //verify sel_id is not a child of selected_ptr.*. (creates cycle)
+    if (!ed.layers.isChildOf(moved_id, new_parent_id)) {
+        const moved = ed.layers.getLayerFromId(moved_id) orelse return;
+        const new_parent = ed.layers.getLayerFromId(new_parent_id) orelse return;
+
+        const parent = ed.layers.getParent(ed.layers.root, moved.id) orelse return;
+        const ustack = try ed.undoctx.pushNewFmt("Moved layer {s}", .{moved.name});
+        //first detach, than reattach to new
+        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, moved.id, parent[0].id, parent[1], .detach));
+        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, moved.id, new_parent.id, sib_index, .attach));
+        Undo.applyRedo(ustack.items, ed);
+    }
+}

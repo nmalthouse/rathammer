@@ -282,6 +282,24 @@ pub const Context = struct {
         }
         return null;
     }
+
+    /// Returns true if child is a child of parent or if child == parent
+    pub fn isChildOf(self: *Self, parent: Id, child: Id) bool {
+        const H = struct {
+            fn isChildRecur(pa: *Layer, ch: *Layer) bool {
+                if (pa.id == ch.id) return true;
+                for (pa.children.items) |np| {
+                    if (isChildRecur(np, ch))
+                        return true;
+                }
+                return false;
+            }
+        };
+        const p = self.getLayerFromId(parent) orelse return false;
+        const ch = self.getLayerFromId(child) orelse return false;
+
+        return H.isChildRecur(p, ch);
+    }
 };
 
 const graph = @import("graph");
@@ -499,16 +517,22 @@ const LayerWidget = struct {
                 const pos = graph.Vec2f{ .x = @round(cb.pos.x), .y = @round(cb.pos.y) };
                 const aa = self.opts.parent.editor.frame_arena.allocator();
                 var btns = ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
+                const allow_move = !self.opts.parent.ctx.isChildOf(self.opts.parent.selected_ptr.*, self.opts.id);
 
                 btns.append(aa, .{ bi("cancel"), "cancel " }) catch {};
                 btns.append(aa, .{ bi("move_selected"), "-> put" }) catch {};
                 btns.append(aa, .{ bi("select_all"), "<- select" }) catch {};
                 btns.append(aa, .{ bi("duplicate"), "duplicate" }) catch {};
                 btns.append(aa, .{ bi("add_child"), "new child" }) catch {};
+                btns.append(aa, .{ bi("noop"), "" }) catch {};
                 if (self.opts.id > 0) { //Root cannot be deleted or merged
                     btns.append(aa, .{ bi("delete"), "delete layer" }) catch {};
                     btns.append(aa, .{ bi("merge"), "^ merge up" }) catch {};
+                    if (allow_move)
+                        btns.append(aa, .{ bi("attach_sib"), "attach as sibling" }) catch {};
                 }
+                if (allow_move)
+                    btns.append(aa, .{ bi("attach_child"), "attach as child" }) catch {};
 
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = btns.items,
@@ -563,6 +587,19 @@ const LayerWidget = struct {
                     const merge_id = if (parent[1] > 0) parent[0].children.items[parent[1] - 1].id else parent[0].id;
                     action.mergeLayer(ed, sel_id, merge_id) catch {};
                     self.opts.parent.selected_ptr.* = merge_id;
+                }
+            },
+            bi("attach_child") => {
+                action.moveLayer(ed, self.opts.parent.selected_ptr.*, sel_id, 0) catch {};
+            },
+            bi("attach_sib") => {
+                if (ed.layers.getParent(ed.layers.root, sel_id)) |parent| {
+                    const moved_parent = ed.layers.getParent(ed.layers.root, self.opts.parent.selected_ptr.*) orelse return;
+
+                    //Special case for movements within a layer,
+                    //otherwise index calculation + 1 is incorrent because length changes when the layer is removed
+                    const new_index = if (moved_parent[0].id == parent[0].id) parent[1] else parent[1] + 1;
+                    action.moveLayer(ed, self.opts.parent.selected_ptr.*, parent[0].id, new_index) catch {};
                 }
             },
             else => {},
