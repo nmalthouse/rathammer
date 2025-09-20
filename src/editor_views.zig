@@ -328,7 +328,7 @@ pub fn draw3Dview(
         try action.selectRaycast(self, screen_area, view_3d);
     }
     if (self.isBindState(self.config.keys.clear_selection.b, .rising))
-        action.clearSelection(self);
+        try action.clearSelection(self);
 
     if (self.isBindState(self.config.keys.group_selection.b, .rising)) {
         try action.groupSelection(self);
@@ -437,7 +437,7 @@ pub fn draw3Dview(
             .many => MANY_COLOR,
         });
         if (self.selection.mode == .many)
-            mt.textFmt("Selected: {d}", .{self.selection.multi.items.len}, fh, col);
+            mt.textFmt("Selected: {d}", .{self.selection.countSelected()}, fh, col);
         if (self.edit_state.manual_hidden_count > 0) {
             mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, HIDDEN_COLOR);
         }

@@ -143,17 +143,19 @@ pub fn applyRedo(list: []const *iUndo, editor: *Editor) void {
 }
 
 pub const SelectionUndo = struct {
-    pub const Kind = enum { select, deselect };
+    const selection = @import("selection.zig");
+    const StateSnapshot = selection.StateSnapshot;
     vt: iUndo,
 
-    kind: Kind,
-    id: Id,
+    old: StateSnapshot,
+    new: StateSnapshot,
 
-    pub fn create(alloc: std.mem.Allocator, kind: Kind, id: Id) !*iUndo {
+    /// Assumes snapshots are allocated by 'alloc', takes memory ownership of snapshots
+    pub fn create(alloc: std.mem.Allocator, old: StateSnapshot, new: StateSnapshot) !*iUndo {
         var obj = try alloc.create(@This());
         obj.* = .{
-            .id = id,
-            .kind = kind,
+            .old = old,
+            .new = new,
             .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
         };
         return &obj.vt;
@@ -161,20 +163,18 @@ pub const SelectionUndo = struct {
 
     pub fn undo(vt: *iUndo, editor: *Editor) void {
         const self: *@This() = @fieldParentPtr("vt", vt);
-        switch (self.kind) {
-            .select => editor.selection.single_id = null,
-            .deselect => editor.selection.single_id = self.id,
-        }
+        editor.selection.setFromSnapshot(self.old) catch {};
     }
     pub fn redo(vt: *iUndo, editor: *Editor) void {
         const self: *@This() = @fieldParentPtr("vt", vt);
-        switch (self.kind) {
-            .select => editor.selection.single_id = self.id,
-            .deselect => editor.selection.single_id = null,
-        }
+        editor.selection.setFromSnapshot(self.new) catch {};
     }
+
     pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
         const self: *@This() = @fieldParentPtr("vt", vt);
+        self.old.destroy(alloc);
+        self.new.destroy(alloc);
+
         alloc.destroy(self);
     }
 };

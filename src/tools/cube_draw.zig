@@ -14,7 +14,6 @@ const iWindow = guis.iWindow;
 const Wg = guis.Widget;
 const util3d = @import("../util_3d.zig");
 const ecs = @import("../ecs.zig");
-const undo = @import("../undo.zig");
 const snapV3 = util3d.snapV3;
 const prim_gen = @import("../primitive_gen.zig");
 const toolutil = @import("../tool_common.zig");

@@ -114,7 +114,7 @@ test "editor init" {
 
     { //BUG -> grouped entity marquee selection, even odd selection
 
-        a.clearSelection(editor);
+        try a.clearSelection(editor);
         editor.selection.setToMulti();
         const cu1 = try actions.createCube(editor, Vec3.new(1, 1, 1), Vec3.new(1, 1, 1), tid, false);
         const cu2 = try actions.createCube(editor, Vec3.new(3, 1, 1), Vec3.new(1, 1, 1), tid, false);
@@ -123,7 +123,7 @@ test "editor init" {
 
         try std.testing.expectEqual(2, editor.selection.getSlice().len);
         try a.groupSelection(editor);
-        a.clearSelection(editor);
+        try a.clearSelection(editor);
         editor.selection.mode = .one;
 
         if (!try editor.ecs.hasComponent(cu1, .group)) return error.noGroup;

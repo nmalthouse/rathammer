@@ -3,13 +3,23 @@ const edit = @import("editor.zig");
 const ecs = @import("ecs.zig");
 const GroupId = ecs.Groups.GroupId;
 const Id = edit.EcsT.Id;
-//TODO
-//allow tools to force single
 
 const Self = @This();
 const Mode = enum {
     one,
     many,
+};
+
+pub const StateSnapshot = struct {
+    multi: []const Id,
+    groups: []const GroupId,
+
+    mode: Mode,
+
+    pub fn destroy(self: *@This(), alloc: std.mem.Allocator) void {
+        alloc.free(self.multi);
+        alloc.free(self.groups);
+    }
 };
 
 /// When .one, selecting an entity will clear the current selection
@@ -19,8 +29,9 @@ mode: Mode = .one,
 /// Toggling this only effects the behavior of fn put()
 ignore_groups: bool = false,
 
-multi: std.ArrayList(Id),
+_multi: std.ArrayList(Id),
 
+/// stores set of groups present in current selection.
 groups: std.AutoHashMap(GroupId, void),
 
 options: struct {
@@ -36,7 +47,7 @@ options: struct {
 
 pub fn init(alloc: std.mem.Allocator) Self {
     return .{
-        .multi = std.ArrayList(Id).init(alloc),
+        ._multi = std.ArrayList(Id).init(alloc),
         .groups = std.AutoHashMap(GroupId, void).init(alloc),
     };
 }
@@ -48,14 +59,51 @@ pub fn toggle(self: *Self) void {
     };
 }
 
+pub fn createStateSnapshot(self: *Self, alloc: std.mem.Allocator) !StateSnapshot {
+    const group_list = try alloc.alloc(GroupId, self.groups.count());
+    var g_it = self.groups.keyIterator();
+
+    var g_i: usize = 0;
+    while (g_it.next()) |g| {
+        if (g_i >= group_list.len)
+            break;
+
+        group_list[g_i] = g.*;
+
+        g_i += 1;
+    }
+    const multi = try alloc.dupe(Id, self._multi.items);
+
+    return StateSnapshot{
+        .mode = self.mode,
+        .multi = multi,
+        .groups = group_list,
+    };
+}
+
+pub fn setFromSnapshot(self: *Self, snapshot: StateSnapshot) !void {
+    self._multi.clearRetainingCapacity();
+    try self._multi.appendSlice(snapshot.multi);
+
+    self.groups.clearRetainingCapacity();
+    for (snapshot.groups) |g| {
+        try self.groups.put(g, {});
+    }
+    self.mode = snapshot.mode;
+}
+
 pub fn getLast(self: *Self) ?Id {
-    return self.multi.getLastOrNull();
+    return self._multi.getLastOrNull();
+}
+
+pub fn countSelected(self: *Self) usize {
+    return self._multi.items.len;
 }
 
 // Only return selected if length of selection is 1
 pub fn getExclusive(self: *Self) ?Id {
-    if (self.multi.items.len == 1)
-        return self.multi.items[0];
+    if (self._multi.items.len == 1)
+        return self._multi.items[0];
     return null;
 }
 
@@ -76,7 +124,7 @@ pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
 pub fn setToSingle(self: *Self, id: Id) !void {
     self.mode = .one;
     self.clear();
-    try self.multi.append(id);
+    try self._multi.append(id);
 }
 
 pub fn setToMulti(self: *Self) void {
@@ -85,11 +133,11 @@ pub fn setToMulti(self: *Self) void {
 
 // Add an id without checking if it exists
 pub fn addUnchecked(self: *Self, id: Id) !void {
-    try self.multi.append(id);
+    try self._multi.append(id);
 }
 
 pub fn multiContains(self: *Self, id: Id) bool {
-    for (self.multi.items) |item| {
+    for (self._multi.items) |item| {
         if (item == id)
             return true;
     }
@@ -97,29 +145,29 @@ pub fn multiContains(self: *Self, id: Id) bool {
 }
 
 pub fn tryRemoveMulti(self: *Self, id: Id) void {
-    if (std.mem.indexOfScalar(Id, self.multi.items, id)) |index|
-        _ = self.multi.orderedRemove(index);
+    if (std.mem.indexOfScalar(Id, self._multi.items, id)) |index|
+        _ = self._multi.orderedRemove(index);
 }
 
 pub fn tryAddMulti(self: *Self, id: Id) !void {
     //TODO no n^2 please, thanks.
-    if (std.mem.indexOfScalar(Id, self.multi.items, id)) |_| {
+    if (std.mem.indexOfScalar(Id, self._multi.items, id)) |_| {
         return;
     }
-    try self.multi.append(id);
+    try self._multi.append(id);
 }
 
 pub fn getSlice(self: *Self) []const Id {
-    return self.multi.items;
+    return self._multi.items;
 }
 
 pub fn clear(self: *Self) void {
-    self.multi.clearRetainingCapacity();
+    self._multi.clearRetainingCapacity();
     self.groups.clearAndFree();
 }
 
 pub fn deinit(self: *Self) void {
-    self.multi.deinit();
+    self._multi.deinit();
     self.groups.deinit();
 }
 
@@ -176,17 +224,17 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !bool {
     const group = if (try editor.ecs.getOpt(id, .group)) |g| g.id else 0;
     switch (self.mode) {
         .one => {
-            try self.multi.resize(1);
-            self.multi.items[0] = id;
+            try self._multi.resize(1);
+            self._multi.items[0] = id;
             self.groups.clearRetainingCapacity();
             try self.groups.put(group, {});
         },
         .many => {
-            if (std.mem.indexOfScalar(Id, self.multi.items, id)) |index| {
-                _ = self.multi.orderedRemove(index);
+            if (std.mem.indexOfScalar(Id, self._multi.items, id)) |index| {
+                _ = self._multi.orderedRemove(index);
                 _ = self.groups.remove(group);
             } else {
-                try self.multi.append(id);
+                try self._multi.append(id);
                 try self.groups.put(group, {});
             }
         },

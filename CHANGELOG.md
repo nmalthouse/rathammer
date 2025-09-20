@@ -17,3 +17,4 @@
 * Maps are written to "$MAPNAME.ratmap.saving" before being atomically moved to "$MAPNAME.ratmap"
 * Gracefully handle json maps with unknown components
 * Fix segfault with map paths that include "."
+* Clearing the selection is undo-able

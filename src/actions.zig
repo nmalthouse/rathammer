@@ -18,16 +18,23 @@ pub fn deleteSelected(ed: *Ed) !void {
     const vis_mask = ecs.EcsT.getComponentMask(&.{ .invisible, .autovis_invisible });
     if (selection.len > 0) {
         const ustack = try ed.undoctx.pushNewFmt("deletion of {d} entities", .{selection.len});
+
         for (selection) |id| {
             if (ed.ecs.intersects(id, vis_mask))
                 continue;
             try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, id, .destroy));
         }
-        Undo.applyRedo(ustack.items, ed);
+        const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
         ed.selection.clear();
+        const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+
+        try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
+        Undo.applyRedo(ustack.items, ed);
     }
 }
 
+//TODO this is actually "toggle hide"
+//Decide on rules for
 pub fn hideSelected(ed: *Ed) !void {
     const selected = ed.selection.getSlice();
     for (selected) |sel| {
@@ -132,7 +139,7 @@ const pgen = @import("primitive_gen.zig");
 const Primitive = pgen.Primitive;
 pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, center: Vec3, rot: graph.za.Mat3, select: bool) ![]const ecs.EcsT.Id {
     const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
-    defer Undo.applyRedo(ustack.items, ed);
+    const old_selection_state = if (select) try ed.selection.createStateSnapshot(ed.undoctx.alloc) else null;
     if (select) {
         ed.selection.clear();
         ed.selection.mode = .many;
@@ -158,6 +165,16 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
             std.debug.print("Invalid cube {!}\n", .{a});
         }
     }
+
+    if (select) {
+        const new_state = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+        const old = old_selection_state.?;
+
+        try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old, new_state));
+    }
+
+    Undo.applyRedo(ustack.items, ed);
+
     return id_list.items;
 }
 
@@ -170,8 +187,15 @@ pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: b
     return ids[0];
 }
 
-pub fn clearSelection(ed: *Ed) void {
+pub fn clearSelection(ed: *Ed) !void {
+    const count = ed.selection.countSelected();
+    const ustack = try ed.undoctx.pushNewFmt("clear selection of {d}", .{count});
+
+    const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
     ed.selection.clear();
+    const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+
+    try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
 }
 
 pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
