@@ -86,3 +86,41 @@ pub const LoadCtxDummy = struct {
 
     pub fn addExpected(_: *Self, _: usize) void {}
 };
+
+/// Split a path to map file into a path component and a base component with map extension stripped
+pub fn pathToMapName(map_path: []const u8) !struct { []const u8, []const u8 } {
+    const path = std.fs.path.dirname(map_path) orelse "";
+    const base = std.fs.path.basename(map_path);
+    const ext = std.fs.path.extension(base);
+    const allowed_exts = [_][]const u8{
+        ".json",
+        ".tar",
+        ".ratmap",
+        ".vmf",
+    };
+
+    var found = false;
+    for (allowed_exts) |allowed| {
+        if (std.mem.eql(u8, allowed, ext))
+            found = true;
+    }
+    if (!found)
+        std.debug.print("unknown map file extension {s}\n", .{ext});
+
+    if (ext.len >= base.len)
+        return error.invalidMapName;
+
+    const base_no_ext = base[0 .. base.len - ext.len];
+    return .{
+        path,
+        base_no_ext,
+    };
+}
+
+test "map path" {
+    const ex = std.testing.expectEqualDeep;
+    try ex(.{ "/tmp/0.0.0", "p" }, try pathToMapName("/tmp/0.0.0/p.json"));
+    try ex(.{ "", "p" }, try pathToMapName("p"));
+    try ex(.{ "", ".json" }, try pathToMapName(".json"));
+    try ex(.{ "hello/world", "0.0.0" }, try pathToMapName("hello/world/0.0.0.ratmap"));
+}

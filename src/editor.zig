@@ -277,7 +277,7 @@ pub const Context = struct {
         const lp = self.loaded_map_path orelse return null;
 
         const aa = self.frame_arena.allocator();
-        const name = self.printScratch("{s}{s}.ratmap", .{ lp, lm }) catch return null;
+        const name = std.fs.path.join(aa, &.{ lp, self.printScratch("{s}.ratmap", .{lm}) catch return null }) catch return null;
         const full_path = self.dirs.app_cwd.realpathAlloc(aa, name) catch |err| {
             std.debug.print("Realpath failed with {!} on {s}\n", .{ err, name });
             return null;
@@ -286,39 +286,10 @@ pub const Context = struct {
     }
 
     pub fn setMapName(self: *Self, filename: []const u8) !void {
-        const eql = std.mem.eql;
-        const allowed_exts = [_][]const u8{
-            ".json",
-            ".tar",
-            ".ratmap",
-            ".vmf",
-        };
-        var dot_index: ?usize = null;
-        var slash_index: ?usize = null;
-        if (std.mem.lastIndexOfScalar(u8, filename, '.')) |index| {
-            var found = false;
-            for (allowed_exts) |ex| {
-                if (eql(u8, filename[index..], ex)) {
-                    found = true;
-                }
-            }
-            if (!found) {
-                log.warn("Unknown map extension: {s}", .{filename});
-            }
-            dot_index = index;
-            //pruned = filename[0..index];
-        } else {
-            log.warn("Map has no extension {s}", .{filename});
-        }
-        if (std.mem.lastIndexOfAny(u8, filename, "\\/")) |sep| {
-            slash_index = sep;
-        }
-        const lname = filename[if (slash_index) |si| si + 1 else 0..if (dot_index) |d| d else filename.len];
-        self.loaded_map_name = try self.storeString(lname);
-        self.loaded_map_path = try self.storeString(filename[0..if (slash_index) |s| s + 1 else 0]);
-        //pruned = pruned[sep + 1 ..];
+        const split = try util.pathToMapName(filename);
 
-        //self.loaded_map_name = try self.storeString(pruned);
+        self.loaded_map_name = try self.storeString(split[1]);
+        self.loaded_map_path = try self.storeString(split[0]);
     }
 
     pub fn init(
@@ -1411,18 +1382,14 @@ pub const Context = struct {
     pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8) !void {
         self.edit_state.map_version += 1;
         var timer = try std.time.Timer.start();
-        try self.notify("saving: {s}{s}", .{ path, basename }, colors.tentative);
 
-        const name = try self.printScratch("{s}{s}.ratmap", .{ path, basename });
-        //const copy_name = try self.printScratch("{s}{s}.ratmap.saving", .{ path, basename });
-        //TODO make copy of existing map incase something goes wrong
-
-        //const out_file = try std.fs.cwd().createFile(name, .{});
+        const name = try std.fs.path.join(self.frame_arena.allocator(), &.{ path, try self.printScratch("{s}.ratmap", .{basename}) });
+        try self.notify("saving: {s}", .{name}, colors.tentative);
 
         var jwriter = std.ArrayList(u8).init(self.alloc);
 
         if (self.writeToJson(jwriter.writer())) {
-            try self.notify(" saved: {s}{s} in {d:.1}ms", .{ path, basename, timer.read() / std.time.ns_per_ms }, colors.good);
+            try self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
 

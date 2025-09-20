@@ -3,6 +3,8 @@ const builtin = @import("builtin");
 
 const log = std.log.scoped(.path_guess);
 
+//TODO rename this file to filesystem and move other filesystem specific stuff in here
+
 pub fn guessSteamPath(env: *std.process.EnvMap, alloc: std.mem.Allocator) !?std.fs.Dir {
     var buf = std.ArrayList(u8).init(alloc);
     defer buf.deinit();

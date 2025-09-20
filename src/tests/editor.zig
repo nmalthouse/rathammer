@@ -6,10 +6,7 @@ const ecs = @import("../ecs.zig");
 
 pub const EditorTestCtx = struct {
     const Conf = @import("../config.zig");
-    const graph = @import("graph");
     const app = @import("../app.zig");
-    const actions = @import("../actions.zig");
-    const Vec3 = graph.za.Vec3;
     const IS_DEBUG = false;
 
     conf: Conf.ConfigCtx,
@@ -70,11 +67,12 @@ pub const EditorTestCtx = struct {
     }
 };
 
+const graph = @import("graph");
+const actions = @import("../actions.zig");
+const Vec3 = graph.za.Vec3;
+
 test "editor init" {
     //const Conf = @import("../config.zig");
-    const graph = @import("graph");
-    const actions = @import("../actions.zig");
-    const Vec3 = graph.za.Vec3;
     //const IS_DEBUG = false;
 
     const alloc = std.testing.allocator;
