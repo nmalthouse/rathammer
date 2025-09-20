@@ -156,21 +156,6 @@ pub fn tryAddMulti(self: *Self, id: Id) !void {
     try self.addUnchecked(id);
 }
 
-pub fn getSlice(self: *Self) []const Id {
-    self._multi_slice_scratch.resize(self.alloc, self.countSelected()) catch return &.{};
-
-    var it = self._multi.keyIterator();
-    var i: usize = 0;
-    while (it.next()) |sel| {
-        if (i >= self._multi_slice_scratch.items.len) break;
-
-        self._multi_slice_scratch.items[i] = sel.*;
-        i += 1;
-    }
-
-    return self._multi_slice_scratch.items;
-}
-
 pub fn clear(self: *Self) void {
     self._multi.clearRetainingCapacity();
     self.groups.clearAndFree();

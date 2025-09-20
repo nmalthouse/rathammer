@@ -321,7 +321,7 @@ pub const TextureTool = struct {
         switch (btn_k) {
             else => {},
             .apply_selection => {
-                const selection = self.ed.selection.getSlice();
+                const selection = self.ed.getSelected();
                 std.debug.print("Start apply\n", .{});
                 const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
 

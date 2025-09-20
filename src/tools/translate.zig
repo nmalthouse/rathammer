@@ -113,7 +113,7 @@ pub const Translate = struct {
     }
 
     fn runTool2DErr(self: *@This(), td: tools.ToolData, ed: *Editor) !void {
-        const selected = ed.selection.getSlice();
+        const selected = ed.getSelected();
         const draw = td.draw;
         for (selected) |id| {
             if (ed.getComponent(id, .solid)) |solid| {
@@ -224,7 +224,7 @@ pub const Translate = struct {
             tool.modeSwitchCube(self, origin, giz_active == .high, draw_nd, td);
             const commit = self.edit_state.rmouse == .rising;
             const real_commit = giz_active == .high and commit;
-            const selected = self.selection.getSlice();
+            const selected = self.getSelected();
             for (selected) |id| {
                 if (self.getComponent(id, .solid)) |solid| {
                     if (giz_active == .rising) {
@@ -324,7 +324,7 @@ pub const Translate = struct {
 
             var text_pos = origin;
             var giz_active = giz_active_pre;
-            const selected = self.selection.getSlice();
+            const selected = self.getSelected();
             if (tool.enable_fast_move) {
                 const rc = self.camRay(td.screen_area, td.view_3d.*);
                 if (self.edit_state.lmouse == .rising and giz_active_pre == .low) {
@@ -522,7 +522,7 @@ pub const Translate = struct {
     }
 
     fn commit_(self: *Editor, dupe: bool, angle_delta: ?Vec3, origin: Vec3, dist: Vec3) !void {
-        const selected = self.selection.getSlice();
+        const selected = self.getSelected();
         var new_ent_list = std.ArrayList(ecs.EcsT.Id).init(self.frame_arena.allocator());
         //Map old groups to duped groups
         var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(self.frame_arena.allocator());

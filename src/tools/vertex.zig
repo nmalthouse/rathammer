@@ -191,7 +191,7 @@ pub const VertexTranslate = struct {
                     const cc = util3d.cubeFromBounds(st.marquee_start.add(r[1].scale(-z_scale)), st.marquee_end.add(r[1].scale(z_scale)));
                     const min = cc[0];
                     const max = min.add(cc[1]);
-                    const selected_slice = ed.selection.getSlice();
+                    const selected_slice = ed.getSelected();
                     for (selected_slice) |sel| {
                         const disps_o = if (self.do_displacements) ed.getComponent(sel, .displacements) else null;
                         if (disps_o) |disps| {
@@ -252,7 +252,7 @@ pub const VertexTranslate = struct {
 
     fn commitDist(self: *Self, dist: Vec3, ed: *Editor) !void {
         const ustack = try ed.undoctx.pushNewFmt("vertex translate ", .{});
-        for (ed.selection.getSlice()) |id| {
+        for (ed.getSelected()) |id| {
             const manip_verts = self.selected.getPtr(id) orelse continue;
             if (manip_verts.items(.index).len == 0) continue;
 
@@ -312,7 +312,7 @@ pub const VertexTranslate = struct {
         const ar = ed.frame_arena.allocator();
         // every frame, stick all selected into here and then use it to prune unselected;
         var id_mapper = std.AutoHashMap(ecs.EcsT.Id, void).init(ar);
-        const selected_slice = ed.selection.getSlice();
+        const selected_slice = ed.getSelected();
 
         const lm = ed.edit_state.lmouse;
         //const r = ed.camRay(td.screen_area, td.view_3d.*);
@@ -438,7 +438,7 @@ pub const VertexTranslate = struct {
     //TODO Make this suck less
     pub fn runVertex(self: *Self, td: tools.ToolData, ed: *Editor) !void {
         const draw_nd = &ed.draw_state.ctx;
-        const selected_slice = ed.selection.getSlice();
+        const selected_slice = ed.getSelected();
         //const lm = ed.edit_state.lmouse;
         //const r = ed.camRay(td.screen_area, td.view_3d.*);
         //const POT_VERT_COLOR = 0x66CDAAff;

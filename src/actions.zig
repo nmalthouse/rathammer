@@ -14,7 +14,7 @@ const Lays = @import("layer.zig");
 const LayerId = Lays.Id;
 
 pub fn deleteSelected(ed: *Ed) !void {
-    const selection = ed.selection.getSlice();
+    const selection = ed.getSelected();
     const vis_mask = ecs.EcsT.getComponentMask(&.{ .invisible, .autovis_invisible });
     if (selection.len > 0) {
         const ustack = try ed.undoctx.pushNewFmt("deletion of {d} entities", .{selection.len});
@@ -36,7 +36,7 @@ pub fn deleteSelected(ed: *Ed) !void {
 //TODO this is actually "toggle hide"
 //Decide on rules for
 pub fn hideSelected(ed: *Ed) !void {
-    const selected = ed.selection.getSlice();
+    const selected = ed.getSelected();
     for (selected) |sel| {
         if (!(ed.ecs.hasComponent(sel, .invisible) catch continue)) {
             ed.edit_state.manual_hidden_count += 1;
@@ -105,7 +105,7 @@ pub fn groupSelection(ed: *Ed) !void {
         }
     }
 
-    const selection = ed.selection.getSlice();
+    const selection = ed.getSelected();
 
     if (owner_count > 1)
         try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
@@ -213,7 +213,7 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
 }
 
 pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
-    const slice = ed.selection.getSlice();
+    const slice = ed.getSelected();
     if (slice.len > 0) {
         const lay = ed.layers.getLayerFromId(lay_id) orelse return;
         const ustack = try ed.undoctx.pushNewFmt("move {d} ent to '{s}'", .{ slice.len, lay.name });

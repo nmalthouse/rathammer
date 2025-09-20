@@ -102,6 +102,7 @@ pub const Context = struct {
 
     scratch_buf: std.ArrayList(u8),
     alloc: std.mem.Allocator,
+    _selection_scratch: std.ArrayListUnmanaged(EcsT.Id) = .{},
 
     /// Stores all the mesh data for solids.
     meshmap: ecs.MeshMap,
@@ -500,6 +501,7 @@ pub const Context = struct {
         if (self.draw_state.portalfile) |pf|
             pf.verts.deinit();
         self.async_asset_load.deinit();
+        self._selection_scratch.deinit(self.alloc);
 
         //destroy does not take a pointer to alloc, so this is safe.
         self.alloc.destroy(self);
@@ -574,6 +576,20 @@ pub const Context = struct {
             .i = 0,
             .ecs = &self.ecs,
         };
+    }
+
+    pub fn getSelected(self: *Self) []const EcsT.Id {
+        self._selection_scratch.clearRetainingCapacity();
+
+        var it = self.selection._multi.keyIterator();
+        const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
+        while (it.next()) |pot| {
+            if (self.ecs.intersects(pot.*, vis_mask))
+                continue;
+            self._selection_scratch.append(self.alloc, pot.*) catch return &.{};
+        }
+
+        return self._selection_scratch.items;
     }
 
     pub fn rebuildMeshesIfDirty(self: *Self) !void {

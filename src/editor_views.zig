@@ -275,7 +275,7 @@ pub fn draw3Dview(
     //Draw helpers for the selected entity
     if (self.selection.getGroupOwnerExclusive(&self.groups)) |sel_id| {
         blk: {
-            const selection = self.selection.getSlice();
+            const selection = self.getSelected();
             if (self.getComponent(sel_id, .entity)) |ent| {
                 var origin = ent.origin;
                 if (selection.len == 1) {
@@ -352,7 +352,7 @@ pub fn draw3Dview(
         },
     };
     if (self.getCurrentTool()) |vt| {
-        const selected = self.selection.getSlice();
+        const selected = self.getSelected();
         if (self.draw_state.draw_outlines) {
             for (selected) |sel| {
                 if (self.getComponent(sel, .solid)) |solid| {
@@ -440,7 +440,7 @@ pub fn draw3Dview(
             .many => MANY_COLOR,
         });
         if (self.selection.mode == .many)
-            mt.textFmt("Selected: {d}", .{self.selection.countSelected()}, fh, col);
+            mt.textFmt("Selected: {d}", .{self.getSelected().len}, fh, col);
         if (self.edit_state.manual_hidden_count > 0) {
             mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, HIDDEN_COLOR);
         }

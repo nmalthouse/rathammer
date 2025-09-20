@@ -119,7 +119,7 @@ pub const Ctx2dView = struct {
             .text_param = .{ .px_size = 10, .color = 0xffff_ffff, .font = self.font },
         };
         if (ed.getCurrentTool()) |tool_vt| {
-            const selected = ed.selection.getSlice();
+            const selected = ed.getSelected();
             for (selected) |sel| {
                 if (ed.getComponent(sel, .solid)) |solid| {
                     solid.drawEdgeOutline(draw, Vec3.zero(), .{

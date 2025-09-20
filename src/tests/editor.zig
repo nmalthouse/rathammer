@@ -121,7 +121,7 @@ test "editor init" {
         try a.selectId(editor, cu1);
         try a.selectId(editor, cu2);
 
-        try std.testing.expectEqual(2, editor.selection.getSlice().len);
+        try std.testing.expectEqual(2, editor.getSelected().len);
         try a.groupSelection(editor);
         try a.clearSelection(editor);
         editor.selection.mode = .one;
@@ -130,7 +130,7 @@ test "editor init" {
         if (!try editor.ecs.hasComponent(cu2, .group)) return error.noGroup;
 
         _ = try editor.selection.put(cu1, editor);
-        const sl = editor.selection.getSlice();
+        const sl = editor.getSelected();
 
         try std.testing.expectEqual(2, sl.len);
         for (sl) |item|

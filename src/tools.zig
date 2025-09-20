@@ -166,7 +166,7 @@ pub const FastFaceManip = struct {
 
     pub fn runToolErr(self: *@This(), td: ToolData, editor: *Editor) !void {
         const draw_nd = &editor.draw_state.ctx;
-        const selected_slice = editor.selection.getSlice();
+        const selected_slice = editor.getSelected();
 
         const rm = editor.edit_state.rmouse;
         const lm = editor.edit_state.lmouse;
@@ -499,7 +499,7 @@ const Proportional = struct {
     }
 
     fn rebuildBB(self: *Self, ed: *Editor) !void {
-        const sel = ed.selection.getSlice();
+        const sel = ed.getSelected();
         self.sel_map.clearRetainingCapacity();
         var min = Vec3.set(std.math.floatMax(f32));
         var max = Vec3.set(-std.math.floatMax(f32));
@@ -517,7 +517,7 @@ const Proportional = struct {
     }
 
     fn needsRebuild(self: *Self, ed: *Editor) bool {
-        const sel = ed.selection.getSlice();
+        const sel = ed.getSelected();
         if (sel.len != self.sel_map.count()) return true;
 
         for (sel) |s| {
@@ -527,7 +527,7 @@ const Proportional = struct {
     }
 
     fn addOrRemoveSelFromMeshMap(ed: *Editor, add: bool) !void {
-        const sel = ed.selection.getSlice();
+        const sel = ed.getSelected();
         for (sel) |id| {
             if (ed.getComponent(id, .solid)) |solid| {
                 if (!add) try solid.removeFromMeshMap(id, ed) else try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null);
@@ -536,7 +536,7 @@ const Proportional = struct {
     }
 
     fn commit(self: *Self, ed: *Editor, ctx: TranslateCtx) !void {
-        const selection = ed.selection.getSlice();
+        const selection = ed.getSelected();
         const ustack = try ed.undoctx.pushNewFmt("scale", .{});
         for (selection) |id| {
             const solid = ed.getComponent(id, .solid) orelse continue;
@@ -565,7 +565,7 @@ const Proportional = struct {
         const draw_nd = &ed.draw_state.ctx;
 
         //draw.cube(cc[0], cc[1], 0xffffff88);
-        const selected = ed.selection.getSlice();
+        const selected = ed.getSelected();
         if (selected.len == 0) return;
         draw_nd.point3D(self.start, 0xffff_00ff, ed.config.dot_size);
         const lm = ed.edit_state.lmouse;

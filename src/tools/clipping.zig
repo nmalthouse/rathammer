@@ -115,7 +115,7 @@ pub const Clipping = struct {
         const lm = ed.edit_state.lmouse;
         switch (self.state) {
             .init => {
-                const sel = ed.selection.getSlice();
+                const sel = ed.getSelected();
                 ed.rayctx.reset();
 
                 for (sel) |s_id| {
@@ -252,7 +252,7 @@ pub const Clipping = struct {
         const pnorm = util3d.trianglePlane(.{ p0, p1, p2 }).norm();
         self.state = .init;
 
-        const selected = ed.selection.getSlice();
+        const selected = ed.getSelected();
         const ustack = try ed.undoctx.pushNewFmt("Clip", .{});
         for (selected) |sel_id| {
             const solid = ed.getComponent(sel_id, .solid) orelse continue;

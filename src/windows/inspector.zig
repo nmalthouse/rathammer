@@ -266,7 +266,7 @@ pub const InspectorWindow = struct {
     fn misc_btn_cbErr(self: *@This(), btn_id: usize) !void {
         switch (@as(MiscBtn, @enumFromInt(btn_id))) {
             .ungroup => {
-                const selection = self.editor.selection.getSlice();
+                const selection = self.editor.getSelected();
                 if (selection.len > 0) {
                     const ustack = try self.editor.undoctx.pushNewFmt("ungrouping of {d} objects", .{selection.len});
                     for (selection) |id| {

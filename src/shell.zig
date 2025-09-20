@@ -178,7 +178,7 @@ pub const CommandCtx = struct {
                     try wr.print("comp deleted : {d} \n", .{self.ed.ecs.data.deleted.dense.items.len});
                 },
                 .dump_selected => {
-                    const selected_slice = self.ed.selection.getSlice();
+                    const selected_slice = self.ed.getSelected();
                     for (selected_slice) |id| {
                         try wr.print("id: {d} \n", .{id});
                         if (try self.ed.ecs.getOptPtr(id, .solid)) |solid| {
@@ -198,14 +198,14 @@ pub const CommandCtx = struct {
                     }
                 },
                 .optimize => {
-                    const selected_slice = self.ed.selection.getSlice();
+                    const selected_slice = self.ed.getSelected();
                     for (selected_slice) |id| {
                         if (try self.ed.ecs.getOptPtr(id, .solid)) |solid|
                             try solid.optimizeMesh();
                     }
                 },
                 .snap_selected => {
-                    const selected_slice = self.ed.selection.getSlice();
+                    const selected_slice = self.ed.getSelected();
                     for (selected_slice) |id| {
                         if (try self.ed.ecs.getOptPtr(id, .solid)) |solid|
                             try solid.roundAllVerts(id, self.ed);
