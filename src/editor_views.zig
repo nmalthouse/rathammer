@@ -324,11 +324,14 @@ pub fn draw3Dview(
     if (self.isBindState(self.config.keys.unhide_all.b, .rising))
         try action.unhideAll(self);
 
-    if (self.isBindState(self.config.keys.select.b, .rising)) {
+    if (self.isBindState(self.config.keys.clear_selection.b, .rising)) {
+        try action.clearSelection(self);
+        //TODO the keybinding system sucks, if the user hits ctrl+E it matches the binding ctrl+E and just E
+        //we have to have fallthrough for binds without modifiers though
+        //implement a system which determines which actions happen
+    } else if (self.isBindState(self.config.keys.select.b, .rising)) {
         try action.selectRaycast(self, screen_area, view_3d);
     }
-    if (self.isBindState(self.config.keys.clear_selection.b, .rising))
-        try action.clearSelection(self);
 
     if (self.isBindState(self.config.keys.group_selection.b, .rising)) {
         try action.groupSelection(self);

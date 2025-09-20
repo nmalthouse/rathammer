@@ -189,6 +189,8 @@ pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: b
 
 pub fn clearSelection(ed: *Ed) !void {
     const count = ed.selection.countSelected();
+    if (count == 0)
+        return;
     const ustack = try ed.undoctx.pushNewFmt("clear selection of {d}", .{count});
 
     const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);

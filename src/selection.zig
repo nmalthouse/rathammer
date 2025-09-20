@@ -15,6 +15,7 @@ pub const StateSnapshot = struct {
     groups: []const GroupId,
 
     mode: Mode,
+    last: ?Id,
 
     pub fn destroy(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.multi);
@@ -29,10 +30,14 @@ mode: Mode = .one,
 /// Toggling this only effects the behavior of fn put()
 ignore_groups: bool = false,
 
-_multi: std.ArrayList(Id),
+_multi: std.AutoHashMap(Id, void),
+last_selected: ?Id = null,
 
 /// stores set of groups present in current selection.
 groups: std.AutoHashMap(GroupId, void),
+
+alloc: std.mem.Allocator,
+_multi_slice_scratch: std.ArrayListUnmanaged(Id) = .{},
 
 options: struct {
     brushes: bool = true,
@@ -47,7 +52,8 @@ options: struct {
 
 pub fn init(alloc: std.mem.Allocator) Self {
     return .{
-        ._multi = std.ArrayList(Id).init(alloc),
+        .alloc = alloc,
+        ._multi = std.AutoHashMap(Id, void).init(alloc),
         .groups = std.AutoHashMap(GroupId, void).init(alloc),
     };
 }
@@ -60,50 +66,43 @@ pub fn toggle(self: *Self) void {
 }
 
 pub fn createStateSnapshot(self: *Self, alloc: std.mem.Allocator) !StateSnapshot {
-    const group_list = try alloc.alloc(GroupId, self.groups.count());
-    var g_it = self.groups.keyIterator();
-
-    var g_i: usize = 0;
-    while (g_it.next()) |g| {
-        if (g_i >= group_list.len)
-            break;
-
-        group_list[g_i] = g.*;
-
-        g_i += 1;
-    }
-    const multi = try alloc.dupe(Id, self._multi.items);
-
+    const group_list = try getHashSetSlice(GroupId, &self.groups, alloc);
+    const multi = try getHashSetSlice(Id, &self._multi, alloc);
     return StateSnapshot{
         .mode = self.mode,
         .multi = multi,
         .groups = group_list,
+        .last = self.last_selected,
     };
 }
 
 pub fn setFromSnapshot(self: *Self, snapshot: StateSnapshot) !void {
     self._multi.clearRetainingCapacity();
-    try self._multi.appendSlice(snapshot.multi);
+    for (snapshot.multi) |m|
+        try self._multi.put(m, {});
 
     self.groups.clearRetainingCapacity();
-    for (snapshot.groups) |g| {
+    for (snapshot.groups) |g|
         try self.groups.put(g, {});
-    }
+
     self.mode = snapshot.mode;
 }
 
 pub fn getLast(self: *Self) ?Id {
-    return self._multi.getLastOrNull();
+    return self.last_selected;
 }
 
 pub fn countSelected(self: *Self) usize {
-    return self._multi.items.len;
+    return self._multi.count();
 }
 
 // Only return selected if length of selection is 1
 pub fn getExclusive(self: *Self) ?Id {
-    if (self._multi.items.len == 1)
-        return self._multi.items[0];
+    if (self.countSelected() == 1) {
+        var it = self._multi.keyIterator();
+        const n = it.next() orelse return null;
+        return n.*;
+    }
     return null;
 }
 
@@ -124,7 +123,8 @@ pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
 pub fn setToSingle(self: *Self, id: Id) !void {
     self.mode = .one;
     self.clear();
-    try self._multi.append(id);
+    try self._multi.put(id, {});
+    self.last_selected = id;
 }
 
 pub fn setToMulti(self: *Self) void {
@@ -133,42 +133,54 @@ pub fn setToMulti(self: *Self) void {
 
 // Add an id without checking if it exists
 pub fn addUnchecked(self: *Self, id: Id) !void {
-    try self._multi.append(id);
+    try self._multi.put(id, {});
+    self.last_selected = id;
 }
 
 pub fn multiContains(self: *Self, id: Id) bool {
-    for (self._multi.items) |item| {
-        if (item == id)
-            return true;
-    }
-    return false;
+    return self._multi.contains(id);
 }
 
 pub fn tryRemoveMulti(self: *Self, id: Id) void {
-    if (std.mem.indexOfScalar(Id, self._multi.items, id)) |index|
-        _ = self._multi.orderedRemove(index);
+    if (self._multi.remove(id)) {
+        if (self.last_selected) |ls| {
+            if (ls == id)
+                self.last_selected = null;
+        }
+    }
 }
 
 pub fn tryAddMulti(self: *Self, id: Id) !void {
-    //TODO no n^2 please, thanks.
-    if (std.mem.indexOfScalar(Id, self._multi.items, id)) |_| {
-        return;
-    }
-    try self._multi.append(id);
+    if (self.multiContains(id)) return;
+
+    try self.addUnchecked(id);
 }
 
 pub fn getSlice(self: *Self) []const Id {
-    return self._multi.items;
+    self._multi_slice_scratch.resize(self.alloc, self.countSelected()) catch return &.{};
+
+    var it = self._multi.keyIterator();
+    var i: usize = 0;
+    while (it.next()) |sel| {
+        if (i >= self._multi_slice_scratch.items.len) break;
+
+        self._multi_slice_scratch.items[i] = sel.*;
+        i += 1;
+    }
+
+    return self._multi_slice_scratch.items;
 }
 
 pub fn clear(self: *Self) void {
     self._multi.clearRetainingCapacity();
     self.groups.clearAndFree();
+    self.last_selected = null;
 }
 
 pub fn deinit(self: *Self) void {
     self._multi.deinit();
     self.groups.deinit();
+    self._multi_slice_scratch.deinit(self.alloc);
 }
 
 fn canSelect(self: *Self, id: Id, editor: *edit.Context) bool {
@@ -224,20 +236,36 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !bool {
     const group = if (try editor.ecs.getOpt(id, .group)) |g| g.id else 0;
     switch (self.mode) {
         .one => {
-            try self._multi.resize(1);
-            self._multi.items[0] = id;
+            try self.setToSingle(id);
             self.groups.clearRetainingCapacity();
             try self.groups.put(group, {});
         },
         .many => {
-            if (std.mem.indexOfScalar(Id, self._multi.items, id)) |index| {
-                _ = self._multi.orderedRemove(index);
-                _ = self.groups.remove(group);
+            if (self._multi.remove(id)) {
+                if (self.last_selected != null and self.last_selected.? == id) self.last_selected = null;
+                _ = self.groups.remove(group); //TODO only remove group if all are of group are gone?
             } else {
-                try self._multi.append(id);
+                try self.addUnchecked(id);
                 try self.groups.put(group, {});
             }
         },
     }
     return true;
+}
+
+fn getHashSetSlice(comptime KeyT: type, hs: *std.AutoHashMap(KeyT, void), alloc: std.mem.Allocator) ![]const KeyT {
+    const list = try alloc.alloc(KeyT, hs.count());
+    var g_it = hs.keyIterator();
+
+    var g_i: usize = 0;
+    while (g_it.next()) |g| {
+        if (g_i >= list.len)
+            break;
+
+        list[g_i] = g.*;
+
+        g_i += 1;
+    }
+
+    return list;
 }
