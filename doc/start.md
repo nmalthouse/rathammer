@@ -259,3 +259,19 @@ When you start the editor, a list of recently edited maps is shown.
 In the directory where rathammer stores the config (see the first few lines of output when running), a file named recent_maps.txt is created.
 
 This file contains a list of absolute paths to ratmaps separated by newlines
+
+### Troubleshooting
+#### On Linux, after pressing F9 to build nothing seems to happen.
+There is some bug with wine, where the first time you run vbsp it will hang indefinitely. Hit f9 again to spin up some new build threads. 
+
+When you try to close the editor, you will have to force kill it as that old vbsp is still hanging. `killall -9 rathammer`
+
+#### Error building map
+Look through the terminal output. You may have a leak -> press ~ and run the command `pointfile` to trace the leak.
+
+If you see `potentially invalid solid: 12 error.vertsDifferent` -> press ~ and run `select_id 12`. Inspect solid 12 to see if it is broken.
+
+In the future I plan on adding a list view of potential errors.
+
+Problematic solids can often be fixed by selecting them and running the command `optimize`
+
