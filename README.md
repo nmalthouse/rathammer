@@ -1,11 +1,11 @@
 # An alternative to the Hammer editor.
 [Download Alpha Build](https://github.com/nmalthouse/rathammer/releases)
 
+[Discord server](https://discord.gg/wP7gMXpcNR)
+
 On Linux you must have "zenity" installed to use the file browser! On Arch, Steam depends on this so you probably have it installed already.
 
 [Documentation](doc/start.md)
-
-[Matrix chat](https://matrix.to/#/#rathammer:matrix.org)
 
 ![Screenshot of the editor](doc/screen.jpg)
 
