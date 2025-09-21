@@ -5,6 +5,7 @@ const vdf_serial = @import("vdf_serial.zig");
 const vmf = @import("vmf.zig");
 const GroupId = ecs.Groups.GroupId;
 const util = @import("util.zig");
+const csg = @import("csg.zig");
 
 const version = @import("version.zig");
 
@@ -41,6 +42,11 @@ fn fixupValue(key: []const u8, value: []const u8, ent_class: []const u8) []const
     return value;
 }
 
+pub const Opts = struct {
+    check_solid: bool = false,
+    pre_optimize_mesh: bool = false,
+};
+
 /// Does not free memory, use an arena.
 pub fn jsontovmf(
     alloc: std.mem.Allocator,
@@ -49,6 +55,7 @@ pub fn jsontovmf(
     vpkmapper: anytype,
     groups: *ecs.Groups,
     filename: ?[]const u8,
+    opts: Opts,
 ) !void {
     const outfile = try std.fs.cwd().createFile(filename orelse "dump.vmf", .{});
     defer outfile.close();
@@ -57,6 +64,8 @@ pub fn jsontovmf(
     defer bwr.flush() catch {};
     const bb = bwr.writer();
     var vr = vdf_serial.WriteVdf(@TypeOf(bb)).init(alloc, bb);
+
+    var csgctx = try csg.Context.init(alloc);
 
     {
         try vr.writeComment("This vmf was created by RatHammer.", .{});
@@ -113,7 +122,7 @@ pub fn jsontovmf(
                 }
             }
 
-            try writeSolid(&vr, solids.i, solid, &side_id_start, vpkmapper, ecs_p);
+            try writeSolid(&vr, solids.i, solid, &side_id_start, vpkmapper, ecs_p, &csgctx, opts);
         }
         try vr.endObject(); //world
 
@@ -181,7 +190,7 @@ pub fn jsontovmf(
                 if (group_ent_map.get(group)) |list| {
                     for (list.items) |solid_i| {
                         const solid = try ecs_p.getOptPtr(solid_i, .solid) orelse continue;
-                        try writeSolid(&vr, solid_i, solid, &side_id_start, vpkmapper, ecs_p);
+                        try writeSolid(&vr, solid_i, solid, &side_id_start, vpkmapper, ecs_p, &csgctx, opts);
                     }
                 }
             }
@@ -200,6 +209,7 @@ pub fn main() !void {
     const args = try graph.ArgGen.parseArgs(&.{
         Arg("map", .string, "ratmap or json map to load"),
         Arg("output", .string, "name of vmf file to write"),
+        Arg("no-check", .flag, "don't check solids for validity"),
     }, &arg_it);
 
     var loadctx = LoadCtx{};
@@ -236,7 +246,10 @@ pub fn main() !void {
         const jsonctx = json_map.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };
         const parsed = try json_map.loadJson(jsonctx, slice, &loadctx, &ecs_p, &vpkmapper, &groups);
 
-        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output);
+        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output, .{
+            .check_solid = !(args.@"no-check" orelse false),
+            .pre_optimize_mesh = true,
+        });
     } else {
         std.debug.print("Please specify map file with --map\n", .{});
     }
@@ -260,7 +273,25 @@ fn ensurePlanar(index: []const u32) ?[3]u32 {
     return null;
 }
 
-fn writeSolid(vr: anytype, ent_id: ecs.EcsT.Id, solid: *ecs.Solid, side_id_start: *usize, vpkmapper: anytype, ecs_p: *ecs.EcsT) !void {
+fn writeSolid(
+    vr: anytype,
+    ent_id: ecs.EcsT.Id,
+    solid: *ecs.Solid,
+    side_id_start: *usize,
+    vpkmapper: anytype,
+    ecs_p: *ecs.EcsT,
+    csgctx: *csg.Context,
+    opts: Opts,
+) !void {
+    try solid.optimizeMesh();
+
+    solid.validateVmfSolid(csgctx) catch |err| {
+        std.debug.print("potentially invalid solid: {d} {!}\n", .{ ent_id, err });
+
+        if (opts.check_solid)
+            return;
+    };
+
     const disps: ?*ecs.Displacements = try ecs_p.getOptPtr(ent_id, .displacements);
     try vr.writeKey("solid");
     try vr.beginObject();

@@ -74,7 +74,7 @@ pub const Context = struct {
         self.clip_winding_dists.deinit();
     }
 
-    pub fn genMesh2(self: *Self, sides: []const Side, alloc: std.mem.Allocator, strstore: *StringStorage, edit: *editor.Context) !ecs.Solid {
+    pub fn genMesh2(self: *Self, sides: []const Side, alloc: std.mem.Allocator, strstore: anytype) !ecs.Solid {
         const MAPSIZE = std.math.maxInt(i32);
         var timer = try std.time.Timer.start();
         var ret = ecs.Solid.init(alloc);
@@ -110,12 +110,11 @@ pub const Context = struct {
             }
             //const ret = map.getPtr(side.material) orelse continue;
 
-            const tex = try edit.loadTextureFromVpk(side.material);
             ret.sides.items[si] = .{
                 ._alloc = ret._alloc,
                 .index = std.ArrayListUnmanaged(u32){},
                 .material = try strstore.store(side.material),
-                .tex_id = tex.res_id,
+                .tex_id = 0,
                 .lightmapscale = side.lightmapscale,
                 .smoothing_groups = side.smoothing_groups,
                 .u = .{
@@ -140,6 +139,7 @@ pub const Context = struct {
             gen_time += timer.read();
         }
         try ret.verts.appendSlice(ret._alloc, self.vecmap.verts.items);
+        try ret.optimizeMesh();
         return ret;
     }
 
@@ -382,13 +382,43 @@ pub fn conVec(v: anytype) @TypeOf(v) {
     return @TypeOf(v).new(v.x(), v.z(), -v.y());
 }
 
+pub const VecOrder = struct {
+    pub const SortCtx = struct {
+        mul: f32 = 128,
+
+        new: []Vec3_32,
+        mapping: []usize,
+
+        pub fn convert(self: @This(), a: Vec3_32) u128 {
+            const x: u128 = @intCast(@as(u32, @bitCast(std.math.lossyCast(i32, @round(a.x() * self.mul)))));
+            const y: u128 = @intCast(@as(u32, @bitCast(std.math.lossyCast(i32, @round(a.y() * self.mul)))));
+            const z: u128 = @intCast(@as(u32, @bitCast(std.math.lossyCast(i32, @round(a.z() * self.mul)))));
+
+            return x << 64 | y << 32 | z;
+        }
+
+        pub fn lessThan(ctx: @This(), a: usize, b: usize) bool {
+            const a1 = ctx.convert(ctx.new[a]);
+            const b1 = ctx.convert(ctx.new[b]);
+
+            return a1 < b1;
+        }
+
+        pub fn swap(ctx: @This(), a: usize, b: usize) void {
+            std.mem.swap(Vec3_32, &ctx.new[a], &ctx.new[b]);
+            std.mem.swap(usize, &ctx.mapping[a], &ctx.mapping[b]);
+        }
+    };
+};
+
 // Rounds off anything after 0.1
 pub const VecMap = struct {
     pub const HashCtx = struct {
-        const off = 10;
+        multiplier: f32 = 128,
         pub fn hash(self: HashCtx, k: Vec3_32) u64 {
-            _ = self;
             var hasher = std.hash.Wyhash.init(0);
+
+            const off = self.multiplier;
 
             std.hash.autoHash(&hasher, @as(i64, @intFromFloat(@round(k.x() * off))));
             std.hash.autoHash(&hasher, @as(i64, @intFromFloat(@round(k.y() * off))));
@@ -396,8 +426,9 @@ pub const VecMap = struct {
             return hasher.final();
         }
 
-        pub fn eql(_: HashCtx, a: Vec3_32, b: Vec3_32) bool {
+        pub fn eql(self: HashCtx, a: Vec3_32, b: Vec3_32) bool {
             //TODO maybe this sucks, look it up
+            const off = self.multiplier;
             const x: i64 = @intFromFloat(@round(a.x() * off));
             const y: i64 = @intFromFloat(@round(a.y() * off));
             const z: i64 = @intFromFloat(@round(a.z() * off));
@@ -419,7 +450,7 @@ pub const VecMap = struct {
     pub fn init(alloc: std.mem.Allocator) @This() {
         return .{
             .verts = std.ArrayList(Vec3_32).init(alloc),
-            .map = MapT.init(alloc),
+            .map = MapT.initContext(alloc, .{}),
         };
     }
 

@@ -218,6 +218,15 @@ pub fn trianglePlane(verts: [3]V3f) V3f {
     return b.cross(a).norm();
 }
 
+test "broken plane" {
+    const a = V3f.new(1, 0, 0);
+    const b = V3f.new(2, 0, 0);
+    const c = V3f.new(3, 1, 0);
+
+    const re = trianglePlane(.{ a, b, c });
+    std.debug.print("THE RESULT IS {any}\n", .{re});
+}
+
 pub fn doesRayIntersectConvexPolygon(ray_origin: V3f, ray_dir: V3f, plane_normal: V3f, verts: []const V3f) ?V3f {
     if (verts.len == 0) return null;
 

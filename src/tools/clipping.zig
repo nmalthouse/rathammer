@@ -262,6 +262,10 @@ pub const Clipping = struct {
             try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, sel_id, .destroy));
 
             for (&ret) |*r| {
+                if (r.sides.items.len < 4) { //TODO more extensive check of validity
+                    r.deinit();
+                    continue;
+                }
                 const new = try ed.ecs.createEntity();
                 try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
                 try ed.ecs.attach(new, .solid, r.*);

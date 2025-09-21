@@ -951,17 +951,21 @@ pub const Context = struct {
         if (vis_id) |vm| {
             try self.ecs.attach(new, .layer, .{ .id = vm });
         }
-        const newsolid = try self.csgctx.genMesh2(
+        var newsolid = try self.csgctx.genMesh2(
             solid.side,
             self.alloc,
             &self.string_storage,
-            self,
             //@intCast(self.set.sparse.items.len),
         );
         if (group_id) |gid| {
             try self.ecs.attach(new, .group, .{ .id = gid });
         }
         var opt_disps: ?ecs.Displacements = null;
+
+        for (newsolid.sides.items) |*side| {
+            const tex = try self.loadTextureFromVpk(side.material);
+            side.tex_id = tex.res_id;
+        }
 
         for (solid.side, 0..) |*side, s_i| {
             const tex = try self.loadTextureFromVpk(side.material);
@@ -1516,6 +1520,7 @@ pub const Context = struct {
                         &self.vpkctx,
                         &self.groups,
                         null,
+                        .{ .check_solid = false },
                     )) {
                         try self.notify("Exported map to vmf", .{}, colors.good);
 

@@ -4,6 +4,7 @@ const limits = @import("limits.zig");
 const graph = @import("graph");
 const profile = @import("profile.zig");
 const Vec3 = graph.za.Vec3;
+const Vec3f64 = graph.za.Vec3_f64;
 const Mat4 = graph.za.Mat4;
 const Quat = graph.za.Quat;
 const vpk = @import("vpk.zig");
@@ -604,15 +605,11 @@ pub const Side = struct {
         {
             try jw.objectField("index");
             try jw.beginArray();
-            var last = self.index.getLastOrNull() orelse return error.invalidSide;
-            // verticies should never be the same as a neighbor.
-            // This exists because of some bug in csg, which very occasionally generates an extra index
+
             for (self.index.items) |id| {
-                if (id == last)
-                    continue;
                 try jw.write(id);
-                last = id;
             }
+
             try jw.endArray();
             try jw.objectField("u");
             try editor.writeComponentToJson(jw, self.u, ent_id);
@@ -746,6 +743,51 @@ pub const Solid = struct {
         return !all_same;
     }
 
+    /// Check if this solid can be written to a vmf file
+    /// Assumes optimizeMesh has been called on self
+    /// returns error if invalid
+    pub fn validateVmfSolid(self: *const Self, csgctx: *csg.Context) !void {
+        //To be valid:
+        //  sides.len >= 4
+        //  Every normal is unique
+
+        if (self.sides.items.len < 4) return error.lessThan4Sides;
+
+        var sstr = @import("string.zig").DummyStorage{};
+
+        const vmf_sides = try self._alloc.alloc(vmf.Side, self.sides.items.len);
+        defer self._alloc.free(vmf_sides);
+        for (self.sides.items, 0..) |s, i| {
+            if (s.index.items.len < 3) return error.degenerateSide;
+            const inds = s.index.items;
+            const v1 = self.verts.items[inds[0]];
+            const v2 = self.verts.items[inds[1]];
+            const v3 = self.verts.items[inds[2]];
+
+            vmf_sides[i] = .{ .plane = .{ .tri = .{
+                Vec3f64.new(v1.x(), v1.y(), v1.z()),
+                Vec3f64.new(v2.x(), v2.y(), v2.z()),
+                Vec3f64.new(v3.x(), v3.y(), v3.z()),
+            } } };
+        }
+
+        var new_solid = try csgctx.genMesh2(vmf_sides, self._alloc, &sstr);
+        defer new_solid.deinit();
+        if (new_solid.sides.items.len != self.sides.items.len) return error.sideLen;
+        if (new_solid.verts.items.len != self.verts.items.len) {
+            std.debug.print("{d} {d}\n", .{ new_solid.verts.items.len, self.verts.items.len });
+            return error.vertLen;
+        }
+
+        const eps: f32 = 0.1;
+        for (new_solid.verts.items, 0..) |nv, i| {
+            if (nv.distance(self.verts.items[i]) > eps)
+                return error.vertsDifferent;
+        }
+
+        //for(new_solid.sides.items, 0..)|ns, i|{ }
+    }
+
     pub fn initFromPrimitive(alloc: std.mem.Allocator, verts: []const Vec3, faces: []const std.ArrayList(u32), tex_id: vpk.VpkResId, offset: Vec3, rot: graph.za.Mat3) !Solid {
         var ret = init(alloc);
         for (verts) |v|
@@ -772,7 +814,16 @@ pub const Solid = struct {
         return ret;
     }
 
-    //Prune duplicate verticies and reindex
+    /// Ensures the following:
+    ///     All verticies are unique
+    ///     All side indicies are unique
+    ///     Side's have > 2 verticies
+    ///
+    /// Rearrange verticies into well defined order
+    /// Rearrange indicies to start with smallest index
+    ///
+    /// Does NOT check for convexity
+    /// Does NOT check for solidity
     pub fn optimizeMesh(self: *Self) !void {
         const alloc = self._alloc;
         var vmap = csg.VecMap.init(alloc);
@@ -811,6 +862,43 @@ pub const Solid = struct {
             self.verts.shrinkAndFree(self._alloc, vmap.verts.items.len);
         }
         try self.verts.resize(self._alloc, vmap.verts.items.len);
+
+        { //Canonical form of solid . verts have a unique order, index have a unique order
+            //enables fast comparison
+            const mapping = try self._alloc.alloc(usize, vmap.verts.items.len);
+            defer self._alloc.free(mapping);
+            const map2 = try self._alloc.alloc(usize, vmap.verts.items.len);
+            defer self._alloc.free(map2);
+            for (0..mapping.len) |m|
+                mapping[m] = m;
+
+            var sort = csg.VecOrder.SortCtx{ .new = vmap.verts.items, .mapping = mapping };
+            std.sort.insertionContext(0, mapping.len, &sort);
+
+            for (0..mapping.len) |mi| {
+                map2[mapping[mi]] = mi;
+            }
+
+            for (self.sides.items) |*side| {
+                var smallest: u32 = std.math.maxInt(u32);
+                var sm_i: usize = 0;
+                for (side.index.items, 0..) |*ind, ii| {
+                    ind.* = @intCast(map2[ind.*]);
+                    if (ind.* < smallest) {
+                        smallest = ind.*;
+                        sm_i = ii;
+                    }
+                }
+                try index.resize(side._alloc, side.index.items.len);
+
+                @memcpy(index.items, side.index.items);
+
+                side.index.clearRetainingCapacity();
+                try side.index.appendSlice(side._alloc, index.items[sm_i..]);
+                try side.index.appendSlice(side._alloc, index.items[0..sm_i]);
+            }
+        }
+
         @memcpy(self.verts.items, vmap.verts.items);
     }
 

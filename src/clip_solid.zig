@@ -124,6 +124,7 @@ const Mapper = struct {
                 index.* = self.map.get(index.*) orelse return error.broken;
             }
         }
+        try solid.optimizeMesh();
     }
 };
 
@@ -143,7 +144,7 @@ pub const ClipCtx = struct {
             .verts = std.ArrayList(VertKind).init(alloc),
             .alloc = alloc,
             .mappers = .{ Mapper.init(alloc), Mapper.init(alloc) },
-            .vert_map = csg.VecMap.MapT.init(alloc),
+            .vert_map = csg.VecMap.MapT.initContext(alloc, .{}),
             .ret_verts = std.ArrayList(Vec3).init(alloc),
             .sides = .{ Side.init(alloc), Side.init(alloc) },
             .split_side = Side.init(alloc),
@@ -257,6 +258,7 @@ pub const ClipCtx = struct {
         }
         for (&self.mappers, 0..) |*m, i|
             try m.buildSolid(&ret[i], self.ret_verts.items);
+
         return ret;
     }
 };

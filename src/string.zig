@@ -31,6 +31,14 @@ pub const StringStorage = struct {
     }
 };
 
+/// Acts as a StringStore but doesn't allocate strings
+pub const DummyStorage = struct {
+    pub fn store(self: *@This(), string: []const u8) ![]const u8 {
+        _ = self;
+        return string;
+    }
+};
+
 test {
     const alloc = std.testing.allocator;
     var str = StringStorage.init(alloc);
