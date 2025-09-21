@@ -576,7 +576,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{
-        .stack_trace_frames = if (IS_DEBUG) 8 else 0,
+        .stack_trace_frames = if (IS_DEBUG) 0 else 0,
     }){};
     const alloc = gpa.allocator();
     var arg_it = try std.process.argsWithAllocator(alloc);

@@ -1,9 +1,0 @@
-[Desktop Entry]
-Version=1.0
-Name=BigDOGGY
-GenericName=CrapHouse
-Comment=The best dog in here.
-Type=Application
-Exec=AppRun %F
-Icon=myapp
-Categories=X-crap-module

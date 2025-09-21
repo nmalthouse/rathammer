@@ -1,6 +1,8 @@
 # An alternative to the Hammer editor.
 [Download Alpha Build](https://github.com/nmalthouse/rathammer/releases)
 
+On Linux you must have "zenity" installed to use the file browser! On Arch, Steam depends on this so you probably have it installed already.
+
 [Documentation](doc/start.md)
 
 [Matrix chat](https://matrix.to/#/#rathammer:matrix.org)
@@ -39,7 +41,11 @@ Second, wine is very slow to startup by default, 'running wineserver --persisten
 * (debian) Install the dependencies listed under [sdl linux](https://github.com/libsdl-org/SDL/blob/main/docs/README-linux.md)
 * Follow the instructions below for building
 
-On arch it should just work
+On arch make sure you have: 
+```
+# Install zig 0.14.1 manually, the pacman package is too new
+sudo pacman -S zenity cmake meson
+```
 
 ### Building and running
 ```
@@ -64,6 +70,10 @@ See config.vdf for defining other game configs.
 
 /zig-out/bin/mapbuilder --map dump.vmf --gamedir Team\ Fortress\ 2 --gamename tf --outputdir tf/maps
 ```
+
+### Building on Windows
+You could probably adapt ratgraph/setup_libs.sh to work with a msys environment.
+It is easier to cross compile for Windows from Linux than to compile natively.
 
 ### Planned
 * Gui dark mode.

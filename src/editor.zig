@@ -1709,9 +1709,9 @@ pub const LoadCtx = struct {
             return;
         if (self.draw_splash) {
             var fbs = std.io.FixedBufferStream([]u8){ .buffer = &self.buffer, .pos = 0 };
-            try fbs.writer().print("v{s} Loaded in {d:.2} ms. {s}.{s}.{s}", .{
+            try fbs.writer().print("v{s}  {s}.{s}.{s}", .{
                 version,
-                self.time / std.time.ns_per_ms,
+                //self.time / std.time.ns_per_ms,
                 @tagName(builtin.mode),
                 @tagName(builtin.target.os.tag),
                 @tagName(builtin.target.cpu.arch),

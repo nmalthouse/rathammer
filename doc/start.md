@@ -61,7 +61,7 @@ Quick reference:
 * texture browser -> alt+t (see workspaces below)
 * undo / redo -> ctrl+z, ctrl+shift+z 
 * save / save as -> ctrl+s, ctrl+shift+s
-* F9 build map (map must have name)
+* F9 build map (map must have name) -> writes bsp file to "dump.bsp"
 
 Notice how these bindings all sit near wasd, so the left hand doesn't need to move out of position while editing.
 
@@ -239,9 +239,23 @@ Maps are always saved to .ratmap but vmf's, json's, ratmaps's can all be loaded 
 
 Compressing the map.json rather than the entire tar is done because compressing images twice won't significantly improve ratio and quickly loading the thumbnail without decompressing the entire map is a priority.
 
-### func_useableladder
+### Misc 
+#### func_useableladder
 This entity is really annoying, it is only used by hl2 and portal. 
 When you translate a func_useableladder entity, the origin of the entity is synced with the point0 field (the start of the ladder)
 The point1 field (end of the ladder) must be set manually. An orange helper outlining the ladders bounds is drawn, but the second part of the hull (point1) can not be manipulated in 3d. Copy and paste a position value into the point1 field.
 
+#### Version checking
+Rathammer can be built with version checking enabled.
+If enabled, on startup rathammer sends a get request to nmalthouse.net which returns the semver for the newest version available. 
 
+If building from source, it is disabled by default, you must set -Dhttp_version_check=true.
+
+If you would like to disable the check, either set 'enable_version_check false' in config.vdf or use the flag --no_version_check
+
+#### Recent maps view
+When you start the editor, a list of recently edited maps is shown.
+
+In the directory where rathammer stores the config (see the first few lines of output when running), a file named recent_maps.txt is created.
+
+This file contains a list of absolute paths to ratmaps separated by newlines

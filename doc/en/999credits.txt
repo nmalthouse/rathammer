@@ -10,7 +10,8 @@ https://github.com/nothings/stb
 SDL3 for window and input
 https://wiki.libsdl.org/SDL3/FrontPage
 
-Freetype2 and all dependencies.
+Freetype2
+Miniz
 
 Libspng
 https://libspng.org/
