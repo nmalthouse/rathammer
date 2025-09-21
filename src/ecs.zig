@@ -900,6 +900,45 @@ pub const Solid = struct {
         }
 
         @memcpy(self.verts.items, vmap.verts.items);
+
+        { //Check all sides are unique
+
+            const HashCtx = struct {
+                const Key = []const u32;
+
+                pub fn hash(ctx: @This(), key: Key) u64 {
+                    _ = ctx;
+
+                    var hasher = std.hash.Wyhash.init(0);
+                    std.hash.autoHashStrat(&hasher, key, .Deep);
+                    return hasher.final();
+                }
+
+                pub fn eql(_: @This(), a: Key, b: Key) bool {
+                    return std.mem.eql(u32, a, b);
+                }
+            };
+            const MapT = std.HashMap(HashCtx.Key, void, HashCtx, std.hash_map.default_max_load_percentage);
+
+            var to_remove = std.ArrayList(usize).init(self._alloc);
+            defer to_remove.deinit();
+            var map = MapT.init(self._alloc);
+            defer map.deinit();
+            for (self.sides.items, 0..) |side, i| {
+                const res = try map.getOrPut(side.index.items);
+                if (res.found_existing)
+                    try to_remove.append(i);
+            }
+
+            var i = to_remove.items.len;
+            while (i > 0) : (i -= 1) {
+                const n = to_remove.items[i - 1];
+                var old = self.sides.orderedRemove(n);
+                old.deinit();
+            }
+            if (to_remove.items.len > 0)
+                std.debug.print("Removed {d} duplicate sides\n", .{to_remove.items.len});
+        }
     }
 
     pub fn initFromCube(alloc: std.mem.Allocator, v1: Vec3, v2: Vec3, tex_id: vpk.VpkResId) !Solid {
