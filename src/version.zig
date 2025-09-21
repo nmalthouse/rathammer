@@ -1,5 +1,5 @@
 //Ensure this gets updated with build.zig.zon version
-const version_private = "0.0.5-pre";
+const version_private = "0.1.0";
 const builtin = @import("builtin");
 
 const std = @import("std");
