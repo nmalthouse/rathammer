@@ -144,8 +144,11 @@ pub fn multiContains(self: *Self, id: Id) bool {
 pub fn tryRemoveMulti(self: *Self, id: Id) void {
     if (self._multi.remove(id)) {
         if (self.last_selected) |ls| {
-            if (ls == id)
+            if (ls == id) {
+                var it = self._multi.keyIterator();
                 self.last_selected = null;
+                if (it.next()) |p| self.last_selected = p.*;
+            }
         }
     }
 }
@@ -227,7 +230,12 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !bool {
         },
         .many => {
             if (self._multi.remove(id)) {
-                if (self.last_selected != null and self.last_selected.? == id) self.last_selected = null;
+                if (self.last_selected != null and self.last_selected.? == id) {
+                    self.last_selected = null;
+                    var it = self._multi.keyIterator();
+                    self.last_selected = null;
+                    if (it.next()) |p| self.last_selected = p.*;
+                }
                 _ = self.groups.remove(group); //TODO only remove group if all are of group are gone?
             } else {
                 try self.addUnchecked(id);
