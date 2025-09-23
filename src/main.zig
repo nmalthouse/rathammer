@@ -33,17 +33,29 @@ const version = @import("version.zig");
 
 fn event_cb(ev: graph.c.SDL_UserEvent) void {
     const rpc = @import("rpc.zig");
+    const ha = std.hash.Wyhash.hash;
     const ed: *Editor = @alignCast(@ptrCast(ev.data1 orelse return));
     const this_id = ed.rpcserv.event_id;
     if (ev.type == this_id) {
         if (ev.data2) |us1| {
             const event: *rpc.Event = @alignCast(@ptrCast(us1));
             defer event.deinit(ed.rpcserv.alloc);
-            if (std.mem.eql(u8, event.msg, "pause")) {
-                ed.paused = !ed.paused;
+            for (event.msg) |msg| {
+                var wr = event.stream.writer();
+                switch (ha(0, msg.method)) {
+                    ha(0, "pause") => {
+                        ed.paused = !ed.paused;
+                        ed.rpcserv.respond(wr, .{
+                            .id = msg.id,
+                            .result = .{ .null = {} },
+                        }) catch {};
+                    },
+                    ha(0, "select_class") => {},
+                    else => {
+                        wr.print("Fuked dude, wrong method\n", .{}) catch {};
+                    },
+                }
             }
-            var wr = event.stream.writer();
-            wr.print("fuckoff\n", .{}) catch {};
         }
     } else {
         std.debug.print("Unknown event: {d}\n", .{ev.type});

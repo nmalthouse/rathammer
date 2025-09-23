@@ -15,6 +15,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    const remote = b.addExecutable(.{
+        .name = "ratremote",
+        .root_source_file = b.path("src/rpc/remote.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const jsonToVmf = b.addExecutable(.{
         .name = "jsonmaptovmf",
         .root_source_file = b.path("src/jsonToVmf.zig"),
@@ -51,6 +58,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(hammer_exe);
     b.installArtifact(jsonToVmf);
     b.installArtifact(mapbuilder);
+    b.installArtifact(remote);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish
