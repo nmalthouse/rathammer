@@ -561,7 +561,7 @@ const LayerWidget = struct {
                 var it = ed.editIterator(.layer);
                 while (it.next()) |item| {
                     if (mask.isSet(item.id)) {
-                        ed.selection.tryAddMulti(it.i) catch return;
+                        ed.selection.add(it.i, ed) catch return;
                     }
                 }
             },

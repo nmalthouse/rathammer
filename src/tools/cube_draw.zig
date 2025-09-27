@@ -320,12 +320,12 @@ pub const CubeDraw = struct {
                 .switch_to_fast_face => {
                     const tid = try ed.tools.getId(tools.FastFaceManip);
                     ed.setTool(tid);
-                    try ed.selection.setToSingle(new);
+                    try ed.selection.setToSingle(new, ed);
                 },
                 .switch_to_translate => {
                     const tid = try ed.tools.getId(tools.Translate);
                     ed.setTool(tid); //Be carefull with this, it will call into self!
-                    try ed.selection.setToSingle(new);
+                    try ed.selection.setToSingle(new, ed);
                 },
             }
         }

@@ -165,7 +165,7 @@ pub const Translate = struct {
                         const cc = util3d.cubeFromBounds(bounds[0], bounds[1]);
                         td.draw.cube(cc[0], cc[1], 0x2222_22dd);
                         if (editor.edit_state.rmouse == .rising)
-                            try action.selectInBounds(editor, bounds);
+                            action.selectInBounds(editor, bounds) catch return error.fatal;
                     },
                 }
             },
@@ -176,7 +176,7 @@ pub const Translate = struct {
         switch (self.origin_mode) {
             .mean => {},
             .last_selected => {
-                const last_id = ed.selection.getLast() orelse return null;
+                const last_id = ed.selection.list.getLast() orelse return null;
                 const last_bb = ed.getComponent(last_id, .bounding_box) orelse return null;
                 if (ed.getComponent(last_id, .solid)) |solid| { //check Solid before Entity
                     _ = solid;

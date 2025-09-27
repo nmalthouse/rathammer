@@ -258,7 +258,7 @@ pub const Clipping = struct {
             const solid = ed.getComponent(sel_id, .solid) orelse continue;
             var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.asset_browser.selected_mat_vpk_id);
 
-            ed.selection.clear();
+            ed.selection.list.clear();
             try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, sel_id, .destroy));
 
             for (&ret) |*r| {

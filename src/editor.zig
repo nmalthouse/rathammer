@@ -581,13 +581,15 @@ pub const Context = struct {
     pub fn getSelected(self: *Self) []const EcsT.Id {
         self._selection_scratch.clearRetainingCapacity();
 
-        var it = self.selection._multi.keyIterator();
-        const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
-        while (it.next()) |pot| {
-            if (self.ecs.intersects(pot.*, vis_mask))
-                continue;
-            self._selection_scratch.append(self.alloc, pot.*) catch return &.{};
-        }
+        self.selection.sanitizeSelection(self) catch return &.{};
+        self._selection_scratch.appendSlice(self.alloc, self.selection.list.ids.items) catch return &.{};
+        //const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
+
+        //for (self.selection.list.ids.items) |pot| {
+        //    if (self.ecs.intersects(pot, vis_mask))
+        //        continue;
+        //    self._selection_scratch.append(self.alloc, pot) catch return &.{};
+        //}
 
         return self._selection_scratch.items;
     }

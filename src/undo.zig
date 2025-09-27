@@ -50,6 +50,12 @@ pub const UndoGroup = struct {
     }
 };
 
+pub const PushOpts = struct {
+    /// A soft change doesn't increment delta_counter.
+    /// Clearing the selection is a soft change.
+    soft_change: bool = false,
+};
+
 pub const UndoContext = struct {
     const Self = @This();
 
@@ -85,6 +91,10 @@ pub const UndoContext = struct {
     }
 
     pub fn pushNewFmt(self: *Self, comptime fmt: []const u8, args: anytype) !*std.ArrayList(*iUndo) {
+        return self.pushNewFmtOpts(fmt, args, .{});
+    }
+
+    pub fn pushNewFmtOpts(self: *Self, comptime fmt: []const u8, args: anytype, opts: PushOpts) !*std.ArrayList(*iUndo) {
         var desc = std.ArrayList(u8).init(self.alloc);
         try desc.writer().print(fmt, args);
         if (self.stack_pointer > self.stack.items.len)
@@ -101,7 +111,8 @@ pub const UndoContext = struct {
             .description = try desc.toOwnedSlice(),
         };
         try self.stack.append(new_group);
-        self.markDelta();
+        if (!opts.soft_change)
+            self.markDelta();
         return &self.stack.items[self.stack.items.len - 1].items;
     }
 

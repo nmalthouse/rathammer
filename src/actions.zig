@@ -25,7 +25,7 @@ pub fn deleteSelected(ed: *Ed) !void {
             try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, id, .destroy));
         }
         const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
-        ed.selection.clear();
+        ed.selection.list.clear();
         const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
 
         try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
@@ -83,7 +83,8 @@ pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !voi
                 const dist = sp.distance(p.point);
                 if (dist > ed.selection.options.nearby_distance) break;
             }
-            if (try ed.selection.put(p.id, ed)) {
+            const putresult = try ed.selection.put(p.id, ed);
+            if (putresult.res != .masked) {
                 if (starting_point == null) starting_point = p.point;
                 if (ed.selection.options.select_nearby) {
                     continue;
@@ -95,17 +96,12 @@ pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !voi
 }
 
 pub fn groupSelection(ed: *Ed) !void {
-    var kit = ed.selection.groups.keyIterator();
-    var owner_count: usize = 0;
-    var last_owner: ?editor.EcsT.Id = null;
-    while (kit.next()) |group| {
-        if (ed.groups.getOwner(group.*)) |own| {
-            owner_count += 1;
-            last_owner = own;
-        }
-    }
-
     const selection = ed.getSelected();
+
+    if (selection.len == 0) return;
+    const last = ed.selection.list.getLast() orelse return;
+    const owner_count = ed.selection.list.countGroup();
+    const last_owner = ed.groups.getOwner(ed.selection.list.getGroup(last) orelse return) orelse null;
 
     if (owner_count > 1)
         try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
@@ -141,7 +137,7 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
     const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
     const old_selection_state = if (select) try ed.selection.createStateSnapshot(ed.undoctx.alloc) else null;
     if (select) {
-        ed.selection.clear();
+        ed.selection.list.clear();
         ed.selection.mode = .many;
     }
     const aa = ed.frame_arena.allocator();
@@ -191,10 +187,10 @@ pub fn clearSelection(ed: *Ed) !void {
     const count = ed.selection.countSelected();
     if (count == 0)
         return;
-    const ustack = try ed.undoctx.pushNewFmt("clear selection of {d}", .{count});
+    const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
 
     const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
-    ed.selection.clear();
+    ed.selection.list.clear();
     const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
 
     try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
@@ -204,12 +200,38 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
     //IF ignore groups is on, just add everything normally
     //Otherwise, track which groups have been touched and only add/remove them once
     //Second put?
+    //
+    //ignore groups is off:
+    //IF ent group not in groups
+    // const added = selection.put
+    // for( item in group) if (added) add else remove
+    //else skip
+
+    ed.selection.setToMulti();
+
+    const GroupId = ecs.Groups.GroupId;
+    // true is added, false removed
+    var visted_groups = std.AutoHashMap(GroupId, bool).init(ed.frame_arena.allocator());
+    const track_groups = !ed.selection.ignore_groups;
+
     var it = ed.editIterator(.bounding_box);
     while (it.next()) |item| {
         if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
-            _ = ed.selection.put(it.i, ed) catch return;
+            const pr = ed.selection.put(it.i, ed) catch return;
+            if (track_groups) {
+                if (pr.res != .masked and pr.group != 0) {
+                    const res = try visted_groups.getOrPut(pr.group);
+                    if (!res.found_existing) { //The status of the first grouped entity determines direction of selection.
+                        res.value_ptr.* = pr.res == .added;
+                    }
+                }
+            }
         }
     }
+
+    //Iterate visited groups
+    // for visted if added ensure all of group in selection
+    // else ensure none of group in selection
 }
 
 pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {

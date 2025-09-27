@@ -10,12 +10,136 @@ const Mode = enum {
     many,
 };
 
+const SelectionList = struct {
+    alloc: std.mem.Allocator,
+
+    /// parallel
+    ids: std.ArrayListUnmanaged(Id) = .{},
+    groups: std.ArrayListUnmanaged(GroupId) = .{},
+
+    //map id -> index
+    idmap: std.AutoHashMapUnmanaged(Id, usize) = .{},
+    // map group -> count
+    groupmap: std.AutoHashMapUnmanaged(GroupId, usize) = .{},
+
+    pub fn init(alloc: std.mem.Allocator) @This() {
+        return .{ .alloc = alloc };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.ids.deinit(self.alloc);
+        self.groups.deinit(self.alloc);
+        self.idmap.deinit(self.alloc);
+        self.groupmap.deinit(self.alloc);
+    }
+
+    pub fn clear(self: *@This()) void {
+        self.ids.clearRetainingCapacity();
+        self.groups.clearRetainingCapacity();
+        self.idmap.clearRetainingCapacity();
+        self.groupmap.clearRetainingCapacity();
+    }
+
+    pub fn add(self: *@This(), id: Id, group: GroupId) !void {
+        if (self.idmap.get(id)) |index| {
+            if (index < self.groups.items.len) {
+                self.groups.items[index] = group;
+            }
+        } else {
+            const index = self.ids.items.len;
+            try self.idmap.put(self.alloc, id, index);
+            try self.ids.append(self.alloc, id);
+            try self.groups.append(self.alloc, group);
+        }
+        const res = try self.groupmap.getOrPut(self.alloc, group);
+        if (res.found_existing) {
+            res.value_ptr.* += 1;
+        } else {
+            res.value_ptr.* = 1;
+        }
+    }
+
+    pub fn remove(self: *@This(), id: Id) !void {
+        if (self.idmap.get(id)) |index| {
+            _ = self.idmap.remove(id);
+            const is_last = index == self.ids.items.len - 1;
+            _ = self.ids.swapRemove(index);
+            const group = self.groups.swapRemove(index);
+
+            if (!is_last) {
+                try self.idmap.put(self.alloc, self.ids.items[index], index);
+            }
+
+            if (self.groupmap.getPtr(group)) |group_count| {
+                if (group_count.* == 1) {
+                    _ = self.groupmap.remove(group);
+                } else {
+                    group_count.* -= 1;
+                }
+            }
+        }
+    }
+
+    pub fn addOrRemove(self: *@This(), id: Id, group: GroupId) !PutResult {
+        if (self.idmap.contains(id)) {
+            try self.remove(id);
+            return .{ .res = .removed, .group = group };
+        } else {
+            try self.add(id, group);
+            return .{ .res = .added, .group = group };
+        }
+    }
+
+    pub fn removeGroup(self: *@This(), group: GroupId) !void {
+        var to_remove = std.ArrayListUnmanaged(Id){};
+        defer to_remove.deinit(self.alloc);
+
+        for (self.groups.items, 0..) |g, i| {
+            if (g == group)
+                try to_remove.append(self.alloc, self.ids.items[i]);
+        }
+        for (to_remove.items) |to| {
+            try self.remove(to);
+        }
+    }
+
+    pub fn count(self: *const @This()) usize {
+        return self.ids.items.len;
+    }
+
+    pub fn countGroup(self: *const @This()) usize {
+        return self.groupmap.count();
+    }
+
+    pub fn getLast(self: *const @This()) ?Id {
+        if (self.ids.items.len > 0)
+            return self.ids.items[self.ids.items.len - 1];
+        return null;
+    }
+
+    pub fn getGroup(self: *const @This(), id: Id) ?GroupId {
+        if (self.idmap.get(id)) |index| {
+            return self.groups.items[index];
+        }
+        return null;
+    }
+
+    pub fn contains(self: *const @This(), id: Id) bool {
+        return self.idmap.contains(id);
+    }
+
+    pub fn containsGroup(self: *const @This(), group: GroupId) bool {
+        return self.groupmap.contains(group);
+    }
+};
+
+//TODO when groups change (ctrl T) update groups mapping
+
 pub const StateSnapshot = struct {
     multi: []const Id,
     groups: []const GroupId,
 
     mode: Mode,
-    last: ?Id,
 
     pub fn destroy(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.multi);
@@ -30,14 +154,11 @@ mode: Mode = .one,
 /// Toggling this only effects the behavior of fn put()
 ignore_groups: bool = false,
 
-_multi: std.AutoHashMap(Id, void),
-last_selected: ?Id = null,
-
-/// stores set of groups present in current selection.
-groups: std.AutoHashMap(GroupId, void),
+list: SelectionList,
 
 alloc: std.mem.Allocator,
-_multi_slice_scratch: std.ArrayListUnmanaged(Id) = .{},
+
+scratch_list: std.ArrayListUnmanaged(Id) = .{},
 
 options: struct {
     brushes: bool = true,
@@ -53,9 +174,13 @@ options: struct {
 pub fn init(alloc: std.mem.Allocator) Self {
     return .{
         .alloc = alloc,
-        ._multi = std.AutoHashMap(Id, void).init(alloc),
-        .groups = std.AutoHashMap(GroupId, void).init(alloc),
+        .list = SelectionList.init(alloc),
     };
+}
+
+pub fn deinit(self: *Self) void {
+    self.list.deinit();
+    self.scratch_list.deinit(self.alloc);
 }
 
 pub fn toggle(self: *Self) void {
@@ -65,43 +190,38 @@ pub fn toggle(self: *Self) void {
     };
 }
 
+//IF groups change ?
+//shouldn't be a problem becouse we have a seperate undo item for setting groups.
 pub fn createStateSnapshot(self: *Self, alloc: std.mem.Allocator) !StateSnapshot {
-    const group_list = try getHashSetSlice(GroupId, &self.groups, alloc);
-    const multi = try getHashSetSlice(Id, &self._multi, alloc);
+    const multi = try alloc.dupe(Id, self.list.ids.items);
+    const groups = try alloc.dupe(GroupId, self.list.groups.items);
+
     return StateSnapshot{
         .mode = self.mode,
         .multi = multi,
-        .groups = group_list,
-        .last = self.last_selected,
+        .groups = groups,
     };
 }
 
 pub fn setFromSnapshot(self: *Self, snapshot: StateSnapshot) !void {
-    self._multi.clearRetainingCapacity();
-    for (snapshot.multi) |m|
-        try self._multi.put(m, {});
+    if (snapshot.multi.len != snapshot.groups.len) return error.invalidSnapshot;
+    self.list.clear();
 
-    self.groups.clearRetainingCapacity();
-    for (snapshot.groups) |g|
-        try self.groups.put(g, {});
+    for (snapshot.multi, 0..) |m, mi| {
+        try self.list.add(m, snapshot.groups[mi]);
+    }
 
     self.mode = snapshot.mode;
 }
 
-pub fn getLast(self: *Self) ?Id {
-    return self.last_selected;
-}
-
 pub fn countSelected(self: *Self) usize {
-    return self._multi.count();
+    return self.list.count();
 }
 
 // Only return selected if length of selection is 1
 pub fn getExclusive(self: *Self) ?Id {
     if (self.countSelected() == 1) {
-        var it = self._multi.keyIterator();
-        const n = it.next() orelse return null;
-        return n.*;
+        return self.list.getLast();
     }
     return null;
 }
@@ -110,65 +230,23 @@ pub fn getExclusive(self: *Self) ?Id {
 /// or it returns the selection when len == 1
 pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
     blk: {
-        if (self.groups.count() != 1) break :blk;
-        var it = self.groups.keyIterator();
-        const first = it.next() orelse break :blk;
-        if (first.* == 0) break :blk;
+        if (self.list.countGroup() != 1) break :blk;
 
-        return groups.getOwner(first.*);
+        const last = self.list.getLast() orelse break :blk;
+
+        return groups.getOwner(self.list.getGroup(last) orelse break :blk);
     }
     return self.getExclusive();
 }
 
-pub fn setToSingle(self: *Self, id: Id) !void {
+pub fn setToSingle(self: *Self, id: Id, ed: *edit.Context) !void {
     self.mode = .one;
-    self.clear();
-    try self._multi.put(id, {});
-    self.last_selected = id;
+    self.list.clear();
+    try self.add(id, ed);
 }
 
 pub fn setToMulti(self: *Self) void {
     self.mode = .many;
-}
-
-// Add an id without checking if it exists
-pub fn addUnchecked(self: *Self, id: Id) !void {
-    try self._multi.put(id, {});
-    self.last_selected = id;
-}
-
-pub fn multiContains(self: *Self, id: Id) bool {
-    return self._multi.contains(id);
-}
-
-pub fn tryRemoveMulti(self: *Self, id: Id) void {
-    if (self._multi.remove(id)) {
-        if (self.last_selected) |ls| {
-            if (ls == id) {
-                var it = self._multi.keyIterator();
-                self.last_selected = null;
-                if (it.next()) |p| self.last_selected = p.*;
-            }
-        }
-    }
-}
-
-pub fn tryAddMulti(self: *Self, id: Id) !void {
-    if (self.multiContains(id)) return;
-
-    try self.addUnchecked(id);
-}
-
-pub fn clear(self: *Self) void {
-    self._multi.clearRetainingCapacity();
-    self.groups.clearAndFree();
-    self.last_selected = null;
-}
-
-pub fn deinit(self: *Self) void {
-    self._multi.deinit();
-    self.groups.deinit();
-    self._multi_slice_scratch.deinit(self.alloc);
 }
 
 fn canSelect(self: *Self, id: Id, editor: *edit.Context) bool {
@@ -198,67 +276,65 @@ fn canSelect(self: *Self, id: Id, editor: *edit.Context) bool {
     return true;
 }
 
-/// Returns true if the item was added
-pub fn put(self: *Self, id: Id, editor: *edit.Context) !bool {
-    if (!self.canSelect(id, editor)) return false;
+const PutResult = struct {
+    res: enum { masked, added, removed },
+    group: GroupId,
+};
+pub fn put(self: *Self, id: Id, editor: *edit.Context) !PutResult {
+    if (!self.canSelect(id, editor)) return .{ .res = .masked, .group = 0 };
     if (!self.ignore_groups) {
         if (try editor.ecs.getOpt(id, .group)) |group| {
             if (group.id != 0) {
                 switch (self.mode) {
-                    .one => self.clear(),
+                    .one => self.list.clear(),
                     .many => {},
                 }
-                const to_remove = self.multiContains(id);
-                if (to_remove) _ = self.groups.remove(group.id) else try self.groups.put(group.id, {});
-                //TODO specify it manually autovis entities should be added
-                var it = editor.editIterator(.group);
-                while (it.next()) |ent| {
-                    if (ent.id == group.id and ent.id != 0) {
-                        if (to_remove) self.tryRemoveMulti(it.i) else try self.tryAddMulti(it.i);
+                const to_remove = self.list.contains(id);
+
+                if (to_remove) {
+                    try self.list.removeGroup(group.id);
+                } else {
+                    var it = editor.editIterator(.group);
+                    while (it.next()) |ent| {
+                        if (ent.id == group.id) {
+                            try self.list.add(it.i, ent.id);
+                        }
                     }
                 }
-                return true;
+
+                return .{ .group = group.id, .res = if (to_remove) .removed else .added };
             }
         }
     }
     const group = if (try editor.ecs.getOpt(id, .group)) |g| g.id else 0;
     switch (self.mode) {
         .one => {
-            try self.setToSingle(id);
-            self.groups.clearRetainingCapacity();
-            try self.groups.put(group, {});
+            try self.setToSingle(id, editor);
+            return .{ .group = group, .res = .added };
         },
         .many => {
-            if (self._multi.remove(id)) {
-                if (self.last_selected != null and self.last_selected.? == id) {
-                    self.last_selected = null;
-                    var it = self._multi.keyIterator();
-                    self.last_selected = null;
-                    if (it.next()) |p| self.last_selected = p.*;
-                }
-                _ = self.groups.remove(group); //TODO only remove group if all are of group are gone?
-            } else {
-                try self.addUnchecked(id);
-                try self.groups.put(group, {});
-            }
+            return try self.list.addOrRemove(id, group);
         },
     }
-    return true;
 }
 
-fn getHashSetSlice(comptime KeyT: type, hs: *std.AutoHashMap(KeyT, void), alloc: std.mem.Allocator) ![]const KeyT {
-    const list = try alloc.alloc(KeyT, hs.count());
-    var g_it = hs.keyIterator();
+///ensure no hidden entities are selected
+pub fn sanitizeSelection(self: *Self, ed: *edit.Context) !void {
+    const vis_mask = edit.EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
 
-    var g_i: usize = 0;
-    while (g_it.next()) |g| {
-        if (g_i >= list.len)
-            break;
+    self.scratch_list.clearRetainingCapacity();
 
-        list[g_i] = g.*;
-
-        g_i += 1;
+    for (self.list.ids.items) |pot| {
+        if (ed.ecs.intersects(pot, vis_mask))
+            try self.scratch_list.append(self.alloc, pot);
     }
 
-    return list;
+    for (self.scratch_list.items) |to_remove| {
+        try self.list.remove(to_remove);
+    }
+}
+
+pub fn add(self: *Self, id: Id, editor: *edit.Context) !void {
+    const group = if (try editor.ecs.getOpt(id, .group)) |g| g.id else 0;
+    try self.list.add(id, group);
 }
