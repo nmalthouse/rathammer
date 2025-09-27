@@ -106,29 +106,27 @@ pub fn groupSelection(ed: *Ed) !void {
     if (owner_count > 1)
         try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
 
-    if (selection.len > 0) {
-        const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
-        const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
-        var owner: ?ecs.EcsT.Id = null;
-        if (last_owner == null) {
-            if (ed.edit_state.default_group_entity != .none) {
-                const new = try ed.ecs.createEntity();
-                try ed.ecs.attach(new, .entity, .{
-                    .class = @tagName(ed.edit_state.default_group_entity),
-                });
-                owner = new;
-            }
+    const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
+    const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
+    var owner: ?ecs.EcsT.Id = null;
+    if (last_owner == null) {
+        if (ed.edit_state.default_group_entity != .none) {
+            const new = try ed.ecs.createEntity();
+            try ed.ecs.attach(new, .entity, .{
+                .class = @tagName(ed.edit_state.default_group_entity),
+            });
+            owner = new;
         }
-        const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
-        for (selection) |id| {
-            const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
-            try ustack.append(
-                try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
-            );
-        }
-        Undo.applyRedo(ustack.items, ed);
-        try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
     }
+    const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
+    for (selection) |id| {
+        const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
+        try ustack.append(
+            try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
+        );
+    }
+    Undo.applyRedo(ustack.items, ed);
+    try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
 }
 
 const pgen = @import("primitive_gen.zig");
@@ -197,41 +195,31 @@ pub fn clearSelection(ed: *Ed) !void {
 }
 
 pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
-    //IF ignore groups is on, just add everything normally
-    //Otherwise, track which groups have been touched and only add/remove them once
-    //Second put?
-    //
-    //ignore groups is off:
-    //IF ent group not in groups
-    // const added = selection.put
-    // for( item in group) if (added) add else remove
-    //else skip
-
     ed.selection.setToMulti();
 
     const GroupId = ecs.Groups.GroupId;
-    // true is added, false removed
-    var visted_groups = std.AutoHashMap(GroupId, bool).init(ed.frame_arena.allocator());
+    const aa = ed.frame_arena.allocator();
+    var visited_groups = std.AutoHashMap(GroupId, void).init(aa);
     const track_groups = !ed.selection.ignore_groups;
 
     var it = ed.editIterator(.bounding_box);
     while (it.next()) |item| {
         if (util3d.doesBBOverlapExclusive(bounds[0], bounds[1], item.a, item.b)) {
-            const pr = ed.selection.put(it.i, ed) catch return;
+            const group = if (try ed.ecs.getOpt(it.i, .group)) |g| g.id else 0;
+
             if (track_groups) {
-                if (pr.res != .masked and pr.group != 0) {
-                    const res = try visted_groups.getOrPut(pr.group);
-                    if (!res.found_existing) { //The status of the first grouped entity determines direction of selection.
-                        res.value_ptr.* = pr.res == .added;
-                    }
+                if (group == 0) {
+                    _ = try ed.selection.put(it.i, ed);
+                } else if (!visited_groups.contains(group)) {
+                    const pr = try ed.selection.put(it.i, ed);
+                    if (pr.res != .masked)
+                        try visited_groups.put(group, {});
                 }
+            } else {
+                _ = try ed.selection.put(it.i, ed);
             }
         }
     }
-
-    //Iterate visited groups
-    // for visted if added ensure all of group in selection
-    // else ensure none of group in selection
 }
 
 pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {

@@ -43,19 +43,32 @@ const SelectionList = struct {
     pub fn add(self: *@This(), id: Id, group: GroupId) !void {
         if (self.idmap.get(id)) |index| {
             if (index < self.groups.items.len) {
-                self.groups.items[index] = group;
+                const old_group = self.groups.items[index];
+                if (old_group != group) {
+                    self.groups.items[index] = group;
+                    self.decrementGroup(old_group);
+                    try self.incrementGroup(group);
+                }
             }
         } else {
             const index = self.ids.items.len;
             try self.idmap.put(self.alloc, id, index);
             try self.ids.append(self.alloc, id);
             try self.groups.append(self.alloc, group);
+            try self.incrementGroup(group);
         }
-        const res = try self.groupmap.getOrPut(self.alloc, group);
-        if (res.found_existing) {
-            res.value_ptr.* += 1;
-        } else {
-            res.value_ptr.* = 1;
+    }
+
+    pub fn updateGroup(self: *@This(), id: Id, group: GroupId) !void {
+        if (self.idmap.get(id)) |index| {
+            if (index < self.groups.items.len) {
+                const old_group = self.groups.items[index];
+                if (old_group != group) {
+                    self.groups.items[index] = group;
+                    self.decrementGroup(old_group);
+                    try self.incrementGroup(group);
+                }
+            }
         }
     }
 
@@ -70,13 +83,7 @@ const SelectionList = struct {
                 try self.idmap.put(self.alloc, self.ids.items[index], index);
             }
 
-            if (self.groupmap.getPtr(group)) |group_count| {
-                if (group_count.* == 1) {
-                    _ = self.groupmap.remove(group);
-                } else {
-                    group_count.* -= 1;
-                }
-            }
+            self.decrementGroup(group);
         }
     }
 
@@ -87,6 +94,25 @@ const SelectionList = struct {
         } else {
             try self.add(id, group);
             return .{ .res = .added, .group = group };
+        }
+    }
+
+    fn decrementGroup(self: *@This(), group: GroupId) void {
+        if (self.groupmap.getPtr(group)) |group_count| {
+            if (group_count.* == 1) {
+                _ = self.groupmap.remove(group);
+            } else {
+                group_count.* -= 1;
+            }
+        }
+    }
+
+    fn incrementGroup(self: *@This(), group: GroupId) !void {
+        const res = try self.groupmap.getOrPut(self.alloc, group);
+        if (res.found_existing) {
+            res.value_ptr.* += 1;
+        } else {
+            res.value_ptr.* = 1;
         }
     }
 
@@ -132,8 +158,6 @@ const SelectionList = struct {
         return self.groupmap.contains(group);
     }
 };
-
-//TODO when groups change (ctrl T) update groups mapping
 
 pub const StateSnapshot = struct {
     multi: []const Id,
