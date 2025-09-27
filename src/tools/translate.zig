@@ -277,7 +277,7 @@ pub const Translate = struct {
                 }
             }
             if (real_commit) {
-                try commit_(self, dupe, angle_delta, origin, Vec3.zero());
+                try action.rotateTranslateSelected(self, dupe, angle_delta, origin, Vec3.zero());
             }
         }
     }
@@ -433,7 +433,7 @@ pub const Translate = struct {
                 }
             }
             if (real_commit) {
-                try commit_(self, dupe, null, origin, dist);
+                try action.rotateTranslateSelected(self, dupe, null, origin, dist);
             }
         }
     }
@@ -519,68 +519,6 @@ pub const Translate = struct {
                 }));
             //area_vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &sl.nearby_distance, 0, 256, .{}));
         }
-    }
-
-    fn commit_(self: *Editor, dupe: bool, angle_delta: ?Vec3, origin: Vec3, dist: Vec3) !void {
-        const selected = self.getSelected();
-        var new_ent_list = std.ArrayList(ecs.EcsT.Id).init(self.frame_arena.allocator());
-        //Map old groups to duped groups
-        var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(self.frame_arena.allocator());
-
-        const ustack = try self.undoctx.pushNewFmt("{s} of {d} entities", .{ if (dupe) "Dupe" else "Translation", selected.len });
-        for (selected) |id| {
-            if (dupe) {
-                const duped = try self.dupeEntity(id);
-
-                try ustack.append(try undo.UndoCreateDestroy.create(self.undoctx.alloc, duped, .create));
-                try ustack.append(try undo.UndoTranslate.create(
-                    self.undoctx.alloc,
-                    dist,
-                    angle_delta,
-                    duped,
-                    origin,
-                ));
-                if (!self.selection.ignore_groups) {
-                    if (try self.ecs.getOpt(duped, .group)) |group| {
-                        if (group.id != ecs.Groups.NO_GROUP) {
-                            if (!group_mapper.contains(group.id)) {
-                                try group_mapper.put(group.id, try self.groups.newGroup(null));
-                            }
-                            try new_ent_list.append(duped);
-                        }
-                    }
-                }
-            } else {
-                try ustack.append(try undo.UndoTranslate.create(
-                    self.undoctx.alloc,
-                    dist,
-                    angle_delta,
-                    id,
-                    origin,
-                ));
-            }
-        }
-        if (dupe) {
-            var it = group_mapper.iterator();
-            while (it.next()) |item| {
-                if (self.groups.getOwner(item.key_ptr.*)) |owner| {
-                    const duped = try self.dupeEntity(owner);
-
-                    try ustack.append(try undo.UndoCreateDestroy.create(self.undoctx.alloc, duped, .create));
-                    try self.groups.setOwner(item.value_ptr.*, duped);
-                    //TODO set the group owner with undo stack
-                }
-            }
-            for (new_ent_list.items) |new_ent| {
-                const old_group = try self.ecs.get(new_ent, .group);
-                const new_group = group_mapper.get(old_group.id) orelse continue;
-                try ustack.append(
-                    try undo.UndoChangeGroup.create(self.undoctx.alloc, old_group.id, new_group, new_ent),
-                );
-            }
-            //now iterate the new_ent_list and update the group mapping
-        }
-        undo.applyRedo(ustack.items, self);
     }
 
     fn btnCb(vt: *iArea, _: usize, _: *RGui, _: *iWindow) void {

@@ -118,7 +118,6 @@ pub const Gizmo = struct {
             .rising => {
                 var caught_one = false;
                 const rc = editor.camRay(screen_area, view);
-                //TODO do a depth test
                 for (cubes, 0..) |cu, ci| {
                     const co = cube_orig[ci];
                     if (util3d.doesRayIntersectBBZ(rc[0], rc[1], co, co.add(cu))) |inter| {

@@ -21,6 +21,7 @@ const iWindow = guis.iWindow;
 const Wg = guis.Widget;
 const gridutil = @import("grid.zig");
 const toolutil = @import("tool_common.zig");
+const action = @import("actions.zig");
 
 pub const CubeDraw = @import("tools/cube_draw.zig").CubeDraw;
 pub const TextureTool = @import("tools/texture.zig").TextureTool;
@@ -92,11 +93,6 @@ pub const ToolData = struct {
 pub const FastFaceManip = struct {
     pub threadlocal var tool_id: ToolReg = initToolReg;
 
-    //TODO during the .start mode, do a sort on the raycast to determine nearest solid
-    const Selected = struct {
-        id: ecs.EcsT.Id,
-        face_id: u16,
-    };
     vt: i3DTool,
 
     state: enum {
@@ -111,7 +107,8 @@ pub const FastFaceManip = struct {
     draw_grid: bool = false,
     draw_text: bool = true,
 
-    selected: std.ArrayList(Selected),
+    selected: std.ArrayListUnmanaged(action.SelectedSide) = .{},
+    alloc: std.mem.Allocator,
 
     fn reset(self: *@This()) void {
         self.face_id = -1;
@@ -132,7 +129,7 @@ pub const FastFaceManip = struct {
                 .selected_solid_edge_color = 0xf7_a94a_af,
                 .selected_solid_point_color = 0xff0000ff,
             },
-            .selected = std.ArrayList(Selected).init(alloc),
+            .alloc = alloc,
         };
         return &obj.vt;
     }
@@ -146,7 +143,7 @@ pub const FastFaceManip = struct {
 
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.selected.deinit();
+        self.selected.deinit(self.alloc);
         alloc.destroy(self);
     }
     pub fn runTool(vt: *i3DTool, td: ToolData, editor: *Editor) ToolError!void {
@@ -195,7 +192,7 @@ pub const FastFaceManip = struct {
                                 for (o_solid.sides.items, 0..) |*side, fi| {
                                     if (norm.dot(side.normal(o_solid)) > NORM_THRESH) {
                                         //if (init_plane.eql(side.normal(o_solid))) {
-                                        try self.selected.append(.{ .id = other, .face_id = @intCast(fi) });
+                                        try self.selected.append(self.alloc, .{ .id = other, .side_i = @intCast(fi) });
                                         try o_solid.removeFromMeshMap(other, editor);
                                         break; //Only one side per solid can be coplanar
                                     }
@@ -266,8 +263,8 @@ pub const FastFaceManip = struct {
 
                                 for (self.selected.items) |sel| {
                                     const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                    if (sel.face_id >= solid_o.sides.items.len) continue;
-                                    const s_io: usize = @intCast(sel.face_id);
+                                    if (sel.side_i >= solid_o.sides.items.len) continue;
+                                    const s_io: usize = @intCast(sel.side_i);
                                     const side_o = &solid_o.sides.items[s_io];
                                     solid_o.drawImmediate(td.draw, editor, dist, side_o.index.items, false) catch return;
                                     draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, 0xff000088, .{ .offset = dist });
@@ -275,18 +272,7 @@ pub const FastFaceManip = struct {
 
                                 const commit_btn = if (self.right) rm else lm;
                                 if (commit_btn == .falling and dist.length() > 0.1) {
-                                    const ustack = editor.undoctx.pushNewFmt("translate {d} faces", .{self.selected.items.len}) catch return;
-                                    for (self.selected.items) |sel| {
-                                        const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                        if (sel.face_id >= solid_o.sides.items.len) continue;
-                                        ustack.append(undo.UndoSolidFaceTranslate.create(
-                                            editor.undoctx.alloc,
-                                            sel.id,
-                                            sel.face_id,
-                                            dist,
-                                        ) catch return) catch return;
-                                    }
-                                    undo.applyRedo(ustack.items, editor);
+                                    try action.translateFace(editor, self.selected.items, dist);
                                 }
                             } else {
                                 draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, 0xff000088, .{});
@@ -451,9 +437,7 @@ pub const PlaceEntity = struct {
 
                 try self.ecs.attach(new, .key_values, kvs);
 
-                const ustack = try self.undoctx.pushNewFmt("create entity", .{});
-                try ustack.append(try undo.UndoCreateDestroy.create(self.undoctx.alloc, new, .create));
-                undo.applyRedo(ustack.items, self);
+                try action.createEntity(self, new);
             }
         }
     }
@@ -739,14 +723,7 @@ pub const TranslateFace = struct {
                         try solid.drawImmediate(td.draw, self, dist, side.index.items, false);
                         if (self.edit_state.rmouse == .rising) {
                             //try solid.translateSide(id, dist, self, s_i);
-                            const ustack = try self.undoctx.pushNewFmt("translated face", .{});
-                            try ustack.append(try undo.UndoSolidFaceTranslate.create(
-                                self.undoctx.alloc,
-                                id,
-                                s_i,
-                                dist,
-                            ));
-                            undo.applyRedo(ustack.items, self);
+                            try action.translateFace(self, &.{.{ .id = id, .side_i = @intCast(s_i) }}, dist);
                             tool.face_origin = origin;
                             tool.gizmo.start = origin;
                             //Commit the changes

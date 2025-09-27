@@ -15,6 +15,7 @@ const Wg = guis.Widget;
 const util3d = @import("../util_3d.zig");
 const ecs = @import("../ecs.zig");
 const undo = @import("../undo.zig");
+const action = @import("../actions.zig");
 const snapV3 = util3d.snapV3;
 
 //TODO when selection changes, change the gui
@@ -270,15 +271,8 @@ pub const TextureTool = struct {
         if (!old.eql(new)) {
             if (self.win_ptr) |win|
                 win.needs_rebuild = true;
-            const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
-            try ustack.append(try undo.UndoTextureManip.create(
-                self.ed.undoctx.alloc,
-                old,
-                new,
-                self.id orelse return,
-                self.face_index orelse return,
-            ));
-            undo.applyRedo(ustack.items, self.ed);
+
+            try action.manipTexture(self.ed, old, new, .{ .id = self.id orelse return, .side_i = @intCast(self.face_index orelse return) });
         }
     }
 
@@ -321,23 +315,8 @@ pub const TextureTool = struct {
         switch (btn_k) {
             else => {},
             .apply_selection => {
-                const selection = self.ed.getSelected();
-                std.debug.print("Start apply\n", .{});
                 const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
-
-                const ustack = try self.ed.undoctx.pushNewFmt("texture apply", .{});
-                for (selection) |sel_id| {
-                    if (self.ed.getComponent(sel_id, .solid)) |solid| {
-                        for (solid.sides.items, 0..) |*sp, side_id| {
-                            const old_s = undo.UndoTextureManip.State{ .u = sp.u, .v = sp.v, .tex_id = sp.tex_id, .lightmapscale = sp.lightmapscale };
-                            var new_s = old_s;
-                            new_s.tex_id = selected_mat;
-                            try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old_s, new_s, sel_id, @intCast(side_id)));
-                        }
-                    }
-                }
-                std.debug.print("Applyied {d}\n", .{ustack.items.len});
-                undo.applyRedo(ustack.items, self.ed);
+                try action.applyTextureToSelection(self.ed, selected_mat);
             },
         }
         const sel = (self.getCurrentlySelected(self.ed) catch null) orelse return;
@@ -400,15 +379,7 @@ pub const TextureTool = struct {
         if (!old.eql(new)) {
             if (self.win_ptr) |win|
                 win.needs_rebuild = true;
-            const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
-            try ustack.append(try undo.UndoTextureManip.create(
-                self.ed.undoctx.alloc,
-                old,
-                new,
-                self.id orelse return,
-                self.face_index orelse return,
-            ));
-            undo.applyRedo(ustack.items, self.ed);
+            try action.manipTexture(self.ed, old, new, .{ .id = self.id orelse return, .side_i = @intCast(self.face_index orelse return) });
         }
     }
 
@@ -491,9 +462,7 @@ pub const TextureTool = struct {
                         const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
                         const new = undo.UndoTextureManip.State{ .u = source.u, .v = source.v, .tex_id = currently_selected, .lightmapscale = side.lightmapscale };
 
-                        const ustack = try editor.undoctx.pushNewFmt("texture manip", .{});
-                        try ustack.append(try undo.UndoTextureManip.create(editor.undoctx.alloc, old, new, pot[0].id, pot[0].side_id.?));
-                        undo.applyRedo(ustack.items, editor);
+                        try action.manipTexture(editor, old, new, .{ .id = pot[0].id, .side_i = @intCast(pot[0].side_id.?) });
                     },
                     .pick => {
                         if (side.tex_id == edit.missingTexture().id) return; //Missing texture

@@ -354,3 +354,144 @@ pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: 
         Undo.applyRedo(ustack.items, ed);
     }
 }
+
+pub const SelectedSide = struct {
+    id: editor.EcsT.Id,
+    side_i: u16,
+};
+pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
+    if (list.len == 0) return;
+    const ustack = try ed.undoctx.pushNewFmt("translated {d} face{s}", .{ list.len, if (list.len > 1) "s" else "" });
+    for (list) |li| {
+        try ustack.append(try Undo.UndoSolidFaceTranslate.create(
+            ed.undoctx.alloc,
+            li.id,
+            li.side_i,
+            dist,
+        ));
+    }
+    Undo.applyRedo(ustack.items, ed);
+}
+
+pub fn createEntity(ed: *Ed, new: editor.EcsT.Id) !void {
+    const ustack = try ed.undoctx.pushNewFmt("create entity", .{});
+    try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+    Undo.applyRedo(ustack.items, ed);
+}
+
+pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
+    const p0 = points[0];
+    const p1 = points[1];
+    const p2 = points[2];
+    const pnorm = util3d.trianglePlane(.{ p0, p1, p2 }).norm();
+
+    const selected = ed.getSelected();
+    const ustack = try ed.undoctx.pushNewFmt("Clip", .{});
+    for (selected) |sel_id| {
+        const solid = ed.getComponent(sel_id, .solid) orelse continue;
+        var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.asset_browser.selected_mat_vpk_id);
+
+        ed.selection.list.clear();
+        try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, sel_id, .destroy));
+
+        for (&ret) |*r| {
+            if (r.sides.items.len < 4) { //TODO more extensive check of validity
+                r.deinit();
+                continue;
+            }
+            const new = try ed.ecs.createEntity();
+            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+            try ed.ecs.attach(new, .solid, r.*);
+            try ed.ecs.attach(new, .bounding_box, .{});
+            try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
+            const solid_ptr = try ed.ecs.getPtr(new, .solid);
+            try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
+        }
+    }
+    Undo.applyRedo(ustack.items, ed);
+}
+
+pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: Vec3, dist: Vec3) !void {
+    const selected = ed.getSelected();
+    var new_ent_list = std.ArrayList(ecs.EcsT.Id).init(ed.frame_arena.allocator());
+    //Map old groups to duped groups
+    var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(ed.frame_arena.allocator());
+
+    const ustack = try ed.undoctx.pushNewFmt("{s} of {d} entities", .{ if (dupe) "Dupe" else "Translation", selected.len });
+    for (selected) |id| {
+        if (dupe) {
+            const duped = try ed.dupeEntity(id);
+
+            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create));
+            try ustack.append(try Undo.UndoTranslate.create(
+                ed.undoctx.alloc,
+                dist,
+                angle_delta,
+                duped,
+                origin,
+            ));
+            if (!ed.selection.ignore_groups) {
+                if (try ed.ecs.getOpt(duped, .group)) |group| {
+                    if (group.id != ecs.Groups.NO_GROUP) {
+                        if (!group_mapper.contains(group.id)) {
+                            try group_mapper.put(group.id, try ed.groups.newGroup(null));
+                        }
+                        try new_ent_list.append(duped);
+                    }
+                }
+            }
+        } else {
+            try ustack.append(try Undo.UndoTranslate.create(
+                ed.undoctx.alloc,
+                dist,
+                angle_delta,
+                id,
+                origin,
+            ));
+        }
+    }
+    if (dupe) {
+        var it = group_mapper.iterator();
+        while (it.next()) |item| {
+            if (ed.groups.getOwner(item.key_ptr.*)) |owner| {
+                const duped = try ed.dupeEntity(owner);
+
+                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create));
+                try ed.groups.setOwner(item.value_ptr.*, duped);
+                //TODO set the group owner with undo stack
+            }
+        }
+        for (new_ent_list.items) |new_ent| {
+            const old_group = try ed.ecs.get(new_ent, .group);
+            const new_group = group_mapper.get(old_group.id) orelse continue;
+            try ustack.append(
+                try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old_group.id, new_group, new_ent),
+            );
+        }
+        //now iterate the new_ent_list and update the group mapping
+    }
+    Undo.applyRedo(ustack.items, ed);
+}
+
+const TexState = Undo.UndoTextureManip.State;
+pub fn manipTexture(ed: *Ed, old: TexState, new: TexState, side: SelectedSide) !void {
+    const ustack = try ed.undoctx.pushNewFmt("texture manip", .{});
+    try ustack.append(try Undo.UndoTextureManip.create(ed.undoctx.alloc, old, new, side.id, side.side_i));
+    Undo.applyRedo(ustack.items, ed);
+}
+
+pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
+    const selection = ed.getSelected();
+    const ustack = try ed.undoctx.pushNewFmt("texture apply", .{});
+    for (selection) |sel_id| {
+        if (ed.getComponent(sel_id, .solid)) |solid| {
+            for (solid.sides.items, 0..) |*sp, side_id| {
+                const old_s = Undo.UndoTextureManip.State{ .u = sp.u, .v = sp.v, .tex_id = sp.tex_id, .lightmapscale = sp.lightmapscale };
+                var new_s = old_s;
+                new_s.tex_id = tex_id;
+                try ustack.append(try Undo.UndoTextureManip.create(ed.undoctx.alloc, old_s, new_s, sel_id, @intCast(side_id)));
+            }
+        }
+    }
+    Undo.applyRedo(ustack.items, ed);
+}

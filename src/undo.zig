@@ -38,6 +38,13 @@ pub const iUndo = struct {
     }
 };
 
+// IDEA
+// mark dependancy relationships between undo items
+// SelectionUndo has no dependents, thus, can be removed from stack without side effects
+//
+// Texture manip is only dependant on its ids CreateDestroy
+// Translate is dependant on Translate and CreateDestroy
+
 pub const UndoGroup = struct {
     description: []const u8,
     items: std.ArrayList(*iUndo),

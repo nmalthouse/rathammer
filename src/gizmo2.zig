@@ -60,8 +60,6 @@ pub const Gizmo = struct {
         switch (lmouse) {
             .rising => {
                 var caught_one = false;
-                //const rc = ed.screenRay(screen_area, view);
-                //TODO do a depth test
                 for (cube_orig, 0..) |co, ci| {
                     const ce = cube_ext[ci];
                     if (util3d.doesRayIntersectBBZ(rc[0], rc[1], co, co.add(ce))) |inter| {

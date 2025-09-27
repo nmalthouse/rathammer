@@ -31,6 +31,12 @@ const build_config = @import("config");
 const Conf = @import("config.zig");
 const version = @import("version.zig");
 
+// Event system?
+// events gui needs to be aware of
+// selection changed
+// tool changed
+// something undone
+
 fn event_cb(ev: graph.c.SDL_UserEvent) void {
     const rpc = @import("rpc.zig");
     const ha = std.hash.Wyhash.hash;

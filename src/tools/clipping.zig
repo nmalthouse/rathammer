@@ -9,6 +9,7 @@ const DrawCtx = graph.ImmediateDrawingContext;
 const undo = @import("../undo.zig");
 const Vec3 = graph.za.Vec3;
 const toolutil = @import("../tool_common.zig");
+const action = @import("../actions.zig");
 
 pub const Clipping = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -246,35 +247,8 @@ pub const Clipping = struct {
     }
 
     fn commitClip(self: *@This(), ed: *Editor) !void {
-        const p0 = self.points[0];
-        const p1 = self.points[1];
-        const p2 = self.points[2];
-        const pnorm = util3d.trianglePlane(.{ p0, p1, p2 }).norm();
         self.state = .init;
 
-        const selected = ed.getSelected();
-        const ustack = try ed.undoctx.pushNewFmt("Clip", .{});
-        for (selected) |sel_id| {
-            const solid = ed.getComponent(sel_id, .solid) orelse continue;
-            var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.asset_browser.selected_mat_vpk_id);
-
-            ed.selection.list.clear();
-            try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, sel_id, .destroy));
-
-            for (&ret) |*r| {
-                if (r.sides.items.len < 4) { //TODO more extensive check of validity
-                    r.deinit();
-                    continue;
-                }
-                const new = try ed.ecs.createEntity();
-                try ustack.append(try undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
-                try ed.ecs.attach(new, .solid, r.*);
-                try ed.ecs.attach(new, .bounding_box, .{});
-                try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
-                const solid_ptr = try ed.ecs.getPtr(new, .solid);
-                try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
-            }
-        }
-        undo.applyRedo(ustack.items, ed);
+        try action.clipSelected(ed, self.points);
     }
 };
