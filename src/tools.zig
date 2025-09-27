@@ -429,9 +429,7 @@ pub const PlaceEntity = struct {
                 var kvs = ecs.KeyValues.init(self.alloc);
                 if (model_id) |mid| {
                     if (self.vpkctx.namesFromId(mid)) |names| {
-                        var string = std.ArrayList(u8).init(self.alloc);
-                        try string.writer().print("{s}/{s}.{s}", .{ names.path, names.name, names.ext });
-                        try kvs.map.put(try self.storeString("model"), .{ ._string = string, .sync = .model });
+                        try kvs.putStringPrintNoNotify("model", "{s}/{s}.{s}", .{ names.path, names.name, names.ext });
                     }
                 }
 

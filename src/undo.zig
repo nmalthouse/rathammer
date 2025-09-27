@@ -44,6 +44,9 @@ pub const iUndo = struct {
 //
 // Texture manip is only dependant on its ids CreateDestroy
 // Translate is dependant on Translate and CreateDestroy
+//
+//  each undo item is given unique id
+// function findPreviousDependant
 
 pub const UndoGroup = struct {
     description: []const u8,
