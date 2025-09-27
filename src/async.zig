@@ -338,10 +338,8 @@ pub const CompressAndSave = struct {
     }
 };
 
-pub const CheckVersionHttp_INCOMPLETE = struct {
+pub const CheckVersionHttp = struct {
     const version = @import("version.zig");
-    //TODO move uri to build config or something
-    //TODO add cli flag and config to disable any http
     job: thread_pool.iJob,
     pool_ptr: *thread_pool.Context,
 

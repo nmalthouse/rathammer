@@ -245,7 +245,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     });
     defer win.destroyWindow();
 
-    win.setUserEventCb(&event_cb);
     const Preset = struct {
         dpi: f32 = 1,
         fh: f32 = 25,

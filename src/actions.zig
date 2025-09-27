@@ -263,7 +263,6 @@ pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
     return error.invalidParent;
 }
 
-//TODO This needs to be recursive
 pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
     const H = struct {
         const Map = std.AutoHashMap(LayerId, LayerId);

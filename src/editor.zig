@@ -46,7 +46,6 @@ const grid_stuff = @import("grid.zig");
 const class_tracker = @import("class_track.zig");
 const version = @import("version.zig").version;
 const pane = @import("pane.zig");
-const rpc = @import("rpc.zig");
 
 const async_util = @import("async.zig");
 const util3d = @import("util_3d.zig");
@@ -141,8 +140,6 @@ pub const Context = struct {
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     autovis: autovis.VisContext,
     layers: Layer.Context,
-
-    rpcserv: *rpc.RpcServer,
 
     shell: *shell.CommandCtx,
 
@@ -338,7 +335,6 @@ pub const Context = struct {
             .vpkctx = try vpk.Context.init(alloc),
             .autovis = autovis.VisContext.init(alloc),
             .layers = try Layer.Context.init(alloc),
-            .rpcserv = try rpc.RpcServer.create(alloc, @ptrCast(ret)),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
             .scratch_buf = std.ArrayList(u8).init(alloc),
@@ -465,7 +461,6 @@ pub const Context = struct {
         self.classtrack.deinit();
         self.autovis.deinit();
         self.layers.deinit();
-        self.rpcserv.destroy();
         self.tools.deinit();
         self.panes.deinit();
         self.tool_res_map.deinit();
