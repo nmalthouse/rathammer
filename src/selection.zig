@@ -257,8 +257,10 @@ pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
         if (self.list.countGroup() != 1) break :blk;
 
         const last = self.list.getLast() orelse break :blk;
+        const lgroup = self.list.getGroup(last) orelse break :blk;
+        if (lgroup == 0) break :blk;
 
-        return groups.getOwner(self.list.getGroup(last) orelse break :blk);
+        return groups.getOwner(lgroup);
     }
     return self.getExclusive();
 }
