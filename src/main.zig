@@ -608,7 +608,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
     }
 
-    std.process.cleanExit();
+    //DON'T clean exit. We need editor.deinit to get called so the thread pool is deinit
+    //std.process.cleanExit();
 }
 
 pub fn main() !void {
