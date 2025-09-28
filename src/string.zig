@@ -53,6 +53,7 @@ test {
 }
 
 pub const String = union(enum) {
+    const FORCE_ALLOC = true;
     const Self = @This();
     const StaticLen = 30;
 
@@ -65,7 +66,7 @@ pub const String = union(enum) {
     }
 
     pub fn init(alloc: std.mem.Allocator, string: []const u8) !Self {
-        if (string.len > StaticLen) {
+        if (string.len > StaticLen or FORCE_ALLOC) {
             var ret = std.ArrayListUnmanaged(u8){};
             try ret.appendSlice(alloc, string);
             return .{ .alist = ret };
@@ -110,5 +111,5 @@ test " HELLO " {
     var a = try String.init(alloc, "hello");
     defer a.deinit(alloc);
 
-    std.debug.print("{s}\n", .{a.slice()});
+    std.debug.print("{any}\n", .{a.slice()});
 }
