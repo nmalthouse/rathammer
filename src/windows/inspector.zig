@@ -15,6 +15,7 @@ const edit = @import("../editor.zig");
 const Context = edit.Context;
 const ptext = @import("widget_texture.zig");
 const fgd = @import("../fgd.zig");
+const app = @import("../app.zig");
 const Layer = @import("../layer.zig");
 //TODO
 // to get this to work we need to first add a getptr cb to all existing
@@ -54,6 +55,8 @@ pub const InspectorWindow = struct {
 
     show_help: bool = true,
 
+    ev_vt: app.iEvent = .{ .cb = event_cb },
+
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
@@ -67,6 +70,12 @@ pub const InspectorWindow = struct {
         self.area.draw_fn = &draw;
         self.area.deinit_fn = &area_deinit;
 
+        if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.undo)) catch {};
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.redo)) catch {};
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.tool_changed)) catch {};
+        } else |_| {}
+
         return self;
     }
 
@@ -77,6 +86,17 @@ pub const InspectorWindow = struct {
         self.id_kv_map.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
+    }
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        switch (ev) {
+            .undo, .redo, .tool_changed => {
+                self.vt.needs_rebuild = true;
+            },
+            else => {},
+        }
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}

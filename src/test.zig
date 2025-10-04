@@ -10,6 +10,7 @@ pub const vdf_s = @import("tests/vdf.zig");
 pub const vpk = @import("tests/vpk.zig");
 pub const jm = @import("tests/json_map.zig");
 pub const av = @import("tests/autovis.zig");
+pub const app = @import("app.zig");
 
 //TODO tests for
 //clip_solid

@@ -46,6 +46,7 @@ const grid_stuff = @import("grid.zig");
 const class_tracker = @import("class_track.zig");
 const version = @import("version.zig").version;
 const pane = @import("pane.zig");
+const app = @import("app.zig");
 
 const async_util = @import("async.zig");
 const util3d = @import("util_3d.zig");
@@ -145,6 +146,8 @@ pub const Context = struct {
 
     loadctx: *LoadCtx,
 
+    eventctx: *app.EventCtx,
+
     classtrack: class_tracker.Tracker,
 
     panes: pane.PaneReg,
@@ -205,10 +208,6 @@ pub const Context = struct {
     hacky_extra_vmf: struct {
         //Not freed, use static_string
         override_vis_group: ?[]const u8 = null,
-    } = .{},
-
-    gui_crap: struct {
-        tool_changed: bool = true,
     } = .{},
 
     edit_state: struct {
@@ -345,6 +344,7 @@ pub const Context = struct {
             .tool_res_map = std.AutoHashMap(vpk.VpkResId, void).init(alloc),
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
+            .eventctx = try app.EventCtx.create(alloc),
 
             .draw_state = .{
                 .ctx = graph.ImmediateDrawingContext.init(alloc),
@@ -355,6 +355,8 @@ pub const Context = struct {
                 }),
             },
         };
+        app.EventCtx.allocateSdlEvent();
+        win_ptr.setUserEventCb(app.EventCtx.graph_event_cb);
         //If an error occurs during initilization it is fatal so there is no reason to clean up resources.
         //Thus we call, defer editor.deinit(); after all is initialized..
         try ret.postInit(args, loadctx, env, app_cwd, conf_dir);
@@ -502,6 +504,7 @@ pub const Context = struct {
             pf.verts.deinit();
         self.async_asset_load.deinit();
         self._selection_scratch.deinit(self.alloc);
+        self.eventctx.destroy();
 
         //destroy does not take a pointer to alloc, so this is safe.
         self.alloc.destroy(self);
@@ -1030,7 +1033,7 @@ pub const Context = struct {
             log.warn("tring to set invalid tool, ignoring", .{});
             return;
         }
-        self.gui_crap.tool_changed = true;
+        self.eventctx.pushEvent(.{ .tool_changed = {} });
         if (self.edit_state.__tool_index == new_tool) {
             if (self.getCurrentTool()) |vt| {
                 if (vt.event_fn) |evf|

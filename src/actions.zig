@@ -64,10 +64,12 @@ pub fn unhideAll(ed: *Ed) !void {
 
 pub fn undo(ed: *Ed) void {
     ed.undoctx.undo(ed);
+    ed.eventctx.pushEvent(.{ .undo = {} });
 }
 
 pub fn redo(ed: *Ed) void {
     ed.undoctx.redo(ed);
+    ed.eventctx.pushEvent(.{ .redo = {} });
 }
 
 pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {

@@ -528,11 +528,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
         { //Hacks to update gui
             const new_id = editor.selection.getGroupOwnerExclusive(&editor.groups);
-            const tool_changed = editor.gui_crap.tool_changed;
-            if (new_id != last_frame_group_owner or tool_changed) {
+            if (new_id != last_frame_group_owner) {
                 inspector_win.vt.needs_rebuild = true;
             }
-            editor.gui_crap.tool_changed = false;
             last_frame_group_owner = new_id;
         }
         //const tab = tabs[editor.draw_state.tab_index];

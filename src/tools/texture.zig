@@ -193,7 +193,7 @@ pub const TextureTool = struct {
                 area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .uscale, 0, 0.125 / 2.0, 1, side.u.scale)));
 
             if (guis.label(area_vt, gui, win, tly.getArea(), "Scale ", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Tb(gui, ar, side.v.scale, win, H.param(self, .vscale)));
+                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .vscale, 0, 0.125 / 2.0, 1, side.v.scale)));
 
             if (guis.label(area_vt, gui, win, tly.getArea(), "Trans ", .{})) |ar|
                 area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .utrans, 1, 0, 512, side.u.trans)));
