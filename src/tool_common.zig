@@ -26,7 +26,7 @@ fn roundForDrawing(v: Vec3) Vec3 {
 pub fn drawDistance(start: Vec3, delta: Vec3, draw: *DrawCtx, tp: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4) void {
     var tt = tp;
     tt.background_rect = 0xaa;
-    const ss = util3d.worldToScreenSpace(screen_area, view, start.add(delta)).add(
+    const ss = (util3d.worldToScreenSpace(screen_area, view, start.add(delta)) orelse return).add(
         .{ .x = 0, .y = 0 },
     );
 
@@ -37,12 +37,22 @@ pub fn drawDistance(start: Vec3, delta: Vec3, draw: *DrawCtx, tp: DrawCtx.TextPa
 pub fn drawPoint(point: Vec3, draw: *DrawCtx, tp: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4) void {
     var tt = tp;
     tt.background_rect = 0xaa;
-    const ss = util3d.worldToScreenSpace(screen_area, view, point).add(
+    const ss = (util3d.worldToScreenSpace(screen_area, view, point) orelse return).add(
         .{ .x = 0, .y = 0 },
     );
 
     const num = roundForDrawing(point);
     draw.textFmt(ss, FMT3D, .{ num.x(), num.y(), num.z() }, tt);
+}
+
+pub fn drawText3D(pos: Vec3, draw: *DrawCtx, tp: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4, comptime fmt: []const u8, args: anytype) void {
+    var tt = tp;
+    tt.background_rect = 0xaa;
+    const ss = (util3d.worldToScreenSpace(screen_area, view, pos) orelse return).add(
+        .{ .x = 0, .y = 0 },
+    );
+
+    draw.textFmt(ss, fmt, args, tt);
 }
 
 pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, t: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4) void {
@@ -53,24 +63,27 @@ pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, t: DrawCtx.TextPar
     const num = roundForDrawing(ex);
     {
         const pos = cc[0].add(Vec3.new(hx.x(), 0, hx.z()));
-        const ss = util3d.worldToScreenSpace(screen_area, view, pos);
-        draw.textFmt(ss, FMT1D, .{num.x()}, t);
-        const start = Vec3.new(cc[0].x(), cc[0].y(), cc[0].z() + cc[1].z() / 2);
-        draw.line3D(start, start.add(Vec3.new(cc[1].x(), 0, 0)), 0xff, 1);
+        if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
+            draw.textFmt(ss, FMT1D, .{num.x()}, t);
+            const start = Vec3.new(cc[0].x(), cc[0].y(), cc[0].z() + cc[1].z() / 2);
+            draw.line3D(start, start.add(Vec3.new(cc[1].x(), 0, 0)), 0xff, 1);
+        }
     }
     {
         const pos = cc[0].add(Vec3.new(0, hx.y(), hx.z()));
-        const ss = util3d.worldToScreenSpace(screen_area, view, pos);
-        draw.textFmt(ss, FMT1D, .{num.y()}, t);
-        const start = cc[0].add(Vec3.new(0, 0, hx.z()));
-        draw.line3D(start, start.add(Vec3.new(0, ex.y(), 0)), 0xff, 1);
+        if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
+            draw.textFmt(ss, FMT1D, .{num.y()}, t);
+            const start = cc[0].add(Vec3.new(0, 0, hx.z()));
+            draw.line3D(start, start.add(Vec3.new(0, ex.y(), 0)), 0xff, 1);
+        }
     }
     {
         const pos = cc[0].add(hx);
-        const ss = util3d.worldToScreenSpace(screen_area, view, pos);
-        draw.textFmt(ss, FMT1D, .{num.z()}, t);
-        const start = cc[0].add(Vec3.new(hx.x(), hx.y(), 0));
-        draw.line3D(start, start.add(Vec3.new(0, 0, ex.z())), 0xff, 1);
+        if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
+            draw.textFmt(ss, FMT1D, .{num.z()}, t);
+            const start = cc[0].add(Vec3.new(hx.x(), hx.y(), 0));
+            draw.line3D(start, start.add(Vec3.new(0, 0, ex.z())), 0xff, 1);
+        }
     }
 }
 

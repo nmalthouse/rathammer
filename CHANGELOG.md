@@ -6,3 +6,4 @@
 * Fix bug where map isn't saved if user quits really fast after saving
 * Remove extraneous GUI elements
 * add select_tex command to select any brushes matching a texture name
+* Fix func_tracktrain

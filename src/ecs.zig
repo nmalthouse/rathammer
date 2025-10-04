@@ -17,6 +17,7 @@ const DrawCtx = graph.ImmediateDrawingContext;
 const layer = @import("layer.zig");
 const prim_gen = @import("primitive_gen.zig");
 const csg = @import("csg.zig");
+const toolutil = @import("tool_common.zig");
 pub const SparseSet = graph.SparseSet;
 const ArrayList = std.ArrayListUnmanaged;
 //Global TODO for ecs stuff
@@ -450,10 +451,14 @@ pub const Entity = struct {
     pub fn drawEnt(ent: *@This(), editor: *Editor, view_3d: Mat4, draw: *DrawCtx, draw_nd: *DrawCtx, param: struct {
         frame_color: u32 = 0x00ff00ff,
         draw_model_bb: bool = false,
+        ent_id: ?EcsT.Id = null,
+        text_param: ?*const graph.ImmediateDrawingContext.TextParam = null,
+        screen_area: graph.Rect,
     }) !void {
         //if(ent._multi_bb_index != null) {
         //    draw.cube(ent.origin)
         //}
+        const EXTRA_RENDER_DIST = 64 * 5;
         const ENT_RENDER_DIST = 64 * 10;
         const dist = ent.origin.distance(editor.draw_state.cam3d.pos);
         if (editor.draw_state.tog.models and dist < editor.draw_state.tog.model_render_dist) {
@@ -476,6 +481,13 @@ pub const Entity = struct {
                     }
                 } else {
                     try editor.loadModelFromId(m);
+                }
+            }
+        }
+        if (dist < EXTRA_RENDER_DIST and param.ent_id != null and param.text_param != null) {
+            if (try editor.ecs.getOptPtr(param.ent_id.?, .key_values)) |kvs| {
+                if (kvs.getString("targetname")) |tname| {
+                    toolutil.drawText3D(ent.origin.add(Vec3.new(0, 0, 12)), draw_nd, param.text_param.?.*, param.screen_area, view_3d, "{s}", .{tname});
                 }
             }
         }

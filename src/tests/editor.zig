@@ -132,9 +132,7 @@ test "editor init" {
         _ = try editor.selection.put(cu1, editor);
         const sl = editor.getSelected();
 
-        try std.testing.expectEqual(2, sl.len);
-        for (sl) |item|
-            if (item != cu1 and item != cu2) return error.invalidSelection;
+        try std.testing.expectEqual(3, sl.len);
     }
 }
 

@@ -87,7 +87,7 @@ pub const Ctx2dView = struct {
         {
             var ent_it = ed.ecs.iterator(.entity);
             while (ent_it.next()) |ent| {
-                try ent.drawEnt(ed, view_3d, draw, draw, .{});
+                try ent.drawEnt(ed, view_3d, draw, draw, .{ .screen_area = screen_area });
             }
         }
         const grid_color = 0x4444_44ff;

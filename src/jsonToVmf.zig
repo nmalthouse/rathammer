@@ -139,7 +139,7 @@ pub fn jsontovmf(
                 // If this is the owner of a group, don't serailize the origin.
                 // If you have a func_detail and its owner entity has a nonzero origin, the result is not what the user expects
                 // There may be owner entities which need to have a custom origin.
-                if (this_group == null) {
+                if (!shouldOmitOrigin(ent.class)) {
                     try vr.writeKey("origin");
                     try vr.printValue("\"{d} {d} {d}\"", .{ ent.origin.x(), ent.origin.y(), ent.origin.z() });
                 }
@@ -384,4 +384,22 @@ fn writeDispRow(comptime T: type, vr: anytype, items: []const T, row_w: usize) !
         try vr.endValue();
     }
     try vr.endObject();
+}
+
+/// Func detail owner origin is added as an offset to entity.
+/// Func tracktrain origin is the train's origin
+///
+/// The func detail behavior is not usefull when editing by users but the tracktrain is.
+/// so we manually omit origin from certain entity classes
+/// TODO there may be others we should omit.
+fn shouldOmitOrigin(class_name: []const u8) bool {
+    const h = std.hash.Wyhash.hash;
+    const s = 0;
+
+    return switch (h(s, class_name)) {
+        h(s, "func_detail"),
+        h(s, "func_door"),
+        => true,
+        else => false,
+    };
 }

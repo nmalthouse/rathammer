@@ -320,6 +320,11 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !PutResult {
                 if (to_remove) {
                     try self.list.removeGroup(group.id);
                 } else {
+                    // Add the group owner ent aswell, not technically a part of group but shouldn't cause issues.
+                    // Selecting a func_tracktrain and moving it will move the origin (group owner ent) aswell.
+                    if (editor.groups.getOwner(group.id)) |owner| {
+                        try self.list.add(owner, group.id);
+                    }
                     var it = editor.editIterator(.group);
                     while (it.next()) |ent| {
                         if (ent.id == group.id) {

@@ -68,9 +68,9 @@ pub fn screenSpaceRay(win_dim: graph.Vec2f, screen_pos: graph.Vec2f, view: graph
     return [2]Vec3{ ray_world, dir };
 }
 
-pub fn worldToScreenSpace(view_rect: graph.Rect, view: graph.za.Mat4, world: Vec3) graph.Vec2f {
+pub fn worldToScreenSpace(view_rect: graph.Rect, view: graph.za.Mat4, world: Vec3) ?graph.Vec2f {
     var screen = view.mulByVec4(world.toVec4(1));
-    if (screen.w() == 0) return .{ .x = 0, .y = 0 };
+    if (screen.w() <= 0) return null;
 
     const scx = (screen.x() / screen.w() + 1) / 2.0 * view_rect.w + view_rect.x;
     const scy_pre = (screen.y() / screen.w() + 1) / 2.0 * view_rect.h;

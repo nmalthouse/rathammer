@@ -218,8 +218,9 @@ pub const Translate = struct {
                 var tt = td.text_param;
                 tt.background_rect = 0xaa;
                 const sn = snapV3(angle, tool.angle_snap);
-                const ss = util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, origin);
-                self.draw_state.screen_space_text_ctx.textFmt(ss, "{d} {d} {d}", .{ sn.x(), sn.y(), sn.z() }, tt);
+                if (util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, origin)) |ss| {
+                    self.draw_state.screen_space_text_ctx.textFmt(ss, "{d} {d} {d}", .{ sn.x(), sn.y(), sn.z() }, tt);
+                }
             }
             tool.modeSwitchCube(self, origin, giz_active == .high, draw_nd, td);
             const commit = self.edit_state.rmouse == .rising;
@@ -268,7 +269,7 @@ pub const Translate = struct {
                         const quat = util3d.extEulerToQuat(snapV3(angle, tool.angle_snap));
                         copy_ent.origin = quat.rotateVec(pos_v).add(origin);
 
-                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true });
+                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area });
 
                         if (commit) {
                             angle_delta = copy_ent.angle.sub(ent.angle);
@@ -428,7 +429,7 @@ pub const Translate = struct {
                     if (giz_active == .high) {
                         var copy_ent = ent.*;
                         copy_ent.origin = ent.origin.add(dist);
-                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true });
+                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area });
                     }
                 }
             }

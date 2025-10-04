@@ -390,25 +390,27 @@ pub const CubeDraw = struct {
 
                     {
                         const pos = cc[0].add(Vec3.new(ext.x() / 2, 0, height + td.text_param.px_size * 2));
-                        const ss = util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, pos);
-                        self.draw_state.ctx.textFmt(ss, "{d}", .{ext.x()}, .{
-                            .color = 0xffff_ffff,
-                            .px_size = td.text_param.px_size,
-                            .font = td.text_param.font,
-                            .background_rect = 0x0000_00_aa,
-                        });
-                        draw.line3D(pos.add(Vec3.new(0, 0, -td.text_param.px_size)), cc[0].add(Vec3.new(ext.x() / 2, 0, 0)), 0xffff_00ff, 4);
+                        if (util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, pos)) |ss| {
+                            self.draw_state.ctx.textFmt(ss, "{d}", .{ext.x()}, .{
+                                .color = 0xffff_ffff,
+                                .px_size = td.text_param.px_size,
+                                .font = td.text_param.font,
+                                .background_rect = 0x0000_00_aa,
+                            });
+                            draw.line3D(pos.add(Vec3.new(0, 0, -td.text_param.px_size)), cc[0].add(Vec3.new(ext.x() / 2, 0, 0)), 0xffff_00ff, 4);
+                        }
                     }
                     {
                         const pos = cc[0].add(Vec3.new(0, ext.y() / 2, height + td.text_param.px_size * 2));
-                        const ss = util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, pos);
-                        self.draw_state.ctx.textFmt(ss, "{d}", .{ext.y()}, .{
-                            .color = 0xffff_ffff,
-                            .px_size = td.text_param.px_size,
-                            .font = td.text_param.font,
-                            .background_rect = 0x0000_00_aa,
-                        });
-                        draw.line3D(pos.add(Vec3.new(0, 0, -td.text_param.px_size)), cc[0].add(Vec3.new(0, ext.y() / 2, 0)), 0xffff_00ff, 4);
+                        if (util3d.worldToScreenSpace(td.screen_area, td.view_3d.*, pos)) |ss| {
+                            self.draw_state.ctx.textFmt(ss, "{d}", .{ext.y()}, .{
+                                .color = 0xffff_ffff,
+                                .px_size = td.text_param.px_size,
+                                .font = td.text_param.font,
+                                .background_rect = 0x0000_00_aa,
+                            });
+                            draw.line3D(pos.add(Vec3.new(0, 0, -td.text_param.px_size)), cc[0].add(Vec3.new(0, ext.y() / 2, 0)), 0xffff_00ff, 4);
+                        }
                     }
 
                     if (self.edit_state.lmouse == .rising and volume > tool.min_volume) {

@@ -113,14 +113,28 @@ pub fn groupSelection(ed: *Ed) !void {
     var owner: ?ecs.EcsT.Id = null;
     if (last_owner == null) {
         if (ed.edit_state.default_group_entity != .none) {
+            const group_origin = blk: {
+                if (ed.getComponent(last, .bounding_box)) |bb| {
+                    break :blk bb.b.add(bb.a).scale(0.5);
+                }
+                break :blk Vec3.zero();
+            };
+
             const new = try ed.ecs.createEntity();
+            var bb = ecs.AABB{ .a = Vec3.new(0, 0, 0), .b = Vec3.new(16, 16, 16), .origin_offset = Vec3.new(8, 8, 8) };
             try ed.ecs.attach(new, .entity, .{
+                .origin = group_origin,
                 .class = @tagName(ed.edit_state.default_group_entity),
             });
+            bb.setFromOrigin(group_origin);
+            try ed.ecs.attach(new, .bounding_box, bb);
+            try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
+            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
             owner = new;
         }
     }
     const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
+    if (owner) |o| try ed.selection.list.add(o, new_group);
     for (selection) |id| {
         const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
         try ustack.append(

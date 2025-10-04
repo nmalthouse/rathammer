@@ -112,6 +112,16 @@ pub fn draw3Dview(
     self.renderer.beginFrame();
     self.renderer.clearLights();
     self.draw_state.active_lights = 0;
+    const td = tools.ToolData{
+        .screen_area = screen_area,
+        .view_3d = &view_3d,
+        .draw = draw,
+        .text_param = .{
+            .color = 0xffff_ffff,
+            .px_size = fh,
+            .font = font,
+        },
+    };
 
     var it = self.meshmap.iterator();
     while (it.next()) |mesh| {
@@ -252,9 +262,15 @@ pub fn draw3Dview(
 
     try draw.flush(null, self.draw_state.cam3d);
     {
+        var tp = td.text_param;
+        tp.background_rect = 0xff;
         var ent_it = self.editIterator(.entity);
         while (ent_it.next()) |ent| {
-            try ent.drawEnt(self, view_3d, draw, draw_nd, .{});
+            try ent.drawEnt(self, view_3d, draw, draw_nd, .{
+                .screen_area = screen_area,
+                .text_param = &tp,
+                .ent_id = ent_it.i,
+            });
         }
     }
 
@@ -341,16 +357,6 @@ pub fn draw3Dview(
         try action.deleteSelected(self);
     }
 
-    const td = tools.ToolData{
-        .screen_area = screen_area,
-        .view_3d = &view_3d,
-        .draw = draw,
-        .text_param = .{
-            .color = 0xffff_ffff,
-            .px_size = fh,
-            .font = font,
-        },
-    };
     if (self.getCurrentTool()) |vt| {
         const selected = self.getSelected();
         if (self.draw_state.draw_outlines) {
