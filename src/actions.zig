@@ -22,14 +22,14 @@ pub fn deleteSelected(ed: *Ed) !void {
         for (selection) |id| {
             if (ed.ecs.intersects(id, vis_mask))
                 continue;
-            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, id, .destroy));
+            try ustack.append(.{ .create_destroy = try .create(ustack.alloc, id, .destroy) });
         }
-        const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+        const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
         ed.selection.list.clear();
-        const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+        const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
 
-        try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
-        Undo.applyRedo(ustack.items, ed);
+        try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
+        ustack.apply(ed);
     }
 }
 
@@ -129,7 +129,7 @@ pub fn groupSelection(ed: *Ed) !void {
             bb.setFromOrigin(group_origin);
             try ed.ecs.attach(new, .bounding_box, bb);
             try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
-            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+            try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
             owner = new;
         }
     }
@@ -137,11 +137,11 @@ pub fn groupSelection(ed: *Ed) !void {
     if (owner) |o| try ed.selection.list.add(o, new_group);
     for (selection) |id| {
         const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
-        try ustack.append(
-            try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old, new_group, id),
-        );
+        try ustack.append(.{
+            .change_group = try .create(ustack.alloc, old, new_group, id),
+        });
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
     try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
 }
 
@@ -149,7 +149,7 @@ const pgen = @import("primitive_gen.zig");
 const Primitive = pgen.Primitive;
 pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, center: Vec3, rot: graph.za.Mat3, select: bool) ![]const ecs.EcsT.Id {
     const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
-    const old_selection_state = if (select) try ed.selection.createStateSnapshot(ed.undoctx.alloc) else null;
+    const old_selection_state = if (select) try ed.selection.createStateSnapshot(ustack.alloc) else null;
     if (select) {
         ed.selection.list.clear();
         ed.selection.mode = .many;
@@ -169,7 +169,7 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
             const solid_ptr = try ed.ecs.getPtr(new, .solid);
             try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
             {
-                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+                try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
             }
         } else |a| {
             std.debug.print("Invalid cube {!}\n", .{a});
@@ -177,13 +177,13 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
     }
 
     if (select) {
-        const new_state = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+        const new_state = try ed.selection.createStateSnapshot(ustack.alloc);
         const old = old_selection_state.?;
 
-        try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old, new_state));
+        try ustack.append(.{ .selection = try .create(ustack.alloc, old, new_state) });
     }
 
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 
     return id_list.items;
 }
@@ -203,11 +203,11 @@ pub fn clearSelection(ed: *Ed) !void {
         return;
     const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
 
-    const old_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+    const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
     ed.selection.list.clear();
-    const new_selection = try ed.selection.createStateSnapshot(ed.undoctx.alloc);
+    const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
 
-    try ustack.append(try Undo.SelectionUndo.create(ed.undoctx.alloc, old_selection, new_selection));
+    try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
 }
 
 pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
@@ -245,9 +245,9 @@ pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
         const ustack = try ed.undoctx.pushNewFmt("move {d} ent to '{s}'", .{ slice.len, lay.name });
         for (slice) |sel| {
             const old = if (ed.getComponent(sel, .layer)) |l| l.id else 0;
-            try ustack.append(try Undo.UndoSetLayer.create(ed.undoctx.alloc, sel, old, lay_id));
+            try ustack.append(.{ .set_layer = try .create(ustack.alloc, sel, old, lay_id) });
         }
-        Undo.applyRedo(ustack.items, ed);
+        ustack.apply(ed);
     }
 }
 
@@ -256,8 +256,8 @@ pub fn createLayer(ed: *Ed, parent_layer: LayerId, layer_name: []const u8) !Laye
         const ustack = try ed.undoctx.pushNewFmt("Create layer", .{});
         const parent = ed.layers.getLayerFromId(parent_layer) orelse return error.invalidParent;
 
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, new_lay.id, parent_layer, parent.children.items.len, .attach));
-        Undo.applyRedo(ustack.items, ed);
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, new_lay.id, parent_layer, parent.children.items.len, .attach) });
+        ustack.apply(ed);
         return new_lay.id;
     }
     return error.failedLayerCreate;
@@ -270,7 +270,7 @@ pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
     if (ed.layers.getParent(ed.layers.root, layer)) |parent| {
         const ustack = try ed.undoctx.pushNewFmt("delete layer", .{});
 
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, layer, parent[0].id, parent[1], .detach));
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, layer, parent[0].id, parent[1], .detach) });
 
         const aa = ed.frame_arena.allocator();
         const mask = (try ed.layers.gatherChildren(aa, lay))[0];
@@ -278,11 +278,11 @@ pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
         var it = ed.editIterator(.layer);
         while (it.next()) |item| {
             if (mask.isSet(item.id)) {
-                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, it.i, .destroy));
+                try ustack.append(.{ .create_destroy = try .create(ustack.alloc, it.i, .destroy) });
             }
         }
 
-        Undo.applyRedo(ustack.items, ed);
+        ustack.apply(ed);
         if (parent[1] == 0) return parent[0].id;
         return parent[0].children.items[parent[1] - 1].id;
     }
@@ -319,7 +319,7 @@ pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
         }
 
         const ustack = try ed.undoctx.pushNewFmt("Dupe layer {s}", .{current.name});
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, new.id, parent[0].id, parent[1] + 1, .attach));
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, new.id, parent[0].id, parent[1] + 1, .attach) });
 
         var it = ed.editIterator(.layer);
         while (it.next()) |item| {
@@ -327,10 +327,10 @@ pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
                 const new_id = idmap.get(item.id) orelse continue;
                 const duped = try ed.dupeEntity(it.i);
                 ed.putComponent(duped, .layer, .{ .id = new_id });
-                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create));
+                try ustack.append(.{ .create_destroy = try .create(ustack.alloc, duped, .create) });
             }
         }
-        Undo.applyRedo(ustack.items, ed);
+        ustack.apply(ed);
     }
 }
 
@@ -347,13 +347,13 @@ pub fn mergeLayer(ed: *Ed, merge: LayerId, target_id: LayerId) !void {
     var it = ed.editIterator(.layer);
     while (it.next()) |item| {
         if (mask.isSet(item.id)) {
-            try ustack.append(try Undo.UndoSetLayer.create(ed.undoctx.alloc, it.i, item.id, target_id));
+            try ustack.append(.{ .set_layer = try .create(ustack.alloc, it.i, item.id, target_id) });
         }
     }
     if (ed.layers.getParent(ed.layers.root, merge)) |parent| {
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, merge, parent[0].id, parent[1], .detach));
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, merge, parent[0].id, parent[1], .detach) });
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 }
 
 pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: usize) !void {
@@ -365,9 +365,9 @@ pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: 
         const parent = ed.layers.getParent(ed.layers.root, moved.id) orelse return;
         const ustack = try ed.undoctx.pushNewFmt("Moved layer {s}", .{moved.name});
         //first detach, than reattach to new
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, moved.id, parent[0].id, parent[1], .detach));
-        try ustack.append(try Undo.UndoAttachLayer.create(ed.undoctx.alloc, moved.id, new_parent.id, sib_index, .attach));
-        Undo.applyRedo(ustack.items, ed);
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, moved.id, parent[0].id, parent[1], .detach) });
+        try ustack.append(.{ .attach_layer = try .create(ustack.alloc, moved.id, new_parent.id, sib_index, .attach) });
+        ustack.apply(ed);
     }
 }
 
@@ -379,20 +379,20 @@ pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
     if (list.len == 0) return;
     const ustack = try ed.undoctx.pushNewFmt("translated {d} face{s}", .{ list.len, if (list.len > 1) "s" else "" });
     for (list) |li| {
-        try ustack.append(try Undo.UndoSolidFaceTranslate.create(
-            ed.undoctx.alloc,
+        try ustack.append(.{ .face_translate = try .create(
+            ustack.alloc,
             li.id,
             li.side_i,
             dist,
-        ));
+        ) });
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 }
 
 pub fn createEntity(ed: *Ed, new: editor.EcsT.Id) !void {
     const ustack = try ed.undoctx.pushNewFmt("create entity", .{});
-    try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
-    Undo.applyRedo(ustack.items, ed);
+    try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
+    ustack.apply(ed);
 }
 
 pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
@@ -408,7 +408,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
         var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.asset_browser.selected_mat_vpk_id);
 
         ed.selection.list.clear();
-        try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, sel_id, .destroy));
+        try ustack.append(.{ .create_destroy = try .create(ustack.alloc, sel_id, .destroy) });
 
         for (&ret) |*r| {
             if (r.sides.items.len < 4) { //TODO more extensive check of validity
@@ -416,7 +416,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
                 continue;
             }
             const new = try ed.ecs.createEntity();
-            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, new, .create));
+            try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
             try ed.ecs.attach(new, .solid, r.*);
             try ed.ecs.attach(new, .bounding_box, .{});
             try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
@@ -424,7 +424,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
             try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
         }
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 }
 
 pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: Vec3, dist: Vec3) !void {
@@ -438,14 +438,14 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
         if (dupe) {
             const duped = try ed.dupeEntity(id);
 
-            try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create));
-            try ustack.append(try Undo.UndoTranslate.create(
-                ed.undoctx.alloc,
+            try ustack.append(.{ .create_destroy = try .create(ustack.alloc, duped, .create) });
+            try ustack.append(.{ .translate = try .create(
+                ustack.alloc,
                 dist,
                 angle_delta,
                 duped,
                 origin,
-            ));
+            ) });
             if (!ed.selection.ignore_groups) {
                 if (try ed.ecs.getOpt(duped, .group)) |group| {
                     if (group.id != ecs.Groups.NO_GROUP) {
@@ -457,13 +457,13 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
                 }
             }
         } else {
-            try ustack.append(try Undo.UndoTranslate.create(
-                ed.undoctx.alloc,
+            try ustack.append(.{ .translate = try .create(
+                ustack.alloc,
                 dist,
                 angle_delta,
                 id,
                 origin,
-            ));
+            ) });
         }
     }
     if (dupe) {
@@ -472,7 +472,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
             if (ed.groups.getOwner(item.key_ptr.*)) |owner| {
                 const duped = try ed.dupeEntity(owner);
 
-                try ustack.append(try Undo.UndoCreateDestroy.create(ed.undoctx.alloc, duped, .create));
+                try ustack.append(.{ .create_destroy = try .create(ustack.alloc, duped, .create) });
                 try ed.groups.setOwner(item.value_ptr.*, duped);
                 //TODO set the group owner with undo stack
             }
@@ -480,20 +480,20 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
         for (new_ent_list.items) |new_ent| {
             const old_group = try ed.ecs.get(new_ent, .group);
             const new_group = group_mapper.get(old_group.id) orelse continue;
-            try ustack.append(
-                try Undo.UndoChangeGroup.create(ed.undoctx.alloc, old_group.id, new_group, new_ent),
-            );
+            try ustack.append(.{
+                .change_group = try .create(ustack.alloc, old_group.id, new_group, new_ent),
+            });
         }
         //now iterate the new_ent_list and update the group mapping
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 }
 
 const TexState = Undo.UndoTextureManip.State;
 pub fn manipTexture(ed: *Ed, old: TexState, new: TexState, side: SelectedSide) !void {
     const ustack = try ed.undoctx.pushNewFmt("texture manip", .{});
-    try ustack.append(try Undo.UndoTextureManip.create(ed.undoctx.alloc, old, new, side.id, side.side_i));
-    Undo.applyRedo(ustack.items, ed);
+    try ustack.append(.{ .texture_manip = try .create(ustack.alloc, old, new, side.id, side.side_i) });
+    ustack.apply(ed);
 }
 
 pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
@@ -505,9 +505,9 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
                 const old_s = Undo.UndoTextureManip.State{ .u = sp.u, .v = sp.v, .tex_id = sp.tex_id, .lightmapscale = sp.lightmapscale, .smoothing_groups = sp.smoothing_groups };
                 var new_s = old_s;
                 new_s.tex_id = tex_id;
-                try ustack.append(try Undo.UndoTextureManip.create(ed.undoctx.alloc, old_s, new_s, sel_id, @intCast(side_id)));
+                try ustack.append(.{ .texture_manip = try .create(ustack.alloc, old_s, new_s, sel_id, @intCast(side_id)) });
             }
         }
     }
-    Undo.applyRedo(ustack.items, ed);
+    ustack.apply(ed);
 }

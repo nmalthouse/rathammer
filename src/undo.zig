@@ -16,28 +16,6 @@ const LayerId = Lay.Id;
 //redo calls redo on stack poniter and decrements
 //push clear anything after the stack pointer
 
-/// Any operation which changes state of game world should implement iUndo.
-/// See "UndoTemplate" for an example of implementation
-pub const iUndo = struct {
-    const Vt = @This();
-    undo_fn: *const fn (*Vt, *Editor) void,
-    redo_fn: *const fn (*Vt, *Editor) void,
-
-    deinit_fn: *const fn (*Vt, std.mem.Allocator) void,
-
-    pub fn undo(self: *Vt, editor: *Editor) void {
-        self.undo_fn(self, editor);
-    }
-
-    pub fn redo(self: *Vt, editor: *Editor) void {
-        self.redo_fn(self, editor);
-    }
-
-    pub fn deinit(self: *Vt, alloc: std.mem.Allocator) void {
-        self.deinit_fn(self, alloc);
-    }
-};
-
 // IDEA
 // mark dependancy relationships between undo items
 // SelectionUndo has no dependents, thus, can be removed from stack without side effects
@@ -50,13 +28,26 @@ pub const iUndo = struct {
 
 pub const UndoGroup = struct {
     description: []const u8,
-    items: std.ArrayList(*iUndo),
+    items: std.ArrayListUnmanaged(UndoAmal),
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.description);
-        for (self.items.items) |vt|
+        for (self.items.items) |*vt|
             vt.deinit(alloc);
-        self.items.deinit();
+        self.items.deinit(alloc);
+    }
+};
+
+pub const GroupBuilder = struct {
+    items: *std.ArrayListUnmanaged(UndoAmal),
+    alloc: std.mem.Allocator,
+
+    pub fn append(self: *const @This(), item: tt.UnionT) !void {
+        try self.items.append(self.alloc, .{ .d = item });
+    }
+
+    pub fn apply(self: *const @This(), ed: *Editor) void {
+        applyRedo(self.items.items, ed);
     }
 };
 
@@ -96,15 +87,15 @@ pub const UndoContext = struct {
     /// The returned array list should be treated as a stack.
     /// Each call to UndoContext.undo/redo will apply all the items in the arraylist at index stack_pointer.
     /// That is, the last item appended is the first item undone and the last redone.
-    pub fn pushNew(self: *Self) !*std.ArrayList(*iUndo) {
+    pub fn pushNew(self: *Self) !GroupBuilder {
         return try self.pushNewFmt("GenericUndo", .{});
     }
 
-    pub fn pushNewFmt(self: *Self, comptime fmt: []const u8, args: anytype) !*std.ArrayList(*iUndo) {
+    pub fn pushNewFmt(self: *Self, comptime fmt: []const u8, args: anytype) !GroupBuilder {
         return self.pushNewFmtOpts(fmt, args, .{});
     }
 
-    pub fn pushNewFmtOpts(self: *Self, comptime fmt: []const u8, args: anytype, opts: PushOpts) !*std.ArrayList(*iUndo) {
+    pub fn pushNewFmtOpts(self: *Self, comptime fmt: []const u8, args: anytype, opts: PushOpts) !GroupBuilder {
         var desc = std.ArrayList(u8).init(self.alloc);
         try desc.writer().print(fmt, args);
         if (self.stack_pointer > self.stack.items.len)
@@ -115,15 +106,14 @@ pub const UndoContext = struct {
         }
         try self.stack.resize(self.stack_pointer); //Discard any
         self.stack_pointer += 1;
-        const vec = std.ArrayList(*iUndo).init(self.alloc);
         const new_group = UndoGroup{
-            .items = vec,
+            .items = .{},
             .description = try desc.toOwnedSlice(),
         };
         try self.stack.append(new_group);
         if (!opts.soft_change)
             self.markDelta();
-        return &self.stack.items[self.stack.items.len - 1].items;
+        return .{ .items = &self.stack.items[self.stack.items.len - 1].items, .alloc = self.alloc };
     }
 
     pub fn undo(self: *Self, editor: *Editor) void {
@@ -158,7 +148,7 @@ pub const UndoContext = struct {
 };
 ///Rather than manually applying the operations when pushing a undo item,
 ///just call applyRedo on the stack you created.
-pub fn applyRedo(list: []const *iUndo, editor: *Editor) void {
+pub fn applyRedo(list: []const UndoAmal, editor: *Editor) void {
     for (list) |item|
         item.redo(editor);
 }
@@ -166,33 +156,28 @@ pub fn applyRedo(list: []const *iUndo, editor: *Editor) void {
 pub const SelectionUndo = struct {
     const selection = @import("selection.zig");
     const StateSnapshot = selection.StateSnapshot;
-    vt: iUndo,
 
     old: StateSnapshot,
     new: StateSnapshot,
 
     /// Assumes snapshots are allocated by 'alloc', takes memory ownership of snapshots
-    pub fn create(alloc: std.mem.Allocator, old: StateSnapshot, new: StateSnapshot) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, old: StateSnapshot, new: StateSnapshot) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
             .old = old,
             .new = new,
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @fieldParentPtr("vt", vt);
+    pub fn undo(self: *@This(), editor: *Editor) void {
         editor.selection.setFromSnapshot(self.old) catch {};
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @fieldParentPtr("vt", vt);
+    pub fn redo(self: *@This(), editor: *Editor) void {
         editor.selection.setFromSnapshot(self.new) catch {};
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @fieldParentPtr("vt", vt);
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         self.old.destroy(alloc);
         self.new.destroy(alloc);
 
@@ -202,28 +187,25 @@ pub const SelectionUndo = struct {
 
 pub const UndoTranslate = struct {
     const Quat = graph.za.Quat;
-    vt: iUndo,
 
     vec: Vec3,
     angle_delta: ?Vec3,
     rot_origin: Vec3,
     id: Id,
 
-    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: Id, rot_origin: Vec3) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: Id, rot_origin: Vec3) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
             .vec = vec,
             .angle_delta = angle_delta,
             .rot_origin = rot_origin,
             .id = id,
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
         };
-        return &obj.vt;
+        return obj;
     }
 
     //TODO translate entity about rot_origin;
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         const quat = if (self.angle_delta) |ad| util3d.extEulerToQuat(ad.scale(-1)) else null;
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translate(self.id, self.vec.scale(-1), editor, self.rot_origin, quat) catch return;
@@ -247,8 +229,7 @@ pub const UndoTranslate = struct {
             }
         }
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         const quat = if (self.angle_delta) |ad| util3d.extEulerToQuat(ad) else null;
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translate(self.id, self.vec, editor, self.rot_origin, quat) catch return;
@@ -274,48 +255,41 @@ pub const UndoTranslate = struct {
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
 
 pub const UndoVertexTranslate = struct {
-    vt: iUndo,
-
     id: Id,
     offset: Vec3,
     vert_indicies: []const u32,
     many: ?[]const Vec3,
 
     //If many is set, it should be parallel to vert_index slice and offset applies globally
-    pub fn create(alloc: std.mem.Allocator, id: Id, offset: Vec3, vert_index: []const u32, many: ?[]const Vec3) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, offset: Vec3, vert_index: []const u32, many: ?[]const Vec3) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .id = id,
             .offset = offset,
             .vert_indicies = try alloc.dupe(u32, vert_index),
             .many = if (many) |m| try alloc.dupe(Vec3, m) else null,
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translateVerts(self.id, self.offset.scale(-1), editor, self.vert_indicies, self.many, -1) catch return;
         }
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translateVerts(self.id, self.offset, editor, self.vert_indicies, self.many, 1) catch return;
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.vert_indicies);
         if (self.many) |m|
             alloc.free(m);
@@ -325,38 +299,32 @@ pub const UndoVertexTranslate = struct {
 
 //TODO deprecate, use UndoVertexTranslate
 pub const UndoSolidFaceTranslate = struct {
-    vt: iUndo,
-
     id: Id,
     side_id: usize,
     offset: Vec3,
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, side_id: usize, offset: Vec3) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, side_id: usize, offset: Vec3) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .id = id,
             .side_id = side_id,
             .offset = offset,
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translateSide(self.id, self.offset.scale(-1), editor, self.side_id) catch return;
         }
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translateSide(self.id, self.offset, editor, self.side_id) catch return;
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
@@ -366,20 +334,18 @@ pub const UndoSolidFaceTranslate = struct {
 /// Sleep/unsleep is idempotent so no need to sleep before calling applyAll
 pub const UndoCreateDestroy = struct {
     pub const Kind = enum { create, destroy };
-    vt: iUndo,
 
     id: Id,
     /// are we undoing a creation, or a destruction
     kind: Kind,
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, kind: Kind) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, kind: Kind) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .id = id,
             .kind = kind,
         };
-        return &obj.vt;
+        return obj;
     }
 
     fn undoCreate(self: *@This(), editor: *Editor) !void {
@@ -398,24 +364,21 @@ pub const UndoCreateDestroy = struct {
         }
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         switch (self.kind) {
             .create => self.undoCreate(editor) catch return,
             .destroy => self.redoCreate(editor) catch return,
         }
     }
 
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         switch (self.kind) {
             .destroy => self.undoCreate(editor) catch return,
             .create => self.redoCreate(editor) catch return,
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
@@ -435,28 +398,24 @@ pub const UndoTextureManip = struct {
 
     id: Id,
     face_id: u32,
-    vt: iUndo,
     old: State,
     new: State,
 
-    pub fn create(alloc: std.mem.Allocator, old: State, new: State, id: Id, face_id: u32) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, old: State, new: State, id: Id, face_id: u32) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .old = old,
             .new = new,
             .id = id,
             .face_id = face_id,
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         self.set(self.old, editor) catch return;
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         self.set(self.new, editor) catch return;
     }
 
@@ -476,33 +435,29 @@ pub const UndoTextureManip = struct {
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
 
 pub const UndoChangeGroup = struct {
     const GroupId = ecs.Groups.GroupId;
-    vt: iUndo,
 
     old: GroupId,
     new: GroupId,
     id: Id,
 
-    pub fn create(alloc: std.mem.Allocator, old: GroupId, new: GroupId, id: Id) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, old: GroupId, new: GroupId, id: Id) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
             .old = old,
             .new = new,
             .id = id,
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         setGroup(editor, self.id, self.old) catch return;
     }
 
@@ -515,20 +470,16 @@ pub const UndoChangeGroup = struct {
         try editor.selection.list.updateGroup(id, new_group);
     }
 
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         setGroup(editor, self.id, self.new) catch return;
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
 
 pub const UndoSetKeyValue = struct {
-    vt: iUndo,
-
     key: []const u8, //Not allocated
 
     old_value: []const u8, //Both allocated
@@ -536,19 +487,18 @@ pub const UndoSetKeyValue = struct {
 
     ent_id: Id,
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, new_value: []const u8) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, new_value: []const u8) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .key = key,
             .ent_id = id,
             .old_value = try alloc.dupe(u8, old_value),
             .new_value = try alloc.dupe(u8, new_value),
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn createFloats(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, comptime count: usize, floats: [count]f32) !*iUndo {
+    pub fn createFloats(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, comptime count: usize, floats: [count]f32) !*@This() {
         var printer = std.ArrayList(u8).init(alloc);
         defer printer.deinit();
         for (floats, 0..) |f, i| {
@@ -557,21 +507,18 @@ pub const UndoSetKeyValue = struct {
         return create(alloc, id, key, old_value, printer.items);
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.ent_id, .key_values) catch null) |kvs| {
             kvs.putString(editor, self.ent_id, self.key, self.old_value) catch return;
         }
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.ent_id, .key_values) catch null) |kvs| {
             kvs.putString(editor, self.ent_id, self.key, self.new_value) catch return;
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.old_value);
         alloc.free(self.new_value);
         alloc.destroy(self);
@@ -579,27 +526,23 @@ pub const UndoSetKeyValue = struct {
 };
 
 pub const UndoDisplacmentModify = struct {
-    vt: iUndo,
-
     id: Id,
     disp_id: u32,
     offset_offset: []const Vec3, //Added to disp.offsets on redo. Subtracted on undo
     offset_index: []const u32, //parallel to offset_offset indexes into disp.offset
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, disp_id: u32, offset: []const Vec3, index: []const u32) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, disp_id: u32, offset: []const Vec3, index: []const u32) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .offset_offset = try alloc.dupe(Vec3, offset),
             .offset_index = try alloc.dupe(u32, index),
             .id = id,
             .disp_id = disp_id,
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .displacements) catch null) |disps| {
             const disp = disps.getDispPtrFromDispId(self.disp_id) orelse return;
             for (self.offset_index, 0..) |ind, i| {
@@ -610,8 +553,7 @@ pub const UndoDisplacmentModify = struct {
         }
     }
 
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .displacements) catch null) |disps| {
             const disp = disps.getDispPtrFromDispId(self.disp_id) orelse return;
             for (self.offset_index, 0..) |ind, i| {
@@ -622,8 +564,7 @@ pub const UndoDisplacmentModify = struct {
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.offset_offset);
         alloc.free(self.offset_index);
         alloc.destroy(self);
@@ -631,21 +572,18 @@ pub const UndoDisplacmentModify = struct {
 };
 
 pub const UndoSetLayer = struct {
-    vt: iUndo,
-
     id: Id,
     old: LayerId,
     new: LayerId,
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, old: LayerId, new: LayerId) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, id: Id, old: LayerId, new: LayerId) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .id = id,
             .old = old,
             .new = new,
         };
-        return &obj.vt;
+        return obj;
     }
 
     fn set(editor: *Editor, id: Id, lay: LayerId) void {
@@ -659,18 +597,15 @@ pub const UndoSetLayer = struct {
             ptr.* = .{ .id = lay };
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         set(editor, self.id, self.old);
     }
 
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         set(editor, self.id, self.new);
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
@@ -680,34 +615,30 @@ pub const UndoAttachLayer = struct {
 
     kind: Kind,
 
-    vt: iUndo,
     layer: LayerId,
 
     parent: LayerId,
     child_index: usize,
 
-    pub fn create(alloc: std.mem.Allocator, layer: LayerId, parent: LayerId, child_index: usize, kind: Kind) !*iUndo {
-        var obj = try alloc.create(@This());
+    pub fn create(alloc: std.mem.Allocator, layer: LayerId, parent: LayerId, child_index: usize, kind: Kind) !*@This() {
+        const obj = try alloc.create(@This());
         obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
             .child_index = child_index,
             .parent = parent,
             .layer = layer,
             .kind = kind,
         };
-        return &obj.vt;
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, ed: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), ed: *Editor) void {
         switch (self.kind) {
             .attach => self.undoCreate(ed),
             .detach => self.redoCreate(ed),
         }
     }
 
-    pub fn redo(vt: *iUndo, ed: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), ed: *Editor) void {
         switch (self.kind) {
             .detach => self.undoCreate(ed),
             .attach => self.redoCreate(ed),
@@ -737,37 +668,29 @@ pub const UndoAttachLayer = struct {
         }
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
 
 /// This is a noop
 pub const UndoTemplate = struct {
-    vt: iUndo,
-
-    pub fn create(alloc: std.mem.Allocator) !*iUndo {
-        var obj = try alloc.create(@This());
-        obj.* = .{
-            .vt = .{ .undo_fn = &@This().undo, .redo_fn = &@This().redo, .deinit_fn = &@This().deinit },
-        };
-        return &obj.vt;
+    pub fn create(alloc: std.mem.Allocator) !*@This() {
+        const obj = try alloc.create(@This());
+        obj.* = .{};
+        return obj;
     }
 
-    pub fn undo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn undo(self: *@This(), editor: *Editor) void {
         _ = self;
         _ = editor;
     }
-    pub fn redo(vt: *iUndo, editor: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn redo(self: *@This(), editor: *Editor) void {
         _ = self;
         _ = editor;
     }
 
-    pub fn deinit(vt: *iUndo, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.destroy(self);
     }
 };
@@ -806,21 +729,19 @@ fn genUnion(comptime list: []const struct { [:0]const u8, type }) type {
     };
 }
 
-const t1 = struct {
-    fn deinit(self: *@This()) void {
-        _ = self;
-        std.debug.print("hello\n", .{});
-    }
-};
-const t2 = struct {
-    fn deinit(self: *@This()) void {
-        _ = self;
-        std.debug.print("hell2o\n", .{});
-    }
-};
 const tt = genUnion(&.{
-    .{ "hello", t1 },
-    .{ "boll", t2 },
+    .{ "template", UndoTemplate },
+    .{ "selection", SelectionUndo },
+    .{ "translate", UndoTranslate },
+    .{ "vertex_translate", UndoVertexTranslate },
+    .{ "face_translate", UndoSolidFaceTranslate },
+    .{ "create_destroy", UndoCreateDestroy },
+    .{ "texture_manip", UndoTextureManip },
+    .{ "change_group", UndoChangeGroup },
+    .{ "set_kv", UndoSetKeyValue },
+    .{ "disp_modify", UndoDisplacmentModify },
+    .{ "set_layer", UndoSetLayer },
+    .{ "attach_layer", UndoAttachLayer },
 });
 
 pub const UndoAmal = struct {
@@ -828,25 +749,27 @@ pub const UndoAmal = struct {
 
     d: tt.UnionT,
 
-    pub fn deinit(self: *Self) void {
+    pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
         inline for (0..tt.Count) |index| {
             const en: tt.EnumT = @enumFromInt(index);
-            if (en == self.d) {
-                @field(self.d, @tagName(en)).deinit();
-            }
+            if (en == self.d)
+                @field(self.d, @tagName(en)).deinit(alloc);
+        }
+    }
+
+    pub fn undo(self: *const Self, ed: *Editor) void {
+        inline for (0..tt.Count) |index| {
+            const en: tt.EnumT = @enumFromInt(index);
+            if (en == self.d)
+                @field(self.d, @tagName(en)).undo(ed);
+        }
+    }
+
+    pub fn redo(self: *const Self, ed: *Editor) void {
+        inline for (0..tt.Count) |index| {
+            const en: tt.EnumT = @enumFromInt(index);
+            if (en == self.d)
+                @field(self.d, @tagName(en)).redo(ed);
         }
     }
 };
-
-test "hel" {
-    _ = tt;
-
-    var myt = t1{};
-    var my2 = t2{};
-    var uu = UndoAmal{ .d = .{ .hello = &myt } };
-    var uu2 = UndoAmal{ .d = .{ .boll = &my2 } };
-
-    std.debug.print("size {d}\n", .{@sizeOf(UndoAmal)});
-    uu.deinit();
-    uu2.deinit();
-}

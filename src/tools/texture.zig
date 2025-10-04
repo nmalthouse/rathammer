@@ -272,7 +272,7 @@ pub const TextureTool = struct {
     fn textboxErr(self: *@This(), num: f32, id: usize) !void {
         if (self.selected_faces.items.len == 0) return;
         const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
-        defer undo.applyRedo(ustack.items, self.ed);
+        defer ustack.apply(self.ed);
         for (self.selected_faces.items) |sf| {
             const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
             const side = solid.getSidePtr(sf.side_i) orelse continue;
@@ -304,7 +304,7 @@ pub const TextureTool = struct {
                 if (self.win_ptr) |win|
                     win.needs_rebuild = true;
 
-                try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i));
+                try ustack.append(.{ .texture_manip = try .create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i) });
             }
         }
     }
@@ -363,14 +363,14 @@ pub const TextureTool = struct {
                 const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
                 if (self.selected_faces.items.len > 0) {
                     const ustack = try self.ed.undoctx.pushNewFmt("texture apply", .{});
-                    defer undo.applyRedo(ustack.items, self.ed);
+                    defer ustack.apply(self.ed);
                     for (self.selected_faces.items) |sf| {
                         const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
                         const side = solid.getSidePtr(sf.side_i) orelse continue;
                         const old_s = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
                         var new_s = old_s;
                         new_s.tex_id = selected_mat;
-                        try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old_s, new_s, sf.id, sf.side_i));
+                        try ustack.append(.{ .texture_manip = try .create(self.ed.undoctx.alloc, old_s, new_s, sf.id, sf.side_i) });
                     }
                 }
                 return;
@@ -379,7 +379,7 @@ pub const TextureTool = struct {
         if (self.selected_faces.items.len == 0) return;
 
         const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
-        defer undo.applyRedo(ustack.items, self.ed);
+        defer ustack.apply(self.ed);
         for (self.selected_faces.items) |sf| {
             const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
             const side = solid.getSidePtr(sf.side_i) orelse continue;
@@ -437,7 +437,7 @@ pub const TextureTool = struct {
             if (!old.eql(new)) {
                 if (self.win_ptr) |win|
                     win.needs_rebuild = true;
-                try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i));
+                try ustack.append(.{ .texture_manip = try .create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i) });
             }
         }
     }

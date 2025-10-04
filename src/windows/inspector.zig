@@ -293,11 +293,11 @@ pub const InspectorWindow = struct {
                     const ustack = try self.editor.undoctx.pushNewFmt("ungrouping of {d} objects", .{selection.len});
                     for (selection) |id| {
                         const old = if (try self.editor.ecs.getOpt(id, .group)) |g| g.id else 0;
-                        try ustack.append(
-                            try undo.UndoChangeGroup.create(self.editor.undoctx.alloc, old, 0, id),
-                        );
+                        try ustack.append(.{
+                            .change_group = try .create(self.editor.undoctx.alloc, old, 0, id),
+                        });
                     }
-                    undo.applyRedo(ustack.items, self.editor);
+                    ustack.apply(self.editor);
                     try self.editor.notify("ungrouped {d} objects", .{selection.len}, 0x00ff00ff);
                 }
             },
@@ -582,15 +582,15 @@ pub const InspectorWindow = struct {
                 floats[3] = std.fmt.parseFloat(f32, value) catch return;
                 const ustack = self.editor.undoctx.pushNewFmt("Set brightness {s}: {d}", .{ field_name, floats[3] }) catch return;
                 const old = kvs.getString(field_name) orelse "";
-                ustack.append(undo.UndoSetKeyValue.createFloats(
+                ustack.append(.{ .set_kv = undo.UndoSetKeyValue.createFloats(
                     self.editor.undoctx.alloc,
                     ent_id,
                     field_name,
                     old,
                     4,
                     floats,
-                ) catch return) catch return;
-                undo.applyRedo(ustack.items, self.editor);
+                ) catch return }) catch return;
+                ustack.apply(self.editor);
             }
         }
     }
@@ -602,14 +602,14 @@ pub const InspectorWindow = struct {
             const ent_id = self.getSelId() orelse return;
             const kvs = self.getKvsPtr() orelse return;
             const old = kvs.getString(field_name) orelse "";
-            ustack.append(undo.UndoSetKeyValue.create(
+            ustack.append(.{ .set_kv = undo.UndoSetKeyValue.create(
                 self.editor.undoctx.alloc,
                 ent_id,
                 field_name,
                 old,
                 value,
-            ) catch return) catch return;
-            undo.applyRedo(ustack.items, self.editor);
+            ) catch return }) catch return;
+            ustack.apply(self.editor);
         }
     }
 
@@ -649,15 +649,15 @@ pub const InspectorWindow = struct {
                     floats[2],
                 }) catch return;
                 const old = kvs.getString(field_name) orelse "";
-                ustack.append(undo.UndoSetKeyValue.createFloats(
+                ustack.append(.{ .set_kv = undo.UndoSetKeyValue.createFloats(
                     self.editor.undoctx.alloc,
                     ent_id,
                     field_name,
                     old,
                     4,
                     floats,
-                ) catch return) catch return;
-                undo.applyRedo(ustack.items, self.editor);
+                ) catch return }) catch return;
+                ustack.apply(self.editor);
             }
         }
     }

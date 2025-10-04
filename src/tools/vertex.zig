@@ -278,27 +278,27 @@ pub const VertexTranslate = struct {
                             try offset_index.append(manip_verts.items(.index)[ind]);
                         }
                     }
-                    try ustack.append(try undo.UndoDisplacmentModify.create(
+                    try ustack.append(.{ .disp_modify = try .create(
                         ed.undoctx.alloc,
                         id,
                         disp_id.*,
                         offsets.items,
                         offset_index.items,
-                    ));
+                    ) });
                 }
                 // Determine which disp sides are present in manip_verts
                 // for each put a dispmodify
             } else {
-                try ustack.append(try undo.UndoVertexTranslate.create(
+                try ustack.append(.{ .vertex_translate = try .create(
                     ed.undoctx.alloc,
                     id,
                     dist,
                     manip_verts.items(.index),
                     null,
-                ));
+                ) });
             }
         }
-        undo.applyRedo(ustack.items, ed);
+        ustack.apply(ed);
 
         var it = self.selected.iterator();
         while (it.next()) |item| {

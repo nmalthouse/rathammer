@@ -529,15 +529,15 @@ const Proportional = struct {
                 index[i] = @intCast(i);
             }
 
-            try ustack.append(try undo.UndoVertexTranslate.create(
+            try ustack.append(.{ .vertex_translate = try .create(
                 ed.undoctx.alloc,
                 id,
                 Vec3.zero(),
                 index,
                 temp_verts,
-            ));
+            ) });
         }
-        undo.applyRedo(ustack.items, ed);
+        ustack.apply(ed);
         self.reset();
     }
 
