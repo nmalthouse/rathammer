@@ -7,3 +7,5 @@
 * Remove extraneous GUI elements
 * add select_tex command to select any brushes matching a texture name
 * Fix func_tracktrain
+* Texture tool now works on multiple faces. The last selected face is what is shown in inspector
+* add smoothing groups slider

@@ -502,7 +502,7 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
     for (selection) |sel_id| {
         if (ed.getComponent(sel_id, .solid)) |solid| {
             for (solid.sides.items, 0..) |*sp, side_id| {
-                const old_s = Undo.UndoTextureManip.State{ .u = sp.u, .v = sp.v, .tex_id = sp.tex_id, .lightmapscale = sp.lightmapscale };
+                const old_s = Undo.UndoTextureManip.State{ .u = sp.u, .v = sp.v, .tex_id = sp.tex_id, .lightmapscale = sp.lightmapscale, .smoothing_groups = sp.smoothing_groups };
                 var new_s = old_s;
                 new_s.tex_id = tex_id;
                 try ustack.append(try Undo.UndoTextureManip.create(ed.undoctx.alloc, old_s, new_s, sel_id, @intCast(side_id)));

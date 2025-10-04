@@ -56,6 +56,8 @@ pub const TextureTool = struct {
         vn_x,
         vn_y,
         vn_z,
+
+        smooth,
     };
     vt: i3DTool,
 
@@ -195,9 +197,9 @@ pub const TextureTool = struct {
                 area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Make displacment", H.btn(self, .make_disp)));
         }
 
+        const St = Wg.StaticSlider;
         {
             const Tb = Wg.TextboxNumber.build;
-            const St = Wg.StaticSlider;
             ly.pushCount(6);
             var tly = guis.TableLayout{ .columns = 2, .item_height = ly.item_height, .bounds = ly.getArea() orelse return };
             area_vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, tly.getArea(), "X", null));
@@ -246,7 +248,13 @@ pub const TextureTool = struct {
             area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "bot", H.btn(self, .j_bottom)));
             area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "cent", H.btn(self, .j_center)));
         }
-        area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "swap axis", H.btn(self, .swap)));
+        {
+            var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
+            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "swap axis", H.btn(self, .swap)));
+            if (guis.label(area_vt, gui, win, hy.getArea(), "smooth", .{})) |ar| {
+                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .smooth, 1, 0, 32, @floatFromInt(side.smoothing_groups))));
+            }
+        }
 
         if (has_disp) {
             area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Draw normals", .{ .bool_ptr = &self.show_disp_normal }, null));
@@ -269,7 +277,7 @@ pub const TextureTool = struct {
             const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
             const side = solid.getSidePtr(sf.side_i) orelse continue;
 
-            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
             var new = old;
             switch (@as(GuiTextEnum, @enumFromInt(id))) {
                 .uscale => new.u.scale = num,
@@ -286,6 +294,11 @@ pub const TextureTool = struct {
                 .vn_x => new.v.axis.xMut().* = num,
                 .vn_y => new.v.axis.yMut().* = num,
                 .vn_z => new.v.axis.zMut().* = num,
+                .smooth => {
+                    if (num >= 0 and num <= 32) {
+                        new.smoothing_groups = @intFromFloat(@trunc(num));
+                    }
+                },
             }
             if (!old.eql(new)) {
                 if (self.win_ptr) |win|
@@ -354,7 +367,7 @@ pub const TextureTool = struct {
                     for (self.selected_faces.items) |sf| {
                         const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
                         const side = solid.getSidePtr(sf.side_i) orelse continue;
-                        const old_s = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+                        const old_s = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
                         var new_s = old_s;
                         new_s.tex_id = selected_mat;
                         try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old_s, new_s, sf.id, sf.side_i));
@@ -370,7 +383,7 @@ pub const TextureTool = struct {
         for (self.selected_faces.items) |sf| {
             const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
             const side = solid.getSidePtr(sf.side_i) orelse continue;
-            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
             var new = old;
             switch (btn_k) {
                 .apply_selection, .apply_faces => {},
@@ -395,7 +408,7 @@ pub const TextureTool = struct {
                     side.resetUv(norm, btn_k == .reset_norm);
                     solid.rebuild(sf.id, self.ed) catch return;
                     self.ed.draw_state.meshes_dirty = true;
-                    new = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+                    new = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
                 },
                 .make_disp => {
                     if (self.ed.getComponent(sf.id, .displacements) == null) {
@@ -516,8 +529,8 @@ pub const TextureTool = struct {
                             break :src side.*;
                         };
 
-                        const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
-                        const new = undo.UndoTextureManip.State{ .u = source.u, .v = source.v, .tex_id = currently_selected, .lightmapscale = side.lightmapscale };
+                        const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
+                        const new = undo.UndoTextureManip.State{ .u = source.u, .v = source.v, .tex_id = currently_selected, .lightmapscale = side.lightmapscale, .smoothing_groups = source.smoothing_groups };
 
                         try action.manipTexture(editor, old, new, .{ .id = pot[0].id, .side_i = @intCast(pot[0].side_id.?) });
                     },

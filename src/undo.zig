@@ -426,9 +426,10 @@ pub const UndoTextureManip = struct {
         v: ecs.Side.UVaxis,
         tex_id: vpk.VpkResId,
         lightmapscale: i32,
+        smoothing_groups: i32,
 
         pub fn eql(a: @This(), b: @This()) bool {
-            return a.u.eql(b.u) and a.v.eql(b.v) and a.tex_id == b.tex_id and a.lightmapscale == b.lightmapscale;
+            return a.u.eql(b.u) and a.v.eql(b.v) and a.tex_id == b.tex_id and a.lightmapscale == b.lightmapscale and a.smoothing_groups == b.smoothing_groups;
         }
     };
 
@@ -470,6 +471,7 @@ pub const UndoTextureManip = struct {
             }
             side.tex_id = new.tex_id;
             side.lightmapscale = new.lightmapscale;
+            side.smoothing_groups = new.smoothing_groups;
             try solid.rebuild(self.id, editor);
         }
     }
