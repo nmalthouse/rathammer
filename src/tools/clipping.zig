@@ -160,10 +160,12 @@ pub const Clipping = struct {
                         },
                         .point0 => self.state = .point1,
                         .point1 => {
-                            self.state = .done;
                             const dist = self.points[0].distance(self.points[1]);
-                            // We use point 0 so that the plane_p0 can be used for all points
-                            self.points[2] = self.points[0].add(self.plane_norm.scale(-dist));
+                            if (dist > 0) {
+                                self.state = .done;
+                                // We use point 0 so that the plane_p0 can be used for all points
+                                self.points[2] = self.points[0].add(self.plane_norm.scale(-dist));
+                            }
                         },
                     }
                 }
