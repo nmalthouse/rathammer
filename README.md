@@ -79,7 +79,7 @@ It is easier to cross compile for Windows from Linux than to compile natively.
 * Gui dark mode.
 * Displacement tool.
 * Multi map tabs.
-* Editing multiple faces or entities at once in the inspector.
+* Editing multiple entities at once in the inspector.
 * Drawing decals.
 
 

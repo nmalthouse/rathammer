@@ -17,11 +17,8 @@ const ecs = @import("../ecs.zig");
 const undo = @import("../undo.zig");
 const action = @import("../actions.zig");
 const snapV3 = util3d.snapV3;
+const ArrayList = std.ArrayListUnmanaged;
 
-//TODO when selection changes, change the gui
-
-// doing the justify buttns
-// idk, annoying
 pub const TextureTool = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
     const GuiBtnEnum = enum {
@@ -43,6 +40,7 @@ pub const TextureTool = struct {
         subdivide,
 
         apply_selection,
+        apply_faces,
     };
     const GuiTextEnum = enum {
         uscale,
@@ -60,8 +58,9 @@ pub const TextureTool = struct {
         vn_z,
     };
     vt: i3DTool,
-    id: ?ecs.EcsT.Id = null,
-    face_index: ?u32 = 0,
+
+    alloc: std.mem.Allocator,
+    selected_faces: ArrayList(action.SelectedSide) = .{},
 
     state: enum { pick, apply } = .apply,
     ed: *Editor,
@@ -87,10 +86,22 @@ pub const TextureTool = struct {
                 .tool_icon_fn = &@This().drawIcon,
                 .gui_build_cb = &buildGui,
                 .selected_solid_edge_color = 0xff00aa,
+                .event_fn = &event,
             },
             .ed = ed,
+            .alloc = alloc,
         };
         return &obj.vt;
+    }
+
+    pub fn event(vt: *i3DTool, ev: tools.ToolEvent, _: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        switch (ev) {
+            .focus, .reFocus => {
+                self.selected_faces.clearRetainingCapacity();
+            },
+            else => {},
+        }
     }
 
     pub fn drawIcon(vt: *i3DTool, draw: *DrawCtx, editor: *Editor, r: graph.Rect) void {
@@ -102,6 +113,7 @@ pub const TextureTool = struct {
 
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        self.selected_faces.deinit(self.alloc);
         alloc.destroy(self);
     }
 
@@ -154,10 +166,11 @@ pub const TextureTool = struct {
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space }));
         {
-            var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
+            var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
             area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Reset face world", H.btn(self, .reset_world)));
             area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Reset face norm", H.btn(self, .reset_norm)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Apply to selection", H.btn(self, .apply_selection)));
+            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Apply selection", H.btn(self, .apply_selection)));
+            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Apply face", H.btn(self, .apply_faces)));
         }
         const tex_w = area_vt.area.w / 2;
         ly.pushHeight(tex_w);
@@ -165,8 +178,9 @@ pub const TextureTool = struct {
         inspector.selectedTextureWidget(area_vt, gui, win, t_ar);
 
         //Begin all selected face stuff
-        const e_id = self.id orelse return;
-        const f_id = self.face_index orelse return;
+        const sel_face = self.selected_faces.getLastOrNull() orelse return;
+        const e_id = sel_face.id;
+        const f_id = sel_face.side_i;
         const solid = (self.ed.getComponent(e_id, .solid)) orelse return;
         if (f_id >= solid.sides.items.len) return;
         const side = &solid.sides.items[f_id];
@@ -248,56 +262,69 @@ pub const TextureTool = struct {
     }
 
     fn textboxErr(self: *@This(), num: f32, id: usize) !void {
-        const sel = (self.getCurrentlySelected(self.ed) catch null) orelse return;
-        const side = sel.side;
-        const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
-        var new = old;
-        switch (@as(GuiTextEnum, @enumFromInt(id))) {
-            .uscale => new.u.scale = num,
-            .vscale => new.v.scale = num,
-            .utrans => new.u.trans = num,
-            .vtrans => new.v.trans = num,
-            .lightmap => {
-                if (num < 1) return;
-                new.lightmapscale = @intFromFloat(num);
-            },
-            .un_x => new.u.axis.xMut().* = num,
-            .un_y => new.u.axis.yMut().* = num,
-            .un_z => new.u.axis.zMut().* = num,
-            .vn_x => new.v.axis.xMut().* = num,
-            .vn_y => new.v.axis.yMut().* = num,
-            .vn_z => new.v.axis.zMut().* = num,
-        }
-        if (!old.eql(new)) {
-            if (self.win_ptr) |win|
-                win.needs_rebuild = true;
+        if (self.selected_faces.items.len == 0) return;
+        const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
+        defer undo.applyRedo(ustack.items, self.ed);
+        for (self.selected_faces.items) |sf| {
+            const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
+            const side = solid.getSidePtr(sf.side_i) orelse continue;
 
-            try action.manipTexture(self.ed, old, new, .{ .id = self.id orelse return, .side_i = @intCast(self.face_index orelse return) });
+            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+            var new = old;
+            switch (@as(GuiTextEnum, @enumFromInt(id))) {
+                .uscale => new.u.scale = num,
+                .vscale => new.v.scale = num,
+                .utrans => new.u.trans = num,
+                .vtrans => new.v.trans = num,
+                .lightmap => {
+                    if (num < 1) return;
+                    new.lightmapscale = @intFromFloat(num);
+                },
+                .un_x => new.u.axis.xMut().* = num,
+                .un_y => new.u.axis.yMut().* = num,
+                .un_z => new.u.axis.zMut().* = num,
+                .vn_x => new.v.axis.xMut().* = num,
+                .vn_y => new.v.axis.yMut().* = num,
+                .vn_z => new.v.axis.zMut().* = num,
+            }
+            if (!old.eql(new)) {
+                if (self.win_ptr) |win|
+                    win.needs_rebuild = true;
+
+                try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i));
+            }
         }
     }
 
     fn slideCb(vt: *iArea, _: *Gui, num: f32, id: usize, state: Wg.StaticSliderOpts.State) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
         const text_k = @as(GuiTextEnum, @enumFromInt(id));
-        const sel = (self.getCurrentlySelected(self.ed) catch null) orelse return;
-        var nn = num;
-        const ptr = switch (text_k) {
-            else => return,
-            .utrans => &sel.side.u.trans,
-            .vtrans => &sel.side.v.trans,
-            .uscale => &sel.side.u.scale,
-            .vscale => &sel.side.v.scale,
-        };
-        switch (state) {
-            .rising => {
-                std.debug.print("SET STUPID {d}\n", .{num});
-                self.stupid_start = ptr.*;
-            },
-            .falling => nn = self.stupid_start,
-            else => {},
+
+        if (self.selected_faces.items.len == 0) return;
+
+        for (self.selected_faces.items) |sf| {
+            const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
+            const side = solid.getSidePtr(sf.side_i) orelse continue;
+            var nn = num;
+            const ptr = switch (text_k) {
+                else => return,
+                .utrans => &side.u.trans,
+                .vtrans => &side.v.trans,
+                .uscale => &side.u.scale,
+                .vscale => &side.v.scale,
+            };
+            switch (state) {
+                .rising => {
+                    std.debug.print("SET STUPID {d}\n", .{num});
+                    self.stupid_start = ptr.*;
+                },
+                .falling => nn = self.stupid_start,
+                else => {},
+            }
+            ptr.* = nn;
+            const sel_face = self.selected_faces.getLastOrNull() orelse return;
+            solid.translate(sel_face.id, Vec3.zero(), self.ed, Vec3.zero(), null) catch return;
         }
-        ptr.* = nn;
-        sel.solid.translate(self.id orelse return, Vec3.zero(), self.ed, Vec3.zero(), null) catch return;
     }
 
     fn slideCommit(vt: *iArea, _: *Gui, num: f32, id: usize) void {
@@ -317,86 +344,116 @@ pub const TextureTool = struct {
             .apply_selection => {
                 const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
                 try action.applyTextureToSelection(self.ed, selected_mat);
+                return;
             },
-        }
-        const sel = (self.getCurrentlySelected(self.ed) catch null) orelse return;
-        const side = sel.side;
-        const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
-        var new = old;
-        switch (btn_k) {
-            .apply_selection => {},
-            .j_fit, .j_left, .j_right, .j_top, .j_bottom, .j_center => {
-                const res = side.justify(sel.solid.verts.items, switch (btn_k) {
-                    .j_fit => .fit,
-                    .j_left => .left,
-                    .j_right => .right,
-                    .j_top => .top,
-                    .j_bottom => .bottom,
-                    .j_center => .center,
-                    else => unreachable,
-                });
-                new.u = res.u;
-                new.v = res.v;
-            },
-            .u_flip => new.u.axis = new.u.axis.scale(-1),
-            .v_flip => new.v.axis = new.v.axis.scale(-1),
-            .swap => std.mem.swap(Vec3, &new.u.axis, &new.v.axis),
-            .reset_world, .reset_norm => {
-                const norm = side.normal(sel.solid);
-                side.resetUv(norm, btn_k == .reset_norm);
-                //TODO put this into the undo stack
-                sel.solid.rebuild(self.id orelse return, self.ed) catch return;
-                self.ed.draw_state.meshes_dirty = true;
-            },
-            .make_disp => {
-                const sel_id = self.id orelse return;
-                const face_id = self.face_index orelse return;
-                if (self.ed.getComponent(sel_id, .displacements) == null) {
-                    const disp = try ecs.Displacements.init(self.ed.alloc, sel.solid.sides.items.len);
-                    try self.ed.ecs.attach(sel_id, .displacements, disp);
-                }
-                if (self.ed.getComponent(sel_id, .displacements)) |disp| {
-                    if (disp.getDispPtr(face_id) == null) {
-                        const normal = side.normal(sel.solid);
-                        var new_disp = try ecs.Displacement.init(self.ed.alloc, side.tex_id, face_id, 2, normal.scale(-1));
-                        try new_disp.genVerts(sel.solid, self.ed);
-                        try disp.put(new_disp, face_id);
+            .apply_faces => {
+                const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
+                if (self.selected_faces.items.len > 0) {
+                    const ustack = try self.ed.undoctx.pushNewFmt("texture apply", .{});
+                    defer undo.applyRedo(ustack.items, self.ed);
+                    for (self.selected_faces.items) |sf| {
+                        const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
+                        const side = solid.getSidePtr(sf.side_i) orelse continue;
+                        const old_s = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+                        var new_s = old_s;
+                        new_s.tex_id = selected_mat;
+                        try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old_s, new_s, sf.id, sf.side_i));
                     }
                 }
+                return;
+            },
+        }
+        if (self.selected_faces.items.len == 0) return;
+
+        const ustack = try self.ed.undoctx.pushNewFmt("texture manip", .{});
+        defer undo.applyRedo(ustack.items, self.ed);
+        for (self.selected_faces.items) |sf| {
+            const solid = self.ed.getComponent(sf.id, .solid) orelse continue;
+            const side = solid.getSidePtr(sf.side_i) orelse continue;
+            const old = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+            var new = old;
+            switch (btn_k) {
+                .apply_selection, .apply_faces => {},
+                .j_fit, .j_left, .j_right, .j_top, .j_bottom, .j_center => {
+                    const res = side.justify(solid.verts.items, switch (btn_k) {
+                        .j_fit => .fit,
+                        .j_left => .left,
+                        .j_right => .right,
+                        .j_top => .top,
+                        .j_bottom => .bottom,
+                        .j_center => .center,
+                        else => unreachable,
+                    });
+                    new.u = res.u;
+                    new.v = res.v;
+                },
+                .u_flip => new.u.axis = new.u.axis.scale(-1),
+                .v_flip => new.v.axis = new.v.axis.scale(-1),
+                .swap => std.mem.swap(Vec3, &new.u.axis, &new.v.axis),
+                .reset_world, .reset_norm => {
+                    const norm = side.normal(solid);
+                    side.resetUv(norm, btn_k == .reset_norm);
+                    solid.rebuild(sf.id, self.ed) catch return;
+                    self.ed.draw_state.meshes_dirty = true;
+                    new = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale };
+                },
+                .make_disp => {
+                    if (self.ed.getComponent(sf.id, .displacements) == null) {
+                        const disp = try ecs.Displacements.init(self.ed.alloc, solid.sides.items.len);
+                        try self.ed.ecs.attach(sf.id, .displacements, disp);
+                    }
+                    if (self.ed.getComponent(sf.id, .displacements)) |disp| {
+                        if (disp.getDispPtr(sf.side_i) == null) {
+                            const normal = side.normal(solid);
+                            var new_disp = try ecs.Displacement.init(self.ed.alloc, side.tex_id, sf.side_i, 2, normal.scale(-1));
+                            try new_disp.genVerts(solid, self.ed);
+                            try disp.put(new_disp, sf.side_i);
+                        }
+                    }
+                    if (self.win_ptr) |win|
+                        win.needs_rebuild = true;
+                },
+                .subdivide => {
+                    if (self.ed.getComponent(sf.id, .displacements)) |disp| {
+                        if (disp.getDispPtr(sf.side_i)) |dface| {
+                            try dface.subdivide(sf.id, self.ed);
+                        }
+                    }
+                },
+            }
+            if (!old.eql(new)) {
                 if (self.win_ptr) |win|
                     win.needs_rebuild = true;
-            },
-            .subdivide => {
-                const sel_id = self.id orelse return;
-                const face_id = self.face_index orelse return;
-                if (self.ed.getComponent(sel_id, .displacements)) |disp| {
-                    if (disp.getDispPtr(face_id)) |dface| {
-                        try dface.subdivide(sel_id, self.ed);
-                    }
-                }
-            },
-        }
-        if (!old.eql(new)) {
-            if (self.win_ptr) |win|
-                win.needs_rebuild = true;
-            try action.manipTexture(self.ed, old, new, .{ .id = self.id orelse return, .side_i = @intCast(self.face_index orelse return) });
+                try ustack.append(try undo.UndoTextureManip.create(self.ed.undoctx.alloc, old, new, sf.id, sf.side_i));
+            }
         }
     }
 
     fn getCurrentlySelected(self: *TextureTool, editor: *Editor) !?struct { solid: *ecs.Solid, side: *ecs.Side } {
-        const id = self.id orelse return null;
+        const sel_face = self.selected_faces.getLastOrNull() orelse return null;
+        const id = sel_face.id;
         const solid = editor.getComponent(id, .solid) orelse return null;
-        if (self.face_index == null or self.face_index.? >= solid.sides.items.len) return null;
+        if (sel_face.side_i >= solid.sides.items.len) return null;
 
-        return .{ .solid = solid, .side = &solid.sides.items[self.face_index.?] };
+        return .{ .solid = solid, .side = &solid.sides.items[sel_face.side_i] };
     }
 
     fn run(self: *TextureTool, td: tools.ToolData, editor: *Editor) !void {
         if (editor.edit_state.lmouse == .rising) {
             const pot = editor.screenRay(td.screen_area, td.view_3d.*);
             if (pot.len > 0) {
-                self.id = pot[0].id;
-                self.face_index = pot[0].side_id;
+                if (pot[0].side_id) |si| {
+                    var removed = false;
+                    for (self.selected_faces.items, 0..) |sf, index| {
+                        if (sf.id == pot[0].id and sf.side_i == si) {
+                            removed = true;
+                            _ = self.selected_faces.orderedRemove(index);
+                            break;
+                        }
+                    }
+                    if (!removed)
+                        try self.selected_faces.append(self.alloc, .{ .id = pot[0].id, .side_i = @intCast(si) });
+                }
             }
             if (self.win_ptr) |win|
                 win.needs_rebuild = true;
@@ -475,9 +532,11 @@ pub const TextureTool = struct {
 
         //Draw a red outline around the face
         //And other draw stuff, too
-        if (try self.getCurrentlySelected(editor)) |sel| {
-            const v = sel.solid.verts.items;
-            const ind = sel.side.index.items;
+        for (self.selected_faces.items) |sf| {
+            const solid = editor.getComponent(sf.id, .solid) orelse continue;
+            const side = &solid.sides.items[sf.side_i];
+            const v = solid.verts.items;
+            const ind = side.index.items;
             if (ind.len > 0) {
                 var last = v[ind[ind.len - 1]];
                 for (0..ind.len) |ti| {
@@ -487,7 +546,7 @@ pub const TextureTool = struct {
                 }
             }
             if (self.show_disp_normal) {
-                if (editor.getComponent(self.id orelse return, .displacements)) |disps| {
+                if (editor.getComponent(sf.id, .displacements)) |disps| {
                     for (disps.disps.items) |disp| {
                         for (disp._verts.items, 0..) |vert, i| {
                             const norm = disp.normals.items[i];
