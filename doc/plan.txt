@@ -12,7 +12,6 @@ Tools
         Subdivision?
 
     Texture tool, 2d gl view of texture like Trenchbroom
-    Multi face selection and smoothing group control
     
 Remove 2d views entirely. This will require adding a camera alignment tool and 
 a way to switch between orthographic and perspective in the main 3d view.

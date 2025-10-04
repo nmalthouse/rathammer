@@ -771,3 +771,82 @@ pub const UndoTemplate = struct {
         alloc.destroy(self);
     }
 };
+
+fn genUnion(comptime list: []const struct { [:0]const u8, type }) type {
+    var ufields: [list.len]std.builtin.Type.UnionField = undefined;
+    var efields: [list.len]std.builtin.Type.EnumField = undefined;
+    inline for (list, 0..) |lf, i| {
+        ufields[i] = .{
+            .name = lf[0],
+            .type = *lf[1],
+            .alignment = 0,
+        };
+
+        efields[i] = .{ .name = lf[0], .value = i };
+    }
+
+    const _EnumT = @Type(.{ .@"enum" = .{
+        .tag_type = u8,
+        .fields = &efields,
+        .decls = &.{},
+        .is_exhaustive = true,
+    } });
+
+    const _UnionT = @Type(.{ .@"union" = .{
+        .layout = .auto,
+        .tag_type = _EnumT,
+        .fields = &ufields,
+        .decls = &.{},
+    } });
+
+    return struct {
+        const EnumT = _EnumT;
+        const UnionT = _UnionT;
+        const Count = list.len;
+    };
+}
+
+const t1 = struct {
+    fn deinit(self: *@This()) void {
+        _ = self;
+        std.debug.print("hello\n", .{});
+    }
+};
+const t2 = struct {
+    fn deinit(self: *@This()) void {
+        _ = self;
+        std.debug.print("hell2o\n", .{});
+    }
+};
+const tt = genUnion(&.{
+    .{ "hello", t1 },
+    .{ "boll", t2 },
+});
+
+pub const UndoAmal = struct {
+    const Self = @This();
+
+    d: tt.UnionT,
+
+    pub fn deinit(self: *Self) void {
+        inline for (0..tt.Count) |index| {
+            const en: tt.EnumT = @enumFromInt(index);
+            if (en == self.d) {
+                @field(self.d, @tagName(en)).deinit();
+            }
+        }
+    }
+};
+
+test "hel" {
+    _ = tt;
+
+    var myt = t1{};
+    var my2 = t2{};
+    var uu = UndoAmal{ .d = .{ .hello = &myt } };
+    var uu2 = UndoAmal{ .d = .{ .boll = &my2 } };
+
+    std.debug.print("size {d}\n", .{@sizeOf(UndoAmal)});
+    uu.deinit();
+    uu2.deinit();
+}
