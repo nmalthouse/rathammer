@@ -288,10 +288,10 @@ pub const PauseWindow = struct {
                 vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.area }));
             }
 
-            vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.area }));
-            vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Force autosave", .{ .cb_fn = &btnCb, .id = Buttons.id(.force_autosave), .cb_vt = &self.area }));
+            //vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.area }));
+            //vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Force autosave", .{ .cb_fn = &btnCb, .id = Buttons.id(.force_autosave), .cb_vt = &self.area }));
 
-            {
+            if (false) {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
                 vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw sprite", .{ .bool_ptr = &ds.tog.sprite }, null));
                 vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw models", .{ .bool_ptr = &ds.tog.models }, null));

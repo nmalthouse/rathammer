@@ -17,6 +17,7 @@ const Commands = enum {
     help,
     select_id,
     select_class,
+    select_tex,
     fov,
     dump_selected,
     snap_selected,
@@ -136,6 +137,23 @@ pub const CommandCtx = struct {
                             _ = self.ed.selection.put(it.i, self.ed) catch |err| {
                                 try wr.print("Selection failed {!}\n", .{err});
                             };
+                        }
+                    }
+                },
+                .select_tex => {
+                    const tex = args.next() orelse return error.expectedTexturePrefix;
+                    var it = self.ed.ecs.iterator(.solid);
+                    while (it.next()) |ent| {
+                        var matches = true;
+                        for (ent.sides.items) |side| {
+                            const name = try self.ed.vpkctx.resolveId(.{ .id = side.tex_id }, false) orelse return error.invalidTexName;
+                            matches = matches and std.mem.startsWith(u8, name.name, tex);
+                            if (!matches)
+                                break;
+                        }
+
+                        if (matches) {
+                            _ = self.ed.selection.put(it.i, self.ed) catch {};
                         }
                     }
                 },

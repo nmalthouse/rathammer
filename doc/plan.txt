@@ -1,0 +1,67 @@
+Layout the current plan for rathammer.
+
+Tear out the console and replace with ipc or something.
+This will allow control of rathammer via an actual shell.
+    JsonRpc? Over ipc sockets or net? How are they framed, netstrings?
+
+Tools
+    Write a displacement tool.
+        TODO
+        Smoothing?
+        Put displacement creation in undo
+        Subdivision?
+
+    Texture tool, 2d gl view of texture like Trenchbroom
+    Multi face selection and smoothing group control
+    
+Remove 2d views entirely. This will require adding a camera alignment tool and 
+a way to switch between orthographic and perspective in the main 3d view.
+Having 3 2d views at once is antiquated, supporting an entirely different method of editing adds lots of code and bugs.
+We need a marquee for the vertex selection in 3d.
+Add a "align view to normal"
+
+Networking. Multi client editing.
+    Problems:
+        Entity allocation.
+        Desyncs
+    
+    First have a way to determine dependency of undo items. Each undo item can link to a previous one. 
+    Stick all undo items into a union rather than vtable's so they can switch() on each other.
+    All major state changes happen via undo, so a client can change state, if the server disagrees, the client just calls undo on that section of the stack. Ownership of parts of the undo stack can change, so if user 1 modifies entity 1, then user 2 modifies entity 1, ownership of all history of entity 1 is transferred to user 2. When user 2 presses ctrl+z it will undo those actions that user 1 did to entity 1.
+    
+    Each client will be have a reservation of entity ids. This allows entity creation to happen locally without requiring a network request, unless the number of entities created exceeds the current allocation. An overhead of ~1000 entities per user shouldn't cause problems.
+    Per id we have a memory overhead of (num_component + 1) * num_entities (dead or alive) * 32 bytes
+    For 10 users
+    so 12 * 1000 * 10 * 32 = 3.84 Mb
+
+    Protocol:
+        Stick a thing into undoctx which sends undo actions to server.
+        Responses from server get put in event queue.
+
+        Undoctx is all "real" state
+
+        Non essential packets include sending camera.pos/camera.front of users, drawing in progress editing of others.
+
+        How will auth be handled? 
+        UpnP?
+        Nat Punching?
+
+Obj model import and brush export.
+
+Serializing undo state.
+    Add an optional file to .ratmap which stores the undo stack.
+
+Gui stuff: 
+    Multi window support.
+    Full screen 3d viewport with inspector / texture browser on a second monitor would be cool.
+    custom gui window/widget placment. Similar to how blender does it.
+
+    !URGENT Ensure Gui elements are never cut off.
+    Add a search bar to inspector kv's
+
+FGD / Custom game
+    Replace FGD with a json specification of entities. Write a fgd -> json spec converter.
+    The format should be ECS based. Should be able to specify component relations, IE A requires B or A and B are mutually exclusive
+
+MISC
+    Investigate func_tracktrain. I think something with the kv serial is preventing it from working

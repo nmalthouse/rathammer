@@ -52,6 +52,8 @@ pub const InspectorWindow = struct {
 
     layer_widget: Layer.GuiWidget,
 
+    show_help: bool = true,
+
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
@@ -182,7 +184,7 @@ pub const InspectorWindow = struct {
                 var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp[1] };
                 ly.padding.left = 10;
                 ly.padding.right = 10;
-                ly.padding.top = 10;
+                ly.padding.top = 0;
                 self.buildValueEditor(gui, &ly, vt) catch {};
             }
             return;
@@ -294,6 +296,7 @@ pub const InspectorWindow = struct {
                 .cb_fn = &misc_btn_cb,
                 .id = @intFromEnum(MiscBtn.ungroup),
             }));
+            lay.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "show help", .{ .bool_ptr = &self.show_help }, null));
         }
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
@@ -331,7 +334,7 @@ pub const InspectorWindow = struct {
                 lay.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{ .init_string = ent.class }));
                 const eclass = ed.fgd_ctx.getPtr(ent.class) orelse return;
                 const fields = eclass.field_data.items;
-                if (eclass.doc.len > 0) { //Doc string
+                if (self.show_help and eclass.doc.len > 0) { //Doc string
                     ly.pushHeight(Wg.TextView.heightForN(gui, 4));
                     lay.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{eclass.doc}, win, .{
                         .mode = .split_on_space,
@@ -364,7 +367,7 @@ pub const InspectorWindow = struct {
             const field = &class.field_data.items[self.selected_kv_index];
 
             lay.addChildOpt(gui, &self.vt, Wg.Text.buildStatic(gui, ly.getArea(), field.name, null));
-            if (field.doc_string.len > 0) {
+            if (self.show_help and field.doc_string.len > 0) {
                 ly.pushHeight(Wg.TextView.heightForN(gui, 4));
                 lay.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{field.doc_string}, win, .{
                     .mode = .split_on_space,
