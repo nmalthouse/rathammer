@@ -1413,6 +1413,14 @@ pub const Context = struct {
 
         var jwriter = std.ArrayList(u8).init(self.alloc);
 
+        if (true) { //TODO REMOVE
+
+            var out = try std.fs.cwd().createFile("undo_dump.json", .{});
+            defer out.close();
+
+            try self.undoctx.writeToJson(out.writer());
+        }
+
         if (self.writeToJson(jwriter.writer())) {
             try self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
