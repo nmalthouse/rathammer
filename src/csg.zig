@@ -314,8 +314,6 @@ pub const Context = struct {
         const elev = disp.elevation;
         const helper = struct {
             pub fn checkArray(a: anytype, vp: usize) ?@TypeOf(a) {
-                //if (!a.was_init)
-                //    return null;
                 if (a.len < vp * vp) {
                     std.debug.print("Invalid displacement\n", .{});
                     return null;
@@ -360,7 +358,7 @@ pub const Context = struct {
         ind.clearRetainingCapacity();
         // triangulate
         const quad_per_row = vper_row - 1;
-        var left: bool = false;
+        var left: bool = true;
         for (0..quad_per_row) |q_i| {
             for (0..quad_per_row) |q_j| {
                 const in0: u32 = @intCast((q_i * vper_row) + q_j);
@@ -368,7 +366,9 @@ pub const Context = struct {
                 const in2: u32 = @intCast(((q_i + 1) * vper_row) + q_j);
                 const in3: u32 = @intCast(((q_i + 1) * vper_row) + q_j + 1);
 
-                try ind.appendSlice(disp._alloc, &.{
+                try ind.appendSlice(disp._alloc, if (left) &.{
+                    in0, in3, in2, in0, in1, in3,
+                } else &.{
                     in1, in2, in0, in3, in2, in1,
                 });
                 left = !left;
