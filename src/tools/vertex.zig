@@ -45,11 +45,9 @@ pub const VertexTranslate = struct {
 
     cb_vt: iArea = undefined,
 
-    /// The perpendicular distance between a vertex and the mouse's ray must be smaller to be a
+    /// The perpendicular distance between a vertex and the mouse's ray must be smaller than the distance from vertex to camera multiplied by this factor to be a
     /// candidate for selection.
-    /// Measured in hammer units (hu).
-    /// In the future, maybe scale this with by the distance from the camera? Seems unnecessary from testing.
-    ray_vertex_distance_max: f32 = 5,
+    ray_vertex_scale_factor: f32 = 0.04,
 
     selection_mode: enum {
         /// Add or remove all candidate verticies.
@@ -96,8 +94,9 @@ pub const VertexTranslate = struct {
     fn raycastVert(self: *Self, ray: [2]Vec3, vert: Vec3, draw: *DrawCtx, ed: *Editor) bool {
         const POT_VERT_COLOR = 0x66CDAAff;
         const proj = util3d.projectPointOntoRay(ray[0], ray[1], vert);
+        const cam_dist = ray[0].distance(vert);
         const distance = proj.distance(vert);
-        if (distance < self.ray_vertex_distance_max) {
+        if (cam_dist > 0 and distance < (cam_dist * self.ray_vertex_scale_factor)) {
             draw.point3D(vert, POT_VERT_COLOR, ed.config.dot_size);
             return true;
         }
