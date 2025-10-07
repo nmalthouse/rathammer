@@ -21,6 +21,7 @@ pub const Args = [_]graph.ArgGen.ArgItem{
     Arg("no_version_check", .flag, "Don't check for newer version over http"),
     Arg("game", .string, "Name of a game defined in config.vdf"),
     Arg("games", .flag, "List available games from config.vdf"),
+    Arg("checkhealth", .flag, "Check health of all game configs"),
 };
 
 const EventKindT = u16;

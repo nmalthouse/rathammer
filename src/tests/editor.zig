@@ -3,6 +3,7 @@ const edit = @import("../editor.zig");
 const Editor = edit.Context;
 const vpk = @import("../vpk.zig");
 const ecs = @import("../ecs.zig");
+const fs = @import("../fs.zig");
 
 pub const EditorTestCtx = struct {
     const Conf = @import("../config.zig");
@@ -22,8 +23,25 @@ pub const EditorTestCtx = struct {
         const conf = try Conf.loadConfig(alloc, @embedFile("../default_config.vdf"));
         const config = conf.config;
 
-        const app_cwd = std.fs.cwd();
-        const config_dir = std.fs.cwd();
+        const app_cwd = try fs.WrappedDir.cwd(alloc);
+        const config_dir = app_cwd;
+
+        const game_name = config.default_game;
+        const game_conf = config.games.map.get(game_name) orelse {
+            std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
+            return error.gameConfigNotFound;
+        };
+
+        var env = std.process.EnvMap.init(alloc);
+        var dirs = try fs.Dirs.open(alloc, app_cwd, .{
+            .config_dir = config_dir,
+            .app_cwd = app_cwd,
+            .override_games_dir = null,
+            .config_steam_dir = "",
+            .override_fgd_dir = null,
+            .config_fgd_dir = game_conf.fgd_dir, //TODO
+        }, &env);
+        defer dirs.deinit(alloc);
 
         var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
             .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
@@ -37,7 +55,7 @@ pub const EditorTestCtx = struct {
         ret.* = .{
             .conf = conf,
             .win = win,
-            .env = std.process.EnvMap.init(alloc),
+            .env = env,
             .alloc = alloc,
             .editor = undefined,
         };
@@ -45,7 +63,7 @@ pub const EditorTestCtx = struct {
         var arg_it = std.mem.tokenizeScalar(u8, "rathammer", ' ');
         const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
 
-        const editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &ret.loadctx, &ret.env, app_cwd, config_dir);
+        const editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &ret.loadctx, dirs);
         ret.editor = editor;
         win.pumpEvents(.poll);
         return ret;
@@ -60,6 +78,7 @@ pub const EditorTestCtx = struct {
     }
 
     pub fn deinit(self: *@This()) void {
+        self.editor.dirs.app_cwd.free(self.alloc);
         self.editor.deinit();
         self.win.destroyWindow();
         self.conf.deinit();

@@ -181,47 +181,111 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var env = try std.process.getEnvMap(alloc);
     defer env.deinit();
 
-    const app_cwd = blk: {
-        switch (builtin.target.os.tag) {
-            .linux => if (env.get("APPDIR")) |appdir| { //For appimage
-                break :blk std.fs.cwd().openDir(appdir, .{}) catch {
-                    log.err("Unable to open $APPDIR {s}", .{appdir});
-                    break :blk std.fs.cwd();
-                };
-            },
-            else => {},
-        }
-        break :blk std.fs.cwd();
-    };
+    var cwd = try fs.WrappedDir.cwd(alloc);
+    defer cwd.free(alloc);
+    var app_cwd = try fs.openAppCwd(&env, cwd, alloc);
+    defer app_cwd.close(alloc);
 
-    const config_dir = try fs.openConfigDir(alloc, std.fs.cwd(), app_cwd, args.config, &env);
+    const config_dir = try fs.openConfigDir(alloc, cwd, app_cwd, args.config, &env);
+    defer config_dir.free(alloc);
     // if user has specified a config, don't copy
     const copy_default_config = args.config == null;
-    if (config_dir.openFile(args.config orelse "config.vdf", .{})) |f| {
+    if (config_dir.dir.openFile(args.config orelse "config.vdf", .{})) |f| {
         f.close();
     } else |_| {
         if (copy_default_config) {
             log.info("config.vdf not found in config dir, copying default", .{});
-            try app_cwd.copyFile("config.vdf", config_dir, "config.vdf", .{});
+            try app_cwd.dir.copyFile("config.vdf", config_dir.dir, "config.vdf", .{});
         }
     }
 
     const load_timer = try std.time.Timer.start();
-    var loaded_config = Conf.loadConfigFromFile(alloc, config_dir, "config.vdf") catch |err| {
+    var loaded_config = Conf.loadConfigFromFile(alloc, config_dir.dir, "config.vdf") catch |err| {
         log.err("User config failed to load with error {!}", .{err});
         return error.failedConfig;
     };
     defer loaded_config.deinit();
     const config = loaded_config.config;
 
-    if (args.games != null) {
+    if (config.default_game.len == 0) {
+        std.debug.print("config.vdf must specify a default_game!\n", .{});
+        return error.incompleteConfig;
+    }
+    const game_name = args.game orelse config.default_game;
+    const game_conf = config.games.map.get(game_name) orelse {
+        std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
+        return error.gameConfigNotFound;
+    };
+
+    const default_game = args.game orelse config.default_game;
+    if (args.games != null or args.checkhealth != null) {
         const out = std.io.getStdOut();
         const wr = out.writer();
-        try wr.print("Available game configs: \n", .{});
+        const sep = "------\n";
+
+        const default_string = "default -> ";
+        const default_pad = " " ** default_string.len;
+
+        {
+            try wr.print("Available game configs: \n", .{});
+            var it = config.games.map.iterator();
+            while (it.next()) |item| {
+                try wr.print("{s}{s}\n", .{
+                    if (std.mem.eql(u8, item.key_ptr.*, default_game)) default_string else default_pad,
+                    item.key_ptr.*,
+                });
+            }
+        }
+        if (!config.games.map.contains(default_game)) try wr.print("{s} is not a defined game", .{default_game});
+        try wr.writeAll(sep);
+    }
+
+    var dirs = try fs.Dirs.open(alloc, cwd, .{
+        .config_dir = config_dir,
+        .app_cwd = app_cwd,
+        .override_games_dir = args.custom_cwd,
+        .config_steam_dir = config.paths.steam_dir,
+        .override_fgd_dir = args.fgddir,
+        .config_fgd_dir = game_conf.fgd_dir, //TODO
+    }, &env);
+    defer dirs.deinit(alloc);
+
+    if (args.games != null or args.checkhealth != null) {
+        const out = std.io.getStdOut();
+        const wr = out.writer();
+        try wr.print("App dir    : {s}\n", .{app_cwd.path});
+        try wr.print("Config dir : {s}\n", .{config_dir.path});
+        try wr.print("Games dir  : {s}\n", .{dirs.games_dir.path});
+
         var it = config.games.map.iterator();
         while (it.next()) |item| {
-            try wr.print("    {s}\n", .{item.key_ptr.*});
+            if (!std.mem.eql(u8, item.key_ptr.*, default_game) and args.checkhealth == null) continue;
+            const en = item.value_ptr;
+            try wr.print("{s}:\n", .{item.key_ptr.*});
+            var failed = false;
+            dirs.games_dir.doesFileExistInDir(en.fgd_dir, en.fgd) catch |err| {
+                failed = true;
+                try wr.print("    fgd: {!}\n", .{err});
+                try wr.print("        fgd_dir: {s}\n", .{en.fgd_dir});
+                try wr.print("        fgd    : {s}\n", .{en.fgd});
+            };
+            for (en.gameinfo.items, 0..) |ginfo, i| {
+                const name = if (ginfo.gameinfo_name.len > 0) ginfo.gameinfo_name else "gameinfo.txt";
+
+                dirs.games_dir.doesFileExistInDir(ginfo.game_dir, name) catch |err| {
+                    failed = true;
+
+                    try wr.print("    gameinfo {d}: {!}\n", .{ i, err });
+                    try wr.print("        game_dir: {s}\n", .{ginfo.game_dir});
+                    try wr.print("        gameinfo: {s}\n", .{name});
+                };
+            }
+            if (!failed)
+                try wr.print("    good", .{});
+
+            try wr.print("\n", .{});
         }
+
         return;
     }
 
@@ -272,11 +336,11 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     if (!graph.SDL.Window.glHasExtension("GL_EXT_texture_compression_s3tc")) return error.glMissingExt;
     var draw = graph.ImmediateDrawingContext.init(alloc);
     defer draw.deinit();
-    var font = try graph.Font.init(alloc, app_cwd, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{
+    var font = try graph.Font.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{
         .codepoints_to_load = &(graph.Font.CharMaps.Default),
     });
     defer font.deinit();
-    const splash = graph.Texture.initFromImgFile(alloc, app_cwd, "ratasset/small.png", .{}) catch edit.missingTexture();
+    const splash = graph.Texture.initFromImgFile(alloc, app_cwd.dir, "ratasset/small.png", .{}) catch edit.missingTexture();
 
     var loadctx = edit.LoadCtx{ .opt = .{
         .draw = &draw,
@@ -290,11 +354,11 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     var time_init = try std.time.Timer.start();
 
-    var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &loadctx, &env, app_cwd, config_dir);
+    var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &loadctx, dirs);
     defer editor.deinit();
     std.debug.print("edit init took {d} us\n", .{time_init.read() / std.time.ns_per_us});
 
-    var os9gui = try Os9Gui.init(alloc, try app_cwd.openDir("ratgraph", .{}), gui_scale, .{
+    var os9gui = try Os9Gui.init(alloc, try app_cwd.dir.openDir("ratgraph", .{}), gui_scale, .{
         .cache_dir = editor.dirs.pref,
         .font_size_px = scaled_text_height,
         .item_height = scaled_item_height,
@@ -305,7 +369,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     font_ptr = os9gui.ofont;
 
     loadctx.cb("Loading gui");
-    var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.openDir("ratgraph", .{}), &font.font);
+    var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font);
     defer gui.deinit();
     gui.style.config.default_item_h = scaled_item_height;
     gui.style.config.text_h = scaled_text_height;
@@ -319,7 +383,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .scale = gui_scale,
     };
     const inspector_win = InspectorWindow.create(&gui, editor);
-    const pause_win = try PauseWindow.create(&gui, editor, app_cwd);
+    const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
     try gui.addWindow(&pause_win.vt, Rec(0, 300, 1000, 1000));
     try gui.addWindow(&inspector_win.vt, Rec(0, 300, 1000, 1000));
     const nag_win = try NagWindow.create(&gui, editor);
@@ -328,7 +392,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const launch_win = try LaunchWindow.create(&gui, editor);
     if (args.map == null) { //Only build the recents list if we don't have a map
         var timer = try std.time.Timer.start();
-        if (config_dir.openFile("recent_maps.txt", .{})) |recent| {
+        if (config_dir.dir.openFile("recent_maps.txt", .{})) |recent| {
             defer recent.close();
             const slice = try recent.reader().readAllAlloc(alloc, std.math.maxInt(usize));
             defer alloc.free(slice);
@@ -386,7 +450,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try editor.initNewMap("sky_day01_01");
     } else {
         if (args.map) |mapname| {
-            try editor.loadMap(app_cwd, mapname, &loadctx);
+            try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
             while (!win.should_exit) {
                 switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, gui_dstate, &loadctx, editor, launch_win.should_exit)) {

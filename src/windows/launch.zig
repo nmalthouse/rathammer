@@ -134,7 +134,7 @@ pub const LaunchWindow = struct {
 
         const mname = self.recents.items[id].name;
         const name = self.editor.printScratch("{s}.ratmap", .{mname}) catch return;
-        self.editor.loadMap(self.editor.dirs.app_cwd, name, self.editor.loadctx) catch |err| {
+        self.editor.loadMap(self.editor.dirs.app_cwd.dir, name, self.editor.loadctx) catch |err| {
             std.debug.print("Can't load map {s} with {!}\n", .{ name, err });
             return;
         };

@@ -234,15 +234,7 @@ pub const Context = struct {
 
     config: Conf.Config,
     game_conf: Conf.GameEntry,
-    dirs: struct {
-        const Dir = std.fs.Dir;
-        cwd: Dir, //Should really be named, game cwd
-        app_cwd: Dir,
-        fgd: Dir,
-        pref: Dir,
-        autosave: Dir,
-        config: Dir,
-    },
+    dirs: path_guess.Dirs,
     win: *graph.SDL.Window,
 
     /// These are currently only used for baking all tool icons into an atlas.
@@ -278,7 +270,7 @@ pub const Context = struct {
 
         const aa = self.frame_arena.allocator();
         const name = std.fs.path.join(aa, &.{ lp, self.printScratch("{s}.ratmap", .{lm}) catch return null }) catch return null;
-        const full_path = self.dirs.app_cwd.realpathAlloc(aa, name) catch |err| {
+        const full_path = self.dirs.app_cwd.dir.realpathAlloc(aa, name) catch |err| {
             std.debug.print("Realpath failed with {!} on {s}\n", .{ err, name });
             return null;
         };
@@ -299,15 +291,12 @@ pub const Context = struct {
         args: anytype,
         win_ptr: *graph.SDL.Window,
         loadctx: *LoadCtx,
-        env: *std.process.EnvMap,
-        app_cwd: std.fs.Dir,
-        conf_dir: std.fs.Dir,
+        dirs: path_guess.Dirs,
     ) !*Self {
-        const shader_dir = try app_cwd.openDir("ratasset/shader", .{});
+        const shader_dir = try dirs.app_cwd.dir.openDir("ratasset/shader", .{});
         var ret = try alloc.create(Context);
         ret.* = .{
             //These are initilized in editor.postInit
-            .dirs = undefined,
             .game_conf = undefined,
             .asset = undefined,
             .asset_atlas = undefined,
@@ -346,6 +335,8 @@ pub const Context = struct {
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
             .eventctx = try app.EventCtx.create(alloc),
 
+            .dirs = dirs,
+
             .draw_state = .{
                 .ctx = graph.ImmediateDrawingContext.init(alloc),
                 .screen_space_text_ctx = DrawCtx.init(alloc),
@@ -359,12 +350,12 @@ pub const Context = struct {
         win_ptr.setUserEventCb(app.EventCtx.graph_event_cb);
         //If an error occurs during initilization it is fatal so there is no reason to clean up resources.
         //Thus we call, defer editor.deinit(); after all is initialized..
-        try ret.postInit(args, loadctx, env, app_cwd, conf_dir);
+        try ret.postInit(args, loadctx);
         return ret;
     }
 
     /// Called by init
-    fn postInit(self: *Self, args: anytype, loadctx: *LoadCtx, env: *std.process.EnvMap, app_cwd: std.fs.Dir, conf_dir: std.fs.Dir) !void {
+    fn postInit(self: *Self, args: anytype, loadctx: *LoadCtx) !void {
         if (self.config.default_game.len == 0) {
             std.debug.print("config.vdf must specify a default_game!\n", .{});
             return error.incompleteConfig;
@@ -376,61 +367,33 @@ pub const Context = struct {
         };
         self.game_conf = game_conf;
 
-        //args.custom_cwd overrides everything
-        const cwd = if (args.custom_cwd) |cc| util.openDirFatal(std.fs.cwd(), cc, .{}, "") else blk: {
-            if (self.config.paths.steam_dir.len > 0) {
-                const p = self.config.paths.steam_dir;
-                if (std.fs.cwd().openDir(p, .{})) |steam_dir| {
-                    log.info("Opened config.paths.steam_dir: {s}", .{p});
-                    break :blk steam_dir;
-                } else |err| {
-                    log.err("Failed to open config.paths.steam_dir: {s}, with error {!}", .{ p, err });
-                }
-            }
-            break :blk try path_guess.guessSteamPath(env, self.alloc) orelse {
-                log.info("Failed to guess steam path, defaulting to exe cwd ", .{});
-                break :blk std.fs.cwd();
-            };
-        };
         const custom_cwd_msg = "Set a custom cwd with --custom_cwd flag";
-        const fgd_dir = util.openDirFatal(cwd, args.fgddir orelse game_conf.fgd_dir, .{}, "");
-
-        loadctx.cb("Dir's opened");
-        const ORG = "rathammer";
-        const APP = "";
-        const path = graph.c.SDL_GetPrefPath(ORG, APP);
-        if (path == null) {
-            log.err("Unable to make pref path", .{});
-        }
-        const pref = try std.fs.cwd().makeOpenPath(std.mem.span(path), .{});
-        const autosave = try pref.makeOpenPath("autosave", .{});
-
-        try graph.AssetBake.assetBake(self.alloc, app_cwd, "ratasset", pref, "packed", .{});
-        loadctx.cb("Asset's baked");
-
-        self.asset = try graph.AssetBake.AssetMap.initFromManifest(self.alloc, pref, "packed");
-        self.asset_atlas = try graph.AssetBake.AssetMap.initTextureFromManifest(self.alloc, pref, "packed");
+        const games_dir = self.dirs.games_dir.dir;
 
         for (game_conf.gameinfo.items) |gamei| {
-            const base_dir_ = util.openDirFatal(cwd, gamei.base_dir, .{}, custom_cwd_msg);
-            const game_dir_ = util.openDirFatal(cwd, gamei.game_dir, .{}, custom_cwd_msg);
+            const base_dir_ = util.openDirFatal(games_dir, gamei.base_dir, .{}, custom_cwd_msg);
+            const game_dir_ = util.openDirFatal(games_dir, gamei.game_dir, .{}, custom_cwd_msg);
 
             try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, loadctx, if (gamei.gameinfo_name.len != 0) gamei.gameinfo_name else "gameinfo.txt");
         }
 
         if (args.basedir) |bd| {
             if (args.gamedir) |gd| {
-                const base_dir_ = util.openDirFatal(cwd, bd, .{}, custom_cwd_msg);
-                const game_dir_ = util.openDirFatal(cwd, gd, .{}, custom_cwd_msg);
+                const base_dir_ = util.openDirFatal(games_dir, bd, .{}, custom_cwd_msg);
+                const game_dir_ = util.openDirFatal(games_dir, gd, .{}, custom_cwd_msg);
                 try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, loadctx, "gameinfo.txt");
             }
         }
 
-        self.dirs = .{ .cwd = cwd, .fgd = fgd_dir, .pref = pref, .autosave = autosave, .app_cwd = app_cwd, .config = conf_dir };
+        try graph.AssetBake.assetBake(self.alloc, self.dirs.app_cwd.dir, "ratasset", self.dirs.pref, "packed", .{});
+        loadctx.cb("Asset's baked");
+
+        self.asset = try graph.AssetBake.AssetMap.initFromManifest(self.alloc, self.dirs.pref, "packed");
+        self.asset_atlas = try graph.AssetBake.AssetMap.initTextureFromManifest(self.alloc, self.dirs.pref, "packed");
 
         //try gameinfo.loadGameinfo(self.alloc, base_dir, game_dir, &self.vpkctx, loadctx);
         try self.asset_browser.populate(&self.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
-        try fgd.loadFgd(&self.fgd_ctx, fgd_dir, args.fgd orelse game_conf.fgd);
+        try fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd, args.fgd orelse game_conf.fgd);
 
         //The order in which these are registered maps to the order 'tool' keybinds are specified in config.vdf
         try self.tools.registerCustom("translate", tool_def.Translate, try tool_def.Translate.create(self.alloc, self));
@@ -1112,7 +1075,7 @@ pub const Context = struct {
         var recent = std.ArrayList([]const u8).init(self.alloc);
         defer recent.deinit();
         const aa = self.frame_arena.allocator();
-        if (self.dirs.config.openFile("recent_maps.txt", .{})) |recent_list| { //Keep track of recent maps
+        if (self.dirs.config.dir.openFile("recent_maps.txt", .{})) |recent_list| { //Keep track of recent maps
             defer recent_list.close();
 
             const slice = try recent_list.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
@@ -1135,7 +1098,7 @@ pub const Context = struct {
         }
 
         try recent.insert(0, full_path);
-        if (self.dirs.config.createFile("recent_maps.txt", .{})) |recent_out| {
+        if (self.dirs.config.dir.createFile("recent_maps.txt", .{})) |recent_out| {
             defer recent_out.close();
             for (recent.items) |rec| {
                 try recent_out.writer().print("{s}\n", .{rec});
@@ -1544,7 +1507,7 @@ pub const Context = struct {
                             .gamename = self.game_conf.mapbuilder.game_name,
 
                             .outputdir = self.game_conf.mapbuilder.output_dir,
-                            .cwd = self.dirs.cwd,
+                            .cwd = self.dirs.games_dir.dir,
                             .tmpdir = self.game_conf.mapbuilder.tmp_dir,
                         });
                     } else |err| {
