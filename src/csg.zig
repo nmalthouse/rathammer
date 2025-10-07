@@ -369,7 +369,7 @@ pub const Context = struct {
                 try ind.appendSlice(disp._alloc, if (left) &.{
                     in0, in3, in2, in0, in1, in3,
                 } else &.{
-                    in1, in2, in0, in3, in2, in1,
+                    in1, in2, in0, in1, in3, in2,
                 });
                 left = !left;
             }

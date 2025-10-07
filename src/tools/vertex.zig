@@ -322,8 +322,24 @@ pub const VertexTranslate = struct {
                 try id_mapper.put(sel, {});
 
                 for (disps.disps.items, 0..) |disp, disp_i| {
+                    if (disp._index.items.len % 3 == 0) {
+                        var i: usize = 0;
+                        while (i < disp._index.items.len) : (i += 6) {
+                            // The index are layed out such that the first and last vertices don't need to be linked
+                            // 0 3 2    0 1 3
+                            // t1       t2
+                            // line (i, i+1) -> this covers all lines once with above order
+                            // that is why we end at 5 and omit the %
+                            for (0..5) |aug| {
+                                const v1 = disp._verts.items[disp._index.items[i + aug]];
+                                const v2 = disp._verts.items[disp._index.items[(aug + 1) + i]];
+                                draw_nd.line3D(v1, v2, 0xffff00ff, 2);
+                            }
+                        }
+                    }
                     for (disp._verts.items, 0..) |vert, v_i| {
                         td.draw.point3D(vert, 0xff0000ff, 12);
+
                         if ((this_frame_had_selection and self.selection_mode == .one) or !do_selection)
                             continue; //skip raycast code but still draw the points so no flashing
 
@@ -475,10 +491,18 @@ pub const VertexTranslate = struct {
                 if (disps_o) |disps| {
                     switch (giz_active) {
                         else => {},
-                        .rising => {},
+                        .rising => {
+                            if (ed.getComponent(id, .solid)) |solid| {
+                                try solid.removeFromMeshMap(id, ed);
+                            }
+                        },
                         .falling => {
                             for (disps.disps.items) |*disp| {
                                 try disp.markForRebuild(id, ed);
+                            }
+                            if (ed.getComponent(id, .solid)) |solid| {
+                                //Dummy to put it bake in the mesh batch
+                                try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null);
                             }
                         },
                         .high => {
