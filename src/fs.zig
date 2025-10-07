@@ -54,6 +54,16 @@ pub const WrappedDir = struct {
         }
     }
 
+    pub fn doesDirExist(self: @This(), path: []const u8) bool {
+        if (self.dir.openDir(path, .{})) |di| {
+            var d = di;
+            d.close();
+            return true;
+        } else |_| {
+            return false;
+        }
+    }
+
     /// Returns null if it exists, otherwise an error message
     pub fn doesFileExistInDir(self: @This(), sub_path: []const u8, filename: []const u8) !void {
         if (self.dir.openDir(sub_path, .{})) |dir| {
@@ -95,6 +105,7 @@ pub const Dirs = struct {
         env: *std.process.EnvMap,
     ) !Dirs {
         const games_dir = try openGameDir(alloc, cwd, param.override_games_dir, param.config_steam_dir, env);
+        std.debug.print("Games dir  : {s}\n", .{games_dir.path});
         const fgd_dir = util.openDirFatal(games_dir.dir, param.override_fgd_dir orelse param.config_fgd_dir, .{}, "");
 
         const ORG = "rathammer";
@@ -145,7 +156,7 @@ pub fn guessSteamPath(env: *std.process.EnvMap, alloc: std.mem.Allocator) !?Wrap
 
 pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: WrappedDir, arg_override: ?[]const u8, env: *std.process.EnvMap) !WrappedDir {
     if (arg_override != null)
-        return cwd;
+        return try cwd.openDir(".", .{}, alloc);
 
     const xdg_config_dir = (env.get("XDG_CONFIG_DIR"));
     var config_path = std.ArrayList(u8).init(alloc);

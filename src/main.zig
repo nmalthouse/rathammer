@@ -190,17 +190,21 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer config_dir.free(alloc);
     // if user has specified a config, don't copy
     const copy_default_config = args.config == null;
-    if (config_dir.dir.openFile(args.config orelse "config.vdf", .{})) |f| {
+    const config_name = args.config orelse "config.vdf";
+    if (config_dir.dir.openFile(config_name, .{})) |f| {
         f.close();
     } else |_| {
         if (copy_default_config) {
             log.info("config.vdf not found in config dir, copying default", .{});
             try app_cwd.dir.copyFile("config.vdf", config_dir.dir, "config.vdf", .{});
+        } else {
+            log.err("Failed to open custom config {s}", .{config_name});
+            return error.failedConfig;
         }
     }
 
     const load_timer = try std.time.Timer.start();
-    var loaded_config = Conf.loadConfigFromFile(alloc, config_dir.dir, "config.vdf") catch |err| {
+    var loaded_config = Conf.loadConfigFromFile(alloc, config_dir.dir, config_name) catch |err| {
         log.err("User config failed to load with error {!}", .{err});
         return error.failedConfig;
     };
@@ -238,6 +242,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
         if (!config.games.map.contains(default_game)) try wr.print("{s} is not a defined game", .{default_game});
         try wr.writeAll(sep);
+        try wr.print("App dir    : {s}\n", .{app_cwd.path});
+        try wr.print("Config dir : {s}\n", .{config_dir.path});
     }
 
     var dirs = try fs.Dirs.open(alloc, cwd, .{
@@ -253,9 +259,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     if (args.games != null or args.checkhealth != null) {
         const out = std.io.getStdOut();
         const wr = out.writer();
-        try wr.print("App dir    : {s}\n", .{app_cwd.path});
-        try wr.print("Config dir : {s}\n", .{config_dir.path});
-        try wr.print("Games dir  : {s}\n", .{dirs.games_dir.path});
 
         var it = config.games.map.iterator();
         while (it.next()) |item| {
@@ -280,8 +283,21 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                     try wr.print("        gameinfo: {s}\n", .{name});
                 };
             }
+            { //map builder
+
+                const gdir = dirs.games_dir.doesDirExist(en.mapbuilder.game_dir);
+                const edir = dirs.games_dir.doesDirExist(en.mapbuilder.exe_dir);
+                if (!gdir or !edir) {
+                    try wr.print("    mapbuilder: \n", .{});
+                    if (!gdir)
+                        try wr.print("        game_dir: error.fileNotFound\n", .{});
+                    if (!edir)
+                        try wr.print("        exe_dir : error.fileNotFound\n", .{});
+                }
+            }
+
             if (!failed)
-                try wr.print("    good", .{});
+                try wr.print("    good\n", .{});
 
             try wr.print("\n", .{});
         }
@@ -660,7 +676,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{
-        .stack_trace_frames = if (IS_DEBUG) 0 else 0,
+        .stack_trace_frames = if (IS_DEBUG) 4 else 0,
     }){};
     const alloc = gpa.allocator();
     var arg_it = try std.process.argsWithAllocator(alloc);

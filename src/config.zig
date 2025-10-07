@@ -11,7 +11,7 @@ pub const Config = struct {
     enable_version_check: bool = true,
     paths: struct {
         steam_dir: []const u8 = "",
-    },
+    } = .{},
     autosave: struct {
         enable: bool = true,
         interval_min: u64 = 5,
@@ -94,27 +94,26 @@ pub const Config = struct {
         sensitivity_2d: f32 = 1,
 
         display_scale: f32 = -1,
-    },
+    } = .{},
     default_game: []const u8 = "",
     games: struct {
-        map: std.StringHashMap(GameEntry),
+        map: std.StringHashMapUnmanaged(GameEntry) = .{},
         pub fn parseVdf(p: *vdf.Parsed, v: *const vdf.KV.Value, alloc: std.mem.Allocator, strings_o: ?*StringStorage) !@This() {
             const strings = strings_o orelse return error.needStrings;
-            var ret = @This(){
-                .map = std.StringHashMap(GameEntry).init(alloc),
-            };
+            var ret = @This(){};
             if (v.* == .literal)
                 return error.notgood;
             for (v.obj.list.items) |entry| {
                 const str = p.stringFromId(entry.key) orelse "";
                 try ret.map.put(
+                    alloc,
                     try strings.store(str),
                     try vdf.fromValue(GameEntry, p, &entry.val, alloc, strings),
                 );
             }
             return ret;
         }
-    },
+    } = .{},
 };
 
 const builtin = @import("builtin");
@@ -123,8 +122,8 @@ pub const TMP_DIR = if (WINDOZE) "C:/rathammer_tmp" else "/tmp/mapcompile";
 
 pub const GameEntry = struct {
     pub const GameInfo = struct {
-        base_dir: []const u8,
-        game_dir: []const u8,
+        base_dir: []const u8 = "",
+        game_dir: []const u8 = "",
         gameinfo_name: []const u8 = "", //Optional
     };
     pub const MapBuilder = struct {
@@ -136,10 +135,10 @@ pub const GameEntry = struct {
     };
     gameinfo: ArrayList(GameInfo) = .{},
 
-    fgd_dir: []const u8,
-    fgd: []const u8,
+    fgd_dir: []const u8 = "",
+    fgd: []const u8 = "",
 
-    mapbuilder: MapBuilder,
+    mapbuilder: MapBuilder = .{},
 
     asset_browser_exclude: struct {
         prefix: []const u8 = "",
@@ -158,7 +157,7 @@ pub const ConfigCtx = struct {
             item.asset_browser_exclude.entry.deinit(self.alloc);
             item.gameinfo.deinit(self.alloc);
         }
-        self.config.games.map.deinit();
+        self.config.games.map.deinit(self.alloc);
         self.config.keys.workspace.deinit(self.alloc);
         self.config.keys.tool.deinit(self.alloc);
         self.config.keys.inspector_tab.deinit(self.alloc);

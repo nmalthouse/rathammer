@@ -9,3 +9,4 @@
 * Fix func_tracktrain
 * Texture tool now works on multiple faces. The last selected face is what is shown in inspector
 * add smoothing groups slider
+* Add --checkhealth and --games flags to print config info

@@ -195,7 +195,7 @@ pub const Entity = struct {
     editor: EditorInfo = .{},
     connections: Connections = .{},
 
-    rest_kvs: vdf.KVMap,
+    rest_kvs: vdf.KVMap = .{},
 };
 pub const Side = struct {
     pub const UvCoord = struct {
@@ -235,8 +235,8 @@ pub const Side = struct {
 
             return self;
         }
-        tri: [3]vdf.Vec3,
-    },
+        tri: [3]vdf.Vec3 = [_]vdf.Vec3{vdf.Vec3.zero()} ** 3,
+    } = .{},
 
     uaxis: UvCoord = .{},
     vaxis: UvCoord = .{},

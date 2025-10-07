@@ -366,7 +366,7 @@ pub fn getArrayListChild(comptime T: type) ?type {
     return null;
 }
 
-pub const KVMap = std.AutoHashMap(StringKey, []const u8);
+pub const KVMap = std.AutoHashMapUnmanaged(StringKey, []const u8);
 const MAX_KVS = 512;
 const KVT = std.bit_set.StaticBitSet(MAX_KVS);
 threadlocal var from_value_visit_tracker = KVT.initEmpty();
@@ -381,13 +381,12 @@ pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, allo
 
             //IF hasField vdf_generic then
             //add any fields that were not visted to vdf_generic
-            var ret: T = undefined;
+            var ret: T = .{};
             if (value.* != .obj) {
                 return error.broken;
             }
             const DO_REST = @hasField(T, "rest_kvs");
             if (DO_REST) {
-                ret.rest_kvs = KVMap.init(alloc);
                 from_value_visit_tracker = KVT.initEmpty();
                 if (value.obj.list.items.len > MAX_KVS)
                     return error.tooManyKeys;
@@ -439,7 +438,7 @@ pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, allo
                     if (bit_i >= value.obj.list.items.len) break;
                     const v = &value.obj.list.items[bit_i];
                     if (v.val == .literal) {
-                        try ret.rest_kvs.put(v.key, v.val.literal);
+                        try ret.rest_kvs.put(alloc, v.key, v.val.literal);
                     }
                 }
             }
