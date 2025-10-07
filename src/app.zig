@@ -12,7 +12,6 @@ pub const Args = [_]graph.ArgGen.ArgItem{
     Arg("gui_scale", .number, "Scale the gui"),
     Arg("gui_font_size", .number, "pixel size of font"),
     Arg("gui_item_height", .number, "item height in pixels / gui_scale"),
-    Arg("game", .string, "Name of a game defined in config.vdf"),
     Arg("custom_cwd", .string, "override the directory used for game"),
     Arg("fontfile", .string, "load custom font"),
     Arg("display_scale", .number, "override detected display scale, should be ~ 0.2-3"),
@@ -20,6 +19,8 @@ pub const Args = [_]graph.ArgGen.ArgItem{
     Arg("version", .flag, "Print rathammer version and exit"),
     Arg("build", .flag, "Print rathammer build info as json and exit"),
     Arg("no_version_check", .flag, "Don't check for newer version over http"),
+    Arg("game", .string, "Name of a game defined in config.vdf"),
+    Arg("games", .flag, "List available games from config.vdf"),
 };
 
 const EventKindT = u16;

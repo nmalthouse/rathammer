@@ -26,6 +26,7 @@ const InspectorWindow = @import("windows/inspector.zig").InspectorWindow;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
 const panereg = @import("pane.zig");
 const json_map = @import("json_map.zig");
+const fs = @import("fs.zig");
 
 const build_config = @import("config");
 const Conf = @import("config.zig");
@@ -192,37 +193,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
         break :blk std.fs.cwd();
     };
-    //Relative to app_cwd
-    const xdg_dir = (env.get("XDG_CONFIG_DIR"));
 
-    const config_dir: std.fs.Dir = blk: {
-        if (args.config != null)
-            break :blk std.fs.cwd();
-
-        var config_path = std.ArrayList(u8).init(alloc);
-        defer config_path.deinit();
-        if (xdg_dir) |x| {
-            try config_path.writer().print("{s}/rathammer", .{x});
-        } else {
-            switch (builtin.target.os.tag) {
-                // Workaround to weird ntdll segfault.
-                // Sometimes an invalidStatus error with openFile(recent_maps) -> STATUS_OBJECT_TYPE_MISMATCH   0xC0000024
-                // Sometimes it segfaults on INVALID_STATUS
-                // Seems to be involve a race condition
-                // app_cwd and config_dir are never closed so this makes no sense.
-                .windows => break :blk try app_cwd.openDir(".", .{}),
-                else => {
-                    if (env.get("HOME")) |home| {
-                        try config_path.writer().print("{s}/.config/rathammer", .{home});
-                    } else {
-                        log.info("XDG_CONFIG_HOME and $HOME not defined, using config in app dir", .{});
-                        break :blk app_cwd;
-                    }
-                },
-            }
-        }
-        break :blk app_cwd.makeOpenPath(config_path.items, .{}) catch break :blk app_cwd;
-    };
+    const config_dir = try fs.openConfigDir(alloc, std.fs.cwd(), app_cwd, args.config, &env);
     // if user has specified a config, don't copy
     const copy_default_config = args.config == null;
     if (config_dir.openFile(args.config orelse "config.vdf", .{})) |f| {
@@ -241,6 +213,18 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     };
     defer loaded_config.deinit();
     const config = loaded_config.config;
+
+    if (args.games != null) {
+        const out = std.io.getStdOut();
+        const wr = out.writer();
+        try wr.print("Available game configs: \n", .{});
+        var it = config.games.map.iterator();
+        while (it.next()) |item| {
+            try wr.print("    {s}\n", .{item.key_ptr.*});
+        }
+        return;
+    }
+
     var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
         .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
         .frame_sync = .adaptive_vsync,
@@ -264,7 +248,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const DPI_presets = [_]Preset{
         .{ .dpi = 1, .fh = 14, .ih = 25, .scale = 1 },
-        .{ .dpi = 1.7, .fh = 24, .ih = 42 },
+        .{ .dpi = 1.7, .fh = 18, .ih = 28, .scale = 2 },
     };
     const config_display_scale = if (config.window.display_scale > 0) config.window.display_scale else null;
     const sc = args.display_scale orelse config_display_scale orelse try dpiDetect(&win);

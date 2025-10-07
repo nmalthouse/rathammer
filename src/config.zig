@@ -249,7 +249,8 @@ pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []con
 
     var realpath_buf: [256]u8 = undefined;
     if (dir.realpath(path, &realpath_buf)) |rp| {
-        std.debug.print("Loading config file: {s}\n", .{rp});
+        const out = std.io.getStdOut();
+        try out.writer().print("Loading config file: {s}\n", .{rp});
     } else |_| {
         std.debug.print("Realpath failed when loading config\n", .{});
     }
