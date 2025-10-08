@@ -229,7 +229,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         return error.failedConfig;
     };
     defer loaded_config.deinit();
-    try loaded_config.loadLooseGameConfigs(config_dir.dir, "games");
+    loaded_config.loadLooseGameConfigs(config_dir.dir, "games") catch |err| {
+        switch (err) {
+            else => return err,
+            error.FileNotFound => {},
+        }
+    };
     const config = loaded_config.config;
 
     if (config.default_game.len == 0) {
