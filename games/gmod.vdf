@@ -1,0 +1,32 @@
+gameinfo {
+    base_dir    "GarrysMod"
+    game_dir    "GarrysMod/garrysmod"
+}
+
+// RatHammer does not support gmod's method of mounting additional games. 
+// Specify them using additional gameinfo {} instead
+gameinfo {
+    base_dir    "Counter-Strike Source"
+    game_dir    "Counter-Strike Source/cstrike"
+}
+
+mapbuilder {
+    game_dir    "GarrysMod"
+    exe_dir     "GarrysMod/BIN"
+    game_name   "garrysmod"
+    output_dir  "garrysmod/maps"
+}
+
+fgd_dir     "GarrysMod/BIN"
+fgd         "garrysmod.fgd"
+
+asset_browser_exclude {
+    prefix "materials/"
+    entry "models"
+    entry "gamepadui"
+    entry "skybox"
+    entry "vgui"
+    entry "particle"
+    entry "console"
+    entry "sprites"
+}

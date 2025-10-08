@@ -10,7 +10,7 @@ pub const EditorTestCtx = struct {
     const app = @import("../app.zig");
     const IS_DEBUG = false;
 
-    conf: Conf.ConfigCtx,
+    conf: *Conf.ConfigCtx,
     editor: *Editor,
     win: graph.SDL.Window,
     loadctx: edit.LoadCtx = .{},

@@ -197,11 +197,31 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (copy_default_config) {
             log.info("config.vdf not found in config dir, copying default", .{});
             try app_cwd.dir.copyFile("config.vdf", config_dir.dir, "config.vdf", .{});
+
+            const games_config_dir = try config_dir.dir.makeOpenPath("games", .{});
+
+            const default_games_config = try app_cwd.dir.openDir("games", .{ .iterate = true });
+            var walker = try default_games_config.walk(alloc);
+            defer walker.deinit();
+
+            //TODO if games contains sub dirs, files are flattened
+            while (try walker.next()) |item| {
+                switch (item.kind) {
+                    else => {},
+                    .file => {
+                        try item.dir.copyFile(item.basename, games_config_dir, item.basename, .{});
+                    },
+                }
+            }
         } else {
             log.err("Failed to open custom config {s}", .{config_name});
             return error.failedConfig;
         }
     }
+
+    if (config_dir.dir.openDir("games", .{ .iterate = true })) |game_dir| {
+        _ = game_dir;
+    } else |_| {}
 
     const load_timer = try std.time.Timer.start();
     var loaded_config = Conf.loadConfigFromFile(alloc, config_dir.dir, config_name) catch |err| {
@@ -209,6 +229,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         return error.failedConfig;
     };
     defer loaded_config.deinit();
+    try loaded_config.loadLooseGameConfigs(config_dir.dir, "games");
     const config = loaded_config.config;
 
     if (config.default_game.len == 0) {
@@ -676,7 +697,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{
-        .stack_trace_frames = if (IS_DEBUG) 4 else 0,
+        .stack_trace_frames = if (IS_DEBUG) 0 else 0,
     }){};
     const alloc = gpa.allocator();
     var arg_it = try std.process.argsWithAllocator(alloc);

@@ -1,0 +1,25 @@
+gameinfo {
+    base_dir    "Counter-Strike Source"
+    game_dir    "Counter-Strike Source/cstrike"
+}
+
+fgd_dir     "Counter-Strike Source/BIN"
+fgd         "cstrike.fgd"
+
+mapbuilder {
+    game_dir    "Counter-Strike Source"
+    exe_dir     "Counter-Strike Source/BIN"
+    game_name   "cstrike"
+    output_dir  "cstrike/maps"
+}
+
+asset_browser_exclude {
+    prefix "materials/"
+    entry "models"
+    entry "gamepadui"
+    entry "skybox"
+    entry "vgui"
+    entry "particle"
+    entry "console"
+    entry "sprites"
+}

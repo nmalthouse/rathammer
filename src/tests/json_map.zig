@@ -20,7 +20,7 @@ const ex = std.testing.expectEqualDeep;
 test {
     const alloc = std.testing.allocator;
 
-    var strings = Str.StringStorage.init(alloc);
+    var strings = try Str.StringStorage.init(alloc);
     defer strings.deinit();
 
     const ctx = jm.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };
@@ -81,7 +81,7 @@ test {
 test "array list" {
     const alloc = std.testing.allocator;
 
-    var strings = Str.StringStorage.init(alloc);
+    var strings = try Str.StringStorage.init(alloc);
     defer strings.deinit();
 
     const ctx = jm.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };

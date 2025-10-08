@@ -200,7 +200,7 @@ pub const Context = struct {
             .split_buf = std.ArrayList(u8).init(alloc),
             .dirs = std.ArrayList(Dir).init(alloc),
             .filebuf = std.ArrayList(u8).init(alloc),
-            .string_storage = StringStorage.init(alloc),
+            .string_storage = try StringStorage.init(alloc),
             .alloc = alloc,
             .vpk_dump_file = if (config.dump_vpk) try std.fs.cwd().createFile("vpkdump.txt", .{}) else {},
         };

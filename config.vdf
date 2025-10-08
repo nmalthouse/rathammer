@@ -122,8 +122,13 @@ games {
             
         }
     }
-
-
+    
+    // Game configs can be specifed here or in a 
+    // a folder called games located in the config directory
+    // ls ~/.config/rathammer/
+    //      config.vdf games
+    // ls ~/.config/rathammer/games/
+    //      tf2.vdf gmod.vdf
     basic_hl2 {
         // Each game can mount multiple game infos
         gameinfo {
@@ -161,193 +166,6 @@ games {
             entry "console"
             entry "sprites"
             entry "backpack"
-        }
-    }
-
-    tf2 {
-        gameinfo {
-            base_dir "Team Fortress 2"
-            game_dir "Team Fortress 2/tf"
-        }
-
-
-        fgd_dir     "Team Fortress 2/BIN"
-        fgd         "tf.fgd"
-        
-        mapbuilder {
-            game_dir    "Team Fortress 2"
-            // For linux, install the game with proton, copy the bin folder somewhere,
-            // Disable proton and update, copy bin to BIN 
-            // On linux bin and BIN are different, to wine they are the same
-            exe_dir    "Team Fortress 2/BIN"
-            game_name   "tf"
-            output_dir  "tf/maps"
-        }
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry "models"
-            entry "effects"
-            entry "gamepadui"
-            entry "skybox"
-            entry "vgui"
-            entry "particle"
-            entry "console"
-            entry "sprites"
-            entry "backpack"
-        }
-    }
-
-    cstrike {
-        gameinfo {
-            base_dir    "Counter-Strike Source"
-            game_dir    "Counter-Strike Source/cstrike"
-        }
-
-        fgd_dir     "Counter-Strike Source/BIN"
-        fgd         "cstrike.fgd"
-
-        mapbuilder {
-            game_dir    "Counter-Strike Source"
-            exe_dir     "Counter-Strike Source/BIN"
-            game_name   "cstrike"
-            output_dir  "cstrike/maps"
-        }
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry "models"
-            entry "gamepadui"
-            entry "skybox"
-            entry "vgui"
-            entry "particle"
-            entry "console"
-            entry "sprites"
-        }
-    }
-
-    portal {
-        gameinfo {
-            base_dir    "Portal"
-            game_dir    "Portal/portal"
-        }
-
-        mapbuilder {
-            game_dir    "Portal"
-            exe_dir     "Portal/BIN"
-            game_name   "portal"
-            output_dir  "portal/maps"
-        }
-
-        fgd_dir     "Portal/BIN"
-        fgd         "portal.fgd"
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry "models"
-            entry "gamepadui"
-            entry "skybox"
-            entry "vgui"
-            entry "particle"
-            entry "console"
-            entry "sprites"
-        }
-    }
-
-    portal2 {
-        gameinfo {
-            base_dir    "Portal 2"
-            game_dir    "Portal 2/portal2"
-            // Portal 2 uses a different format for gameinfo than other source games. 
-            // Rather than supporting yet another way of (implicitly) specifing vpks we write a custom gameinfo.
-            // Copy the gameinfo_portal2.txt from extra into Portal 2/portal2/
-            gameinfo_name "gameinfo_portal2.txt" 
-        }
-
-        fgd_dir     "Portal 2/BIN"
-        fgd         "portal2.fgd"
-
-        mapbuilder {
-            game_dir    "Portal 2"
-            exe_dir     "Portal 2/BIN"
-            game_name   "portal2"
-            output_dir  "portal2/maps"
-            tmp_dir     "Portal 2/map_build" //Portal2 vbsp can't write elsewhere
-        }
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry "models"
-            entry "gamepadui"
-            entry "skybox"
-            entry "vgui"
-            entry "particle"
-            entry "console"
-            entry "sprites"
-        }
-    }
-
-    black_mesa {
-
-        fgd_dir     "Black Mesa/BIN"
-        fgd         "bms.fgd"
-
-        gameinfo {
-            base_dir    "Black Mesa"
-            game_dir    "Black Mesa/bms"
-        }
-
-        mapbuilder {
-            game_dir    "Black Mesa"
-            exe_dir     "Black Mesa/BIN"
-            game_name   "bms"
-            output_dir  "bms/maps"
-        }
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry   "models"
-            entry   "gamepadui"
-            entry   "skybox"
-            entry   "vgui"
-            entry   "particle"
-            entry   "console"
-            entry   "sprites"
-        }
-    }
-    
-    gmod {
-        gameinfo {
-            base_dir    "GarrysMod"
-            game_dir    "GarrysMod/garrysmod"
-        }
-
-        // RatHammer does not support gmod's method of mounting additional games. 
-        // Specify them using additional gameinfo {} instead
-        gameinfo {
-            base_dir    "Counter-Strike Source"
-            game_dir    "Counter-Strike Source/cstrike"
-        }
-        
-        mapbuilder {
-            game_dir    "GarrysMod"
-            exe_dir     "GarrysMod/BIN"
-            game_name   "garrysmod"
-            output_dir  "garrysmod/maps"
-        }
-
-        fgd_dir     "GarrysMod/BIN"
-        fgd         "garrysmod.fgd"
-
-        asset_browser_exclude {
-            prefix "materials/"
-            entry "models"
-            entry "gamepadui"
-            entry "skybox"
-            entry "vgui"
-            entry "particle"
-            entry "console"
-            entry "sprites"
         }
     }
 }

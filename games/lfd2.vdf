@@ -1,0 +1,28 @@
+gameinfo {
+    base_dir        "Left 4 Dead 2"
+    game_dir        "Left 4 Dead 2/left4dead2"
+    //Rathammer does not support the portal2/lfd2 gameinfo format, copy the gameinfo_l4d2.txt from extra/
+    gameinfo_name   "gameinfo_l4d2.txt"
+}
+
+mapbuilder {
+    game_dir    "Left 4 Dead 2"
+    exe_dir     "Left 4 Dead 2/bin"
+    game_name   "left4dead2"
+    output_dir  "left4dead2/maps"
+}
+
+//Make sure to install the authoring tools.
+fgd_dir     "Left 4 Dead 2/bin"
+fgd         "left4dead2.fgd"
+
+asset_browser_exclude {
+    prefix "materials/"
+    entry "models"
+    entry "gamepadui"
+    entry "skybox"
+    entry "vgui"
+    entry "particle"
+    entry "console"
+    entry "sprites"
+}

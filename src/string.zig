@@ -3,24 +3,26 @@ pub const StringStorage = struct {
     const Self = @This();
 
     set: std.StringHashMap(void),
-    arena: std.heap.ArenaAllocator,
-    alloc: ?std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
+    retained_alloc: std.mem.Allocator,
+    arena_alloc: std.mem.Allocator,
 
-    pub fn init(alloc: std.mem.Allocator) Self {
+    pub fn init(alloc: std.mem.Allocator) !Self {
+        const arena = try alloc.create(std.heap.ArenaAllocator);
+        //We store this on the heap so we don't have to call arena.allocator on every store()
+        arena.* = std.heap.ArenaAllocator.init(alloc);
         return .{
-            .arena = std.heap.ArenaAllocator.init(alloc),
+            .arena = arena,
             .set = std.StringHashMap(void).init(alloc),
-            .alloc = null,
+            .retained_alloc = alloc,
+            .arena_alloc = arena.allocator(),
         };
     }
 
     pub fn store(self: *Self, string: []const u8) ![]const u8 {
         if (self.set.getKey(string)) |str| return str;
 
-        if (self.alloc == null)
-            self.alloc = self.arena.allocator();
-
-        const str = try self.alloc.?.dupe(u8, string);
+        const str = try self.arena_alloc.dupe(u8, string);
         try self.set.put(str, {});
         return str;
     }
@@ -28,6 +30,7 @@ pub const StringStorage = struct {
     pub fn deinit(self: *Self) void {
         self.set.deinit();
         self.arena.deinit();
+        self.retained_alloc.destroy(self.arena);
     }
 };
 
@@ -41,7 +44,7 @@ pub const DummyStorage = struct {
 
 test {
     const alloc = std.testing.allocator;
-    var str = StringStorage.init(alloc);
+    var str = try StringStorage.init(alloc);
     defer str.deinit();
     const hello = try str.store("hello");
     const hello_jp = try str.store("今日は");

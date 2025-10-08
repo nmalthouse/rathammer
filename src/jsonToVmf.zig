@@ -237,7 +237,7 @@ pub fn main() !void {
             }
         };
 
-        var strings = StringStorage.init(alloc);
+        var strings = try StringStorage.init(alloc);
         var ecs_p = try ecs.EcsT.init(alloc);
 
         var vpkmapper = json_map.VpkMapper.init(alloc);

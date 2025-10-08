@@ -151,6 +151,39 @@ pub const ConfigCtx = struct {
     strings: StringStorage,
     alloc: std.mem.Allocator,
 
+    pub fn loadLooseGameConfigs(self: *@This(), dir: std.fs.Dir, dir_name: []const u8) !void {
+        var iter = try dir.openDir(dir_name, .{ .iterate = true });
+        defer iter.close();
+        var walk = try iter.walk(self.alloc);
+        defer walk.deinit();
+
+        while (try walk.next()) |item| {
+            switch (item.kind) {
+                else => {},
+                .file => {
+                    if (std.mem.endsWith(u8, item.basename, ".vdf")) {
+                        const in = try item.dir.openFile(item.basename, .{});
+                        defer in.close();
+                        const slice = try in.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
+                        defer self.alloc.free(slice);
+                        var val = try vdf.parse(self.alloc, slice, null, .{});
+                        defer val.deinit();
+                        const name = item.basename[0 .. item.basename.len - ".vdf".len];
+                        if (self.config.games.map.contains(name)) {
+                            std.debug.print("Config already contains game config for {s} ignoring file\n", .{name});
+                        } else {
+                            try self.config.games.map.put(
+                                self.alloc,
+                                try self.strings.store(name),
+                                try vdf.fromValue(GameEntry, &val, &.{ .obj = &val.value }, self.alloc, &self.strings),
+                            );
+                        }
+                    } else {}
+                },
+            }
+        }
+    }
+
     pub fn deinit(self: *@This()) void {
         var it = self.config.games.map.valueIterator();
         while (it.next()) |item| {
@@ -162,6 +195,7 @@ pub const ConfigCtx = struct {
         self.config.keys.tool.deinit(self.alloc);
         self.config.keys.inspector_tab.deinit(self.alloc);
         self.strings.deinit();
+        self.alloc.destroy(self);
     }
 };
 
@@ -244,7 +278,7 @@ fn backupKeymod(name: []const u8) graph.SDL.keycodes.Keymod {
     return .NONE;
 }
 
-pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !ConfigCtx { //Load config
+pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !*ConfigCtx { //Load config
 
     var realpath_buf: [256]u8 = undefined;
     if (dir.realpath(path, &realpath_buf)) |rp| {
@@ -261,13 +295,15 @@ pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []con
     return try loadConfig(alloc, slice);
 }
 
-pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !ConfigCtx { //Load config
+pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //Load config
     var val = try vdf.parse(alloc, slice, null, .{});
     defer val.deinit();
 
-    var ctx = ConfigCtx{
+    const ctx = try alloc.create(ConfigCtx);
+
+    ctx.* = ConfigCtx{
         .alloc = alloc,
-        .strings = StringStorage.init(alloc),
+        .strings = try StringStorage.init(alloc),
         .config = undefined,
     };
     //CONF MUST BE copyable IE no alloc
