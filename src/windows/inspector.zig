@@ -17,6 +17,7 @@ const ptext = @import("widget_texture.zig");
 const fgd = @import("../fgd.zig");
 const app = @import("../app.zig");
 const Layer = @import("../layer.zig");
+const CbHandle = guis.CbHandle;
 //TODO
 // to get this to work we need to first add a getptr cb to all existing
 // widgets and use that to obtain our values.
@@ -31,6 +32,7 @@ pub const InspectorWindow = struct {
     };
 
     vt: iWindow,
+    cbhandle: CbHandle = .{},
     area: iArea,
 
     editor: *Context,
@@ -306,7 +308,6 @@ pub const InspectorWindow = struct {
 
     fn buildProps(self: *@This(), gui: *Gui, ly: anytype, lay: *iArea) !void {
         const ed = self.editor;
-        const a = &self.area;
         const win = &self.vt;
         self.selected_class_id = null;
         {
@@ -363,7 +364,7 @@ pub const InspectorWindow = struct {
                 ly.pushRemaining();
                 lay.addChildOpt(gui, win, Wg.VScroll.build(gui, ly.getArea(), .{
                     .build_cb = &buildScrollItems,
-                    .build_vt = a,
+                    .build_vt = &self.cbhandle,
                     .win = win,
                     .count = fields.len,
                     .item_h = gui.style.config.default_item_h,
@@ -423,8 +424,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn buildScrollItems(window_area: *iArea, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
-        buildScrollItemsErr(window_area, vt, index, gui, win) catch return;
+    pub fn buildScrollItems(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        buildScrollItemsErr(cb, vt, index, gui, win) catch return;
     }
 
     pub fn getSelId(self: *Self) ?ecs.EcsT.Id {
@@ -455,8 +456,8 @@ pub const InspectorWindow = struct {
         return null;
     }
 
-    pub fn buildScrollItemsErr(window_area: *iArea, vt: *iArea, index: usize, gui: *Gui, _: *iWindow) !void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", window_area));
+    pub fn buildScrollItemsErr(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, _: *iWindow) !void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.resetIds();
         var ly = guis.TableLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area, .columns = 2 };
         const ed = self.editor;
@@ -475,7 +476,7 @@ pub const InspectorWindow = struct {
                 for (fields[index..], index..) |req_f, f_i| {
                     const cb_id = self.getId(req_f.name);
                     a.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), req_f.name, .{
-                        .cb_vt = window_area,
+                        .cb_vt = &self.area,
                         .cb_fn = &select_kv_cb,
                         .id = f_i,
                         .custom_draw = &customButtonDraw,
@@ -492,10 +493,10 @@ pub const InspectorWindow = struct {
                     switch (req_f.type) {
                         .model, .material => {
                             const H = struct {
-                                fn btn_cb(win_ar: *iArea, id: u64, _: *Gui, _: *iWindow) void {
+                                fn btn_cb(vtt: *iArea, id: u64, _: *Gui, _: *iWindow) void {
                                     // if msb of id is set, its a texture not model
                                     // hacky yea.
-                                    const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", win_ar));
+                                    const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
                                     const idd = id << 1 >> 1; //clear msb;
 
                                     const is_mat = (id & (1 << 63) != 0);
@@ -512,7 +513,7 @@ pub const InspectorWindow = struct {
                             const mask: u64 = if (req_f.type == .material) 1 << 63 else 0;
                             const idd: u64 = sel_id | mask;
                             a.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Select", .{
-                                .cb_vt = window_area,
+                                .cb_vt = &self.area,
                                 .cb_fn = &H.btn_cb,
                                 .id = idd,
                             }));
@@ -687,8 +688,8 @@ pub const InspectorWindow = struct {
         self.setKvStr(id, string);
     }
 
-    pub fn select_kv_cb(this_window: *iArea, id: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_window));
+    pub fn select_kv_cb(vt: *iArea, id: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
         _ = gui;
         win.needs_rebuild = true;
         self.selected_kv_index = id;
@@ -742,7 +743,7 @@ pub const InspectorWindow = struct {
         const cons = self.getConsPtr() orelse return;
         area_vt.addChildOpt(gui, win, Wg.VScroll.build(gui, area_vt.area, .{
             .build_cb = &buildIoScrollCb,
-            .build_vt = user_vt,
+            .build_vt = &self.cbhandle,
             .win = win,
             .count = cons.list.items.len,
             .item_h = gui.style.config.default_item_h,
@@ -750,8 +751,8 @@ pub const InspectorWindow = struct {
         }));
     }
 
-    fn buildIoScrollCb(window_area: *iArea, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", window_area));
+    fn buildIoScrollCb(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         _ = win;
         self.buildIoTab(gui, vt.area, vt, index) catch return;
     }

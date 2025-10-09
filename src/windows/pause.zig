@@ -14,6 +14,7 @@ const label = guis.label;
 const async_util = @import("../async.zig");
 const Config = @import("../config.zig");
 const Layer = @import("../layer.zig");
+const CbHandle = guis.CbHandle;
 
 pub const PauseWindow = struct {
     const Buttons = enum {
@@ -39,6 +40,7 @@ pub const PauseWindow = struct {
         name: std.ArrayList(u8),
     };
 
+    cbhandle: CbHandle = .{},
     vt: iWindow,
     area: iArea,
 
@@ -325,7 +327,7 @@ pub const PauseWindow = struct {
 
             vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
                 .build_cb = &buildHelpScroll,
-                .build_vt = &self.area,
+                .build_vt = &self.cbhandle,
                 .win = win,
                 .count = self.texts.items.len,
                 .item_h = ly.item_height,
@@ -354,8 +356,8 @@ pub const PauseWindow = struct {
         }
     }
 
-    pub fn buildHelpScroll(window_area: *iArea, vt: *iArea, index: usize, gui: *Gui, window: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", window_area));
+    pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, window: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
@@ -364,7 +366,7 @@ pub const PauseWindow = struct {
                 .custom_draw = &Wg.Button.customButtonDraw_listitem,
                 .id = i,
                 .cb_fn = &btn_help_cb,
-                .cb_vt = window_area,
+                .cb_vt = &self.area,
                 .user_1 = if (self.selected_text_i == i) 1 else 0,
             }));
         }

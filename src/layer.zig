@@ -324,6 +324,7 @@ const Gui = guis.Gui;
 const Wg = guis.Widget;
 const iWindow = guis.iWindow;
 const iArea = guis.iArea;
+const CbHandle = guis.CbHandle;
 pub const GuiWidget = struct {
     const Self = @This();
     const bi = guis.Widget.BtnContextWindow.buttonId;
@@ -334,6 +335,7 @@ pub const GuiWidget = struct {
     ctx: *Context,
     editor: *edit.Context,
     vt: iArea = undefined,
+    cbhandle: CbHandle = .{},
     win: *iWindow,
     scroll_index: usize = 0,
 
@@ -366,7 +368,7 @@ pub const GuiWidget = struct {
 
         vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
             .build_cb = &buildList,
-            .build_vt = &self.vt,
+            .build_vt = &self.cbhandle,
             .win = win,
             .count = self.ctx.layers.items.len,
             .item_h = gui.style.config.default_item_h,
@@ -374,8 +376,8 @@ pub const GuiWidget = struct {
         }));
     }
 
-    fn buildList(vt: *iArea, ar: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    fn buildList(cb: *CbHandle, ar: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
         var list = std.ArrayList(LayTemp).init(gui.alloc);
         defer list.deinit();

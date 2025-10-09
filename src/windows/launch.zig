@@ -12,6 +12,7 @@ const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const async_util = @import("../async.zig");
+const CbHandle = guis.CbHandle;
 pub const LaunchWindow = struct {
     const Buttons = enum {
         quit,
@@ -40,6 +41,7 @@ pub const LaunchWindow = struct {
 
     vt: iWindow,
     area: iArea,
+    cbhandle: CbHandle = .{},
 
     editor: *Context,
     should_exit: bool = false,
@@ -103,13 +105,13 @@ pub const LaunchWindow = struct {
             .count = self.recents.items.len,
             .item_h = gui.style.config.default_item_h * SZ,
             .build_cb = buildScroll,
-            .build_vt = &self.area,
+            .build_vt = &self.cbhandle,
             .win = win,
         }));
     }
 
-    pub fn buildScroll(vt: *iArea, area: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn buildScroll(cb: *CbHandle, area: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h * 5, .bounds = area.area };
         if (index >= self.recents.items.len) return;
         const text_bound = gui.font.textBounds("_Load_", gui.style.config.text_h);
