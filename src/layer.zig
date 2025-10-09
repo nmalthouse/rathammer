@@ -15,7 +15,22 @@ const Undo = @import("undo.zig");
 /// Rathammer supports up to 2**16 visgroups but hammer does not
 pub const MAX_VIS_GROUP_VMF = 128;
 
-pub const Id = u16;
+pub const Id = enum(u16) {
+    none,
+    _,
+
+    pub fn initFromJson(v: std.json.Value, _: anytype) !@This() {
+        if (v != .integer) return error.expectedInt;
+
+        if (v.integer < 0 or v.integer > std.math.maxInt(u16)) return error.layerIdOutOfRange;
+
+        return @enumFromInt(@as(u16, @intCast(v.integer)));
+    }
+
+    pub fn serial(self: @This(), _: anytype, jw: anytype, _: anytype) !void {
+        try jw.write(@as(u16, @intFromEnum(self)));
+    }
+};
 pub const Layer = struct {
     children: ArrayList(*Layer),
 
@@ -40,14 +55,14 @@ pub const Context = struct {
     alloc: std.mem.Allocator,
     root: *Layer,
 
-    layer_counter: Id = 0,
+    layer_counter: u16 = 0,
 
     /// Bitmask that can be directly tested for visibility.
     /// Toggling a parent layers "enabled" field doesn't affect child's "enabled" flag but does affect the 'disabled' state
     disabled: std.DynamicBitSetUnmanaged = .{},
 
     pub fn init(alloc: std.mem.Allocator) !Self {
-        const root = try createLayer(alloc, 0, ROOT_LAYER_NAME);
+        const root = try createLayer(alloc, .none, ROOT_LAYER_NAME);
         var ret = Self{
             .alloc = alloc,
             .root = root,
@@ -56,7 +71,7 @@ pub const Context = struct {
             .vmf_id_mapping = std.AutoHashMap(u8, Id).init(alloc),
         };
         try ret.layers.append(alloc, root);
-        try ret.map.put(0, root);
+        try ret.map.put(.none, root);
 
         return ret;
     }
@@ -75,7 +90,7 @@ pub const Context = struct {
 
     fn newLayerId(self: *Self) Id {
         self.layer_counter += 1;
-        return self.layer_counter;
+        return @enumFromInt(self.layer_counter);
     }
 
     /// Return bitset with ids below `lay` set. Caller must free result
@@ -84,7 +99,7 @@ pub const Context = struct {
         try gatherChildrenRecur(&ids, lay, alloc);
         var mask = try std.DynamicBitSetUnmanaged.initEmpty(alloc, self.layer_counter + 1);
         for (ids.items) |id|
-            mask.set(id);
+            mask.set(@intFromEnum(id));
         return .{ mask, try ids.toOwnedSlice(alloc) };
     }
 
@@ -158,14 +173,15 @@ pub const Context = struct {
     }
 
     pub fn isDisabled(self: *Self, id: Id) bool {
-        if (id >= self.disabled.bit_length) return false;
-        return self.disabled.isSet(id);
+        if (@intFromEnum(id) >= self.disabled.bit_length) return false;
+        return self.disabled.isSet(@intFromEnum(id));
     }
 
     pub fn setDisabled(self: *Self, id: Id, enable: bool) !void {
-        if (id >= self.disabled.bit_length)
-            try self.disabled.resize(self.alloc, @intCast(id + 1), false);
-        self.disabled.setValue(id, !enable);
+        const idd: u16 = @intFromEnum(id);
+        if (idd >= self.disabled.bit_length)
+            try self.disabled.resize(self.alloc, @intCast(idd + 1), false);
+        self.disabled.setValue(idd, !enable);
     }
 
     pub fn writeToJson(self: *Self, wr: anytype) !void {
@@ -186,7 +202,7 @@ pub const Context = struct {
         try wr.write(layer.enabled);
 
         try wr.objectField("id");
-        try wr.write(layer.id);
+        try wr.write(@as(u16, @intFromEnum(layer.id)));
         try wr.objectField("children");
         try wr.beginArray();
         for (layer.children.items) |child|
@@ -207,7 +223,7 @@ pub const Context = struct {
     }
 
     fn insertRecur(self: *Self, parent: *Layer, layer: json_map.VisGroup) !void {
-        if (self.map.contains(layer.id)) {
+        if (self.map.contains(@enumFromInt(layer.id))) {
             log.warn("layer with duplicate id: {d} {s}, omitting", .{ layer.id, layer.name });
             return;
         }
@@ -215,9 +231,9 @@ pub const Context = struct {
         //Ensure any new groups don't intersect with old
         self.layer_counter = @max(self.layer_counter, layer.id);
 
-        const new = try createLayer(self.alloc, layer.id, layer.name);
+        const new = try createLayer(self.alloc, @enumFromInt(layer.id), layer.name);
         try self.layers.append(self.alloc, new);
-        try self.map.put(layer.id, new);
+        try self.map.put(@enumFromInt(layer.id), new);
 
         try parent.children.append(self.alloc, new);
 
@@ -313,7 +329,7 @@ pub const GuiWidget = struct {
     const bi = guis.Widget.BtnContextWindow.buttonId;
     const LayTemp = struct {
         ptr: *Layer,
-        depth: Id,
+        depth: u16,
     };
     ctx: *Context,
     editor: *edit.Context,
@@ -408,7 +424,7 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), depth: Id) !void {
+    fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), depth: u16) !void {
         if (layer.collapse) return;
         for (layer.children.items) |child| {
             try list.append(.{ .ptr = child, .depth = depth });
@@ -458,7 +474,7 @@ const LayerWidget = struct {
             .style = .check,
             .cb_fn = check_cb,
             .cb_vt = &self.vt,
-            .user_id = opts.id,
+            .user_id = @intFromEnum(opts.id),
             .cross_color = opts.check_color,
         }, opts.enabled));
 
@@ -467,7 +483,7 @@ const LayerWidget = struct {
                 .style = .dropdown,
                 .cb_fn = collapse_cb,
                 .cb_vt = &self.vt,
-                .user_id = opts.id,
+                .user_id = @intFromEnum(opts.id),
             }, !opts.collapse));
         self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
@@ -491,7 +507,7 @@ const LayerWidget = struct {
 
     pub fn check_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.opts.parent.ctx.setEnabledCascade(@intCast(uid), checked) catch return;
+        self.opts.parent.ctx.setEnabledCascade(@enumFromInt(@as(u16, @intCast(uid))), checked) catch return;
         self.opts.parent.editor.rebuildVisGroups() catch return;
         self.opts.win.needs_rebuild = true;
         _ = gui;
@@ -499,7 +515,7 @@ const LayerWidget = struct {
 
     pub fn collapse_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.opts.parent.ctx.setCollapse(@intCast(uid), !checked);
+        self.opts.parent.ctx.setCollapse(@enumFromInt((uid)), !checked);
         self.opts.win.needs_rebuild = true;
         _ = gui;
     }
@@ -525,7 +541,7 @@ const LayerWidget = struct {
                 btns.append(aa, .{ bi("duplicate"), "duplicate" }) catch {};
                 btns.append(aa, .{ bi("add_child"), "new child" }) catch {};
                 btns.append(aa, .{ bi("noop"), "" }) catch {};
-                if (self.opts.id > 0) { //Root cannot be deleted or merged
+                if (self.opts.id != .none) { //Root cannot be deleted or merged
                     btns.append(aa, .{ bi("delete"), "delete layer" }) catch {};
                     btns.append(aa, .{ bi("merge"), "^ merge up" }) catch {};
                     if (allow_move)
@@ -560,7 +576,7 @@ const LayerWidget = struct {
 
                 var it = ed.editIterator(.layer);
                 while (it.next()) |item| {
-                    if (mask.isSet(item.id)) {
+                    if (mask.isSet(@intFromEnum(item.id))) {
                         ed.selection.add(it.i, ed) catch return;
                     }
                 }

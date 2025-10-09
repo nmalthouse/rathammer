@@ -1718,7 +1718,7 @@ pub const Displacement = struct {
 };
 
 pub const Layer = struct {
-    id: layer.Id = 0,
+    id: layer.Id = .none,
 
     pub fn dupe(a: *@This(), _: anytype, _: anytype) !@This() {
         return a.*;

@@ -53,7 +53,7 @@ pub const VpkMapper = struct {
 pub const VisGroup = struct {
     name: []const u8,
     color: u32,
-    id: u8,
+    id: u16,
     children: []const VisGroup,
 };
 
@@ -234,6 +234,10 @@ pub fn readComponentFromJson(ctx: InitFromJsonCtx, v: std.json.Value, T: type, v
     }
     switch (info) {
         .bool, .float, .int => return try std.json.innerParseFromValue(T, ctx.alloc, v, .{}),
+        .@"enum" => {
+            if (std.meta.hasFn(T, "initFromJson"))
+                return try T.initFromJson(v, ctx);
+        },
         .@"struct" => |s| {
             if (std.meta.hasFn(T, "initFromJson")) {
                 return try T.initFromJson(v, ctx);

@@ -244,7 +244,7 @@ pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
         const lay = ed.layers.getLayerFromId(lay_id) orelse return;
         const ustack = try ed.undoctx.pushNewFmt("move {d} ent to '{s}'", .{ slice.len, lay.name });
         for (slice) |sel| {
-            const old = if (ed.getComponent(sel, .layer)) |l| l.id else 0;
+            const old = if (ed.getComponent(sel, .layer)) |l| l.id else .none;
             try ustack.append(.{ .set_layer = try .create(ustack.alloc, sel, old, lay_id) });
         }
         ustack.apply(ed);
@@ -277,7 +277,7 @@ pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
 
         var it = ed.editIterator(.layer);
         while (it.next()) |item| {
-            if (mask.isSet(item.id)) {
+            if (mask.isSet(@intFromEnum(item.id))) {
                 try ustack.append(.{ .create_destroy = try .create(ustack.alloc, it.i, .destroy) });
             }
         }
@@ -315,7 +315,7 @@ pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
         {
             var it = idmap.keyIterator();
             while (it.next()) |item|
-                mask.set(item.*);
+                mask.set(@intFromEnum(item.*));
         }
 
         const ustack = try ed.undoctx.pushNewFmt("Dupe layer {s}", .{current.name});
@@ -323,7 +323,7 @@ pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
 
         var it = ed.editIterator(.layer);
         while (it.next()) |item| {
-            if (mask.isSet(item.id)) {
+            if (mask.isSet(@intFromEnum(item.id))) {
                 const new_id = idmap.get(item.id) orelse continue;
                 const duped = try ed.dupeEntity(it.i);
                 ed.putComponent(duped, .layer, .{ .id = new_id });
@@ -346,7 +346,7 @@ pub fn mergeLayer(ed: *Ed, merge: LayerId, target_id: LayerId) !void {
     const ustack = try ed.undoctx.pushNewFmt("Merge layer {s} into {s}", .{ to_merge.name, target.name });
     var it = ed.editIterator(.layer);
     while (it.next()) |item| {
-        if (mask.isSet(item.id)) {
+        if (mask.isSet(@intFromEnum(item.id))) {
             try ustack.append(.{ .set_layer = try .create(ustack.alloc, it.i, item.id, target_id) });
         }
     }

@@ -228,7 +228,7 @@ pub const Context = struct {
         mpos: graph.Vec2f = undefined,
         inspector_pane_id: usize = 100000,
 
-        selected_layer: Layer.Id = 0,
+        selected_layer: Layer.Id = .none,
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 
@@ -502,7 +502,7 @@ pub const Context = struct {
             try new_ent.setClass(self, new_ent.class, duped);
         }
         //a layer of 0 is implied
-        if (self.edit_state.selected_layer != 0) {
+        if (self.edit_state.selected_layer != .none) {
             self.putComponent(duped, .layer, .{ .id = self.edit_state.selected_layer });
         }
         return duped;
@@ -808,6 +808,12 @@ pub const Context = struct {
                 if (comp) |p|
                     return try self.writeComponentToJson(jw, p, id);
                 return try jw.write(null);
+            },
+            .@"enum" => {
+                if (std.meta.hasFn(T, "serial")) {
+                    return try comp.serial(self, jw, id);
+                }
+                @compileError("unsupported enum");
             },
             .@"struct" => |s| {
                 if (std.meta.hasFn(T, "serial")) {
