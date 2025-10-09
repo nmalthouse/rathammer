@@ -8,24 +8,38 @@ I occasionally get the urge to make some 3D environments and Half Life 2, with i
 The issue is that Hammer does not run on Linux, and the ergonomics are terrible.
 You can't rebind keys for example, and if you use a keyboard layout other than Qwerty you will have to constantly switch layouts. Every operation requires you to move your left hand over to the enter key. And most editing requires you to orient yourself in 4 different views at once. In its current state RatHammer does not have full feature parity with Hammer, but it can do a lot of editing in a way that is much nicer.
 
-I recommend starting RatHammer from a terminal so you can see error messages. If you use the built in Vbsp runner, the compile output of Vbsp, Vvis and Vrad is printed to this console as well.
+Open a terminal and navigate to where you downloaded RatHammer.
 ```
-rathammer --help # Show all the flags you can set
+# Run the following command to list possible games and check configuration.
+./rathammer --games --checkhealth
 ```
+The output will look like this, if your paths are configured correctly:
+```
+Loading config file: /home/rat/.config/rathammer/config.vdf
+Available game configs:
+           tf2
+default -> basic_hl2
+           gmod
+           cstrike
+```
+To map for a game other than Half Life 2 add one of the listed games with the --game flag
+```
+./rathammer --game tf2
+```
+
 # Games
 By Default RatHammer will search for Half Life 2 in your OS's default steam directory
 ```
 On Windows "/Program Files (x86)/Steam/steamapps/common"
 On Linux "$HOME/.local/share/Steam/steamapps/common"
 ```
-
-All games are defined inside of 'config.vdf'.
-
 On Linux the default config file is copied to "$XDG_CONFIG_DIR/rathammer/config.vdf". This defaults to $HOME/.config/rathammer/config.vdf.
 
 On Windows the config is loaded from the XDG_CONFIG_DIR if set, otherwise it just loads the config from cwd.
 
-To map for a different Source game or use it for custom levels, you must edit config.vdf and set the default_game appropriately.
+Games are defined in a folder called 'games' in the config directory
+
+To map for a different Source game or use it for custom levels, you must edit config.vdf and set the default_game appropriately, or launch rathammer with the --game flag.
 All paths for game configuration can be temporarily overridden with command line flags, use --help to see these.
 If Rathammer fails to start, read through the console output and look for lines like this:
 ```

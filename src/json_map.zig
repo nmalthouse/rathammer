@@ -6,6 +6,11 @@ const vdf = @import("vdf.zig");
 const vpk = @import("vpk.zig");
 const version = @import("version.zig");
 const StringStorage = @import("string.zig").StringStorage;
+//TODO
+// 1.
+// Load functions, loadVmf, loadJson, should do parsing before modifying world state.
+// In the case of parse failure, loading can be aborted without corrupting world state.
+// This becomes important when importing multiple maps together, prefabs.
 
 /// Dummy vpkctx that provides enough of the interface to parse json files.
 /// When we load json to serialize to vmf, we don't want to have to mount vpk's.
