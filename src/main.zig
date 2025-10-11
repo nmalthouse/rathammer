@@ -354,7 +354,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const DPI_presets = [_]Preset{
         .{ .dpi = 1, .fh = 14, .ih = 25, .scale = 1 },
-        .{ .dpi = 1.7, .fh = 18, .ih = 28, .scale = 2 },
+        .{ .dpi = 1.7, .fh = 18, .ih = 28, .scale = 1 },
     };
     const config_display_scale = if (config.window.display_scale > 0) config.window.display_scale else null;
     const sc = args.display_scale orelse config_display_scale orelse try dpiDetect(&win);

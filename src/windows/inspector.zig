@@ -202,13 +202,14 @@ pub const InspectorWindow = struct {
                 self.buildProps(gui, &ly, vt) catch {};
             }
 
-            {
-                var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp[1] };
-                ly.padding.left = 10;
-                ly.padding.right = 10;
-                ly.padding.top = 0;
-                self.buildValueEditor(gui, &ly, vt) catch {};
-            }
+            vt.addChildOpt(gui, win, Wg.FloatScroll.build(gui, sp[1], .{
+                .build_cb = buildValueEditor,
+                .build_vt = &self.cbhandle,
+                .win = win,
+                .scroll_mul = gui.style.config.default_item_h * 4,
+                .scroll_y = true,
+                .scroll_x = false,
+            }));
             return;
         }
         if (eql(u8, tab_name, "io")) {
@@ -352,10 +353,12 @@ pub const InspectorWindow = struct {
                         .current = self.selected_class_id orelse 0,
                         .count = self.editor.fgd_ctx.ents.items.len,
                     }, {}));
-                lay.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{ .init_string = ent.class }));
+                //lay.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{ .init_string = ent.class }));
                 const eclass = ed.fgd_ctx.getPtr(ent.class) orelse return;
                 const fields = eclass.field_data.items;
-                if (self.show_help and eclass.doc.len > 0) { //Doc string
+                const min_left_to_show_help = 10;
+                const left = ly.countLeft();
+                if (self.show_help and eclass.doc.len > 0 and left > min_left_to_show_help) { //Doc string
                     ly.pushHeight(Wg.TextView.heightForN(gui, 4));
                     lay.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{eclass.doc}, win, .{
                         .mode = .split_on_space,
@@ -378,10 +381,19 @@ pub const InspectorWindow = struct {
         }
     }
 
+    fn buildValueEditor(cb: *CbHandle, lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        buildValueEditorErr(self, lay, gui, win, scr) catch {};
+    }
+
     // If a kv is selected, this edits it
-    fn buildValueEditor(self: *@This(), gui: *Gui, ly: anytype, lay: *iArea) !void {
+    fn buildValueEditorErr(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) !void {
+        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = lay.area };
+        ly.padding.left = 10;
+        ly.padding.right = 10;
+        ly.padding.top = 0;
+        defer scr.hintBounds(ly.getUsed());
         const ed = self.editor;
-        const win = &self.vt;
         if (self.selected_class_id) |cid| {
             const class = &ed.fgd_ctx.ents.items[cid];
             if (self.selected_kv_index >= class.field_data.items.len) return;
