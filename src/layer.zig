@@ -486,6 +486,7 @@ const LayerWidget = struct {
                 .cb_fn = collapse_cb,
                 .cb_vt = &self.vt,
                 .user_id = @intFromEnum(opts.id),
+                .cross_color = gui.nstyle.color.drop_down_arrow,
             }, !opts.collapse));
         self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
@@ -494,7 +495,7 @@ const LayerWidget = struct {
 
     pub fn draw(vt: *iArea, d: guis.DrawState) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        const col: u32 = if (self.opts.selected) 0x6097dbff else d.style.config.colors.background;
+        const col: u32 = if (self.opts.selected) 0x6097dbff else d.nstyle.color.bg;
         d.ctx.rect(vt.area, col);
         const thi = 2;
         const y = vt.area.y + vt.area.h - thi;

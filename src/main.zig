@@ -417,12 +417,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     gui.style.config.text_h = scaled_text_height;
     gui.scale = gui_scale;
     gui.tint = config.gui_tint;
+    const nstyle = G.Style{};
     const gui_dstate = G.DrawState{
         .ctx = &draw,
         .font = &font.font,
         .style = &gui.style,
         .gui = &gui,
         .scale = gui_scale,
+        .nstyle = &nstyle,
     };
     const inspector_win = InspectorWindow.create(&gui, editor);
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);

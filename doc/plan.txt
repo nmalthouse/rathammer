@@ -64,3 +64,8 @@ FGD / Custom game
 
 MISC
     Investigate func_tracktrain. I think something with the kv serial is preventing it from working
+
+Remove the pause menu:
+    Replace it with a menu bar 
+    remove the terminal
+    Change how the 3dview interacts with the gui panes. Gui panes can show over the 3d view and can overlap?
