@@ -58,14 +58,12 @@ pub const PauseWindow = struct {
     pub fn create(gui: *Gui, editor: *Context, app_cwd: std.fs.Dir) !*PauseWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = iArea.init(gui, Rec(0, 0, 0, 0)),
+            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
         };
-        self.area.draw_fn = &draw;
-        self.area.deinit_fn = &area_deinit;
 
         if (app_cwd.openDir("doc/en", .{ .iterate = true })) |doc_dir| {
             var dd = doc_dir;
@@ -114,8 +112,8 @@ pub const PauseWindow = struct {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
-    pub fn btnCb(vt: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .unpause => self.editor.paused = false,
             .quit => self.should_exit = true,
@@ -188,7 +186,7 @@ pub const PauseWindow = struct {
                 vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                     .init_string = "",
                     .commit_cb = &textbox_cb,
-                    .commit_vt = &self.area,
+                    .commit_vt = &self.cbhandle,
                     .user_id = @intFromEnum(Textboxes.set_skyname),
                 }));
         }
@@ -270,8 +268,8 @@ pub const PauseWindow = struct {
             if (self.editor.has_loaded_map) {
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Unpause", .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.area }));
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "save as", .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.area }));
+                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Unpause", .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle }));
+                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "save as", .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle }));
                 }
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
@@ -279,15 +277,15 @@ pub const PauseWindow = struct {
                         vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                             .init_string = self.editor.hacky_extra_vmf.override_vis_group orelse "",
                             .commit_cb = &textbox_cb,
-                            .commit_vt = &self.area,
+                            .commit_vt = &self.cbhandle,
                             .user_id = @intFromEnum(Textboxes.set_import_visgroup),
                         }));
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.area }));
+                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
                 }
             } else {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "New map", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.area }));
-                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.area }));
+                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "New map", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
+                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
             }
 
             //vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.area }));
@@ -335,15 +333,15 @@ pub const PauseWindow = struct {
         }
     }
 
-    pub fn btn_help_cb(vt: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn btn_help_cb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.texts.items.len) return;
         self.selected_text_i = id;
         self.vt.needs_rebuild = true;
     }
 
-    pub fn textbox_cb(vt: *iArea, _: *Gui, string: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn textbox_cb(cb: *guis.CbHandle, _: *Gui, string: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
         const str = self.editor.storeString(string) catch return;
         switch (@as(Textboxes, @enumFromInt(id))) {
@@ -366,7 +364,7 @@ pub const PauseWindow = struct {
                 .custom_draw = &Wg.Button.customButtonDraw_listitem,
                 .id = i,
                 .cb_fn = &btn_help_cb,
-                .cb_vt = &self.area,
+                .cb_vt = &self.cbhandle,
                 .user_1 = if (self.selected_text_i == i) 1 else 0,
             }));
         }

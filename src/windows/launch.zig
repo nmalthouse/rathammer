@@ -51,13 +51,11 @@ pub const LaunchWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) !*LaunchWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = iArea.init(gui, Rec(0, 0, 0, 0)),
+            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
             .recents = std.ArrayList(Recent).init(editor.alloc),
         };
-        self.area.draw_fn = &draw;
-        self.area.deinit_fn = &area_deinit;
 
         return self;
     }
@@ -96,8 +94,8 @@ pub const LaunchWindow = struct {
         var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = inset };
         const Btn = Wg.Button.build;
         self.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome ", null));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.area }));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.area }));
+        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
+        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
 
         ly.pushRemaining();
         const SZ = 5;
@@ -126,12 +124,12 @@ pub const LaunchWindow = struct {
             const ld_btn = ly.getArea() orelse return;
             const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
 
-            area.addChildOpt(gui, win, Wg.Button.build(gui, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.area }));
+            area.addChildOpt(gui, win, Wg.Button.build(gui, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle }));
         }
     }
 
-    pub fn loadBtn(vt: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn loadBtn(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.recents.items.len) return;
 
         const mname = self.recents.items[id].name;
@@ -143,8 +141,8 @@ pub const LaunchWindow = struct {
         self.editor.paused = false;
     }
 
-    pub fn btnCb(vt: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .quit => self.should_exit = true,
             .new_map => {

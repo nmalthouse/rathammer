@@ -24,6 +24,7 @@ pub const ConsoleCb = struct {
 pub const Console = struct {
     const Self = @This();
     vt: iWindow,
+    cbhandle: guis.CbHandle = .{},
     area: iArea,
 
     line_arena: std.heap.ArenaAllocator,
@@ -37,7 +38,7 @@ pub const Console = struct {
         const self = gui.create(@This());
 
         self.* = .{
-            .area = iArea.init(gui, Rec(0, 0, 0, 0)),
+            .area = .{ .area = Rec(0, 0, 0, 0), .deinit_fn = area_deinit },
             .vt = iWindow.init(&build, gui, &deinit, &self.area),
             .lines = std.ArrayList([]const u8).init(gui.alloc),
             .line_arena = std.heap.ArenaAllocator.init(gui.alloc),
@@ -45,7 +46,6 @@ pub const Console = struct {
             .exec_vt = exec_vt,
         };
 
-        self.area.deinit_fn = &area_deinit;
         return self;
     }
 
@@ -80,7 +80,7 @@ pub const Console = struct {
         self.area.addChildOpt(gui, vt, Wg.Textbox.buildOpts(gui, command, .{
             .init_string = "",
             .commit_cb = &textbox_cb,
-            .commit_vt = &self.area,
+            .commit_vt = &self.cbhandle,
             .user_id = 0,
             .clear_on_commit = true,
             .restricted_charset = "`",
@@ -113,8 +113,8 @@ pub const Console = struct {
         tv.rebuildScroll(gui, gui.getWindow(&self.area) orelse return);
     }
 
-    pub fn textbox_cb(vt: *iArea, gui: *Gui, string: []const u8, _: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn textbox_cb(cb: *guis.CbHandle, gui: *Gui, string: []const u8, _: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.execCommand(string, gui);
     }
 

@@ -62,15 +62,13 @@ pub const InspectorWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = iArea.init(gui, Rec(0, 0, 0, 0)),
+            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
             .id_kv_map = std.StringHashMap(usize).init(gui.alloc),
         };
-        self.area.draw_fn = &draw;
-        self.area.deinit_fn = &area_deinit;
 
         if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
             editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.undo)) catch {};
@@ -229,7 +227,7 @@ pub const InspectorWindow = struct {
             }));
 
             vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Add new", .{
-                .cb_vt = &self.area,
+                .cb_vt = &self.cbhandle,
                 .cb_fn = &ioBtnCbAdd,
             }));
             const cons = self.getConsPtr() orelse return;
@@ -245,24 +243,24 @@ pub const InspectorWindow = struct {
                         1 => vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, sp1[1], .{
                             .init_string = li.target.items,
                             .user_id = 1,
-                            .commit_vt = &self.area,
+                            .commit_vt = &self.cbhandle,
                             .commit_cb = &ioTextboxCb,
                         })),
                         2 => self.buildInputCombo(vt, gui, win, sp1[1]),
                         3 => vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, sp1[1], .{
                             .init_string = li.value.items,
                             .user_id = 3,
-                            .commit_vt = &self.area,
+                            .commit_vt = &self.cbhandle,
                             .commit_cb = &ioTextboxCb,
                         })),
                         4 => vt.addChildOpt(gui, win, Wg.TextboxNumber.build(gui, sp1[1], li.delay, win, .{
                             .user_id = 4,
-                            .commit_vt = &self.area,
+                            .commit_vt = &self.cbhandle,
                             .commit_cb = &ioTextboxCb,
                         })),
                         5 => vt.addChildOpt(gui, win, Wg.TextboxNumber.build(gui, sp1[1], li.fire_count, win, .{
                             .user_id = 5,
-                            .commit_vt = &self.area,
+                            .commit_vt = &self.cbhandle,
                             .commit_cb = &ioTextboxCb,
                         })),
                         else => {},
@@ -284,8 +282,8 @@ pub const InspectorWindow = struct {
         self.editor.autovis.enabled.items[id] = val;
         self.editor.rebuildAutoVis() catch return;
     }
-    fn misc_btn_cb(vt: *iArea, btn_id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    fn misc_btn_cb(cb: *CbHandle, btn_id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.misc_btn_cbErr(btn_id) catch return;
     }
     fn misc_btn_cbErr(self: *@This(), btn_id: usize) !void {
@@ -314,7 +312,7 @@ pub const InspectorWindow = struct {
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
             lay.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Ungroup", .{
-                .cb_vt = &self.area,
+                .cb_vt = &self.cbhandle,
                 .cb_fn = &misc_btn_cb,
                 .id = @intFromEnum(MiscBtn.ungroup),
             }));
@@ -413,7 +411,7 @@ pub const InspectorWindow = struct {
             lay.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                 .init_string = val.slice(),
                 .user_id = cb_id,
-                .commit_vt = win.area,
+                .commit_vt = &self.cbhandle,
                 .commit_cb = &cb_commitTextbox,
             }));
             //Extra stuff for typed fields TODO put in a scroll
@@ -488,7 +486,7 @@ pub const InspectorWindow = struct {
                 for (fields[index..], index..) |req_f, f_i| {
                     const cb_id = self.getId(req_f.name);
                     a.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), req_f.name, .{
-                        .cb_vt = &self.area,
+                        .cb_vt = &self.cbhandle,
                         .cb_fn = &select_kv_cb,
                         .id = f_i,
                         .custom_draw = &customButtonDraw,
@@ -505,10 +503,10 @@ pub const InspectorWindow = struct {
                     switch (req_f.type) {
                         .model, .material => {
                             const H = struct {
-                                fn btn_cb(vtt: *iArea, id: u64, _: *Gui, _: *iWindow) void {
+                                fn btn_cb(cbb: *CbHandle, id: u64, _: *Gui, _: *iWindow) void {
                                     // if msb of id is set, its a texture not model
                                     // hacky yea.
-                                    const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+                                    const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cbb));
                                     const idd = id << 1 >> 1; //clear msb;
 
                                     const is_mat = (id & (1 << 63) != 0);
@@ -525,7 +523,7 @@ pub const InspectorWindow = struct {
                             const mask: u64 = if (req_f.type == .material) 1 << 63 else 0;
                             const idd: u64 = sel_id | mask;
                             a.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Select", .{
-                                .cb_vt = &self.area,
+                                .cb_vt = &self.cbhandle,
                                 .cb_fn = &H.btn_cb,
                                 .id = idd,
                             }));
@@ -565,7 +563,7 @@ pub const InspectorWindow = struct {
                             a.addChildOpt(gui, win, Wg.TextboxNumber.build(gui, sp[1], floats[3], win, .{
                                 .user_id = cb_id,
                                 .commit_cb = &setBrightness,
-                                .commit_vt = win.area,
+                                .commit_vt = &self.cbhandle,
                                 //.init_string = ed.printScratch("{d}", .{c[3]}) catch "100",
                             }));
                         },
@@ -574,7 +572,7 @@ pub const InspectorWindow = struct {
                             a.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                                 .init_string = value.slice(),
                                 .user_id = cb_id,
-                                .commit_vt = win.area,
+                                .commit_vt = &self.cbhandle,
                                 .commit_cb = &cb_commitTextbox,
                             }));
                         },
@@ -584,8 +582,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    fn setBrightness(this_w: *iArea, _: *Gui, value: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_w));
+    fn setBrightness(cb: *CbHandle, _: *Gui, value: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (self.getNameFromId(id)) |field_name| {
             const ent_id = self.getSelId() orelse return;
             const kvs = self.getKvsPtr() orelse return;
@@ -695,13 +693,13 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn cb_commitTextbox(this_window: *iArea, _: *Gui, string: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_window));
+    pub fn cb_commitTextbox(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.setKvStr(id, string);
     }
 
-    pub fn select_kv_cb(vt: *iArea, id: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn select_kv_cb(cb: *CbHandle, id: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         _ = gui;
         win.needs_rebuild = true;
         self.selected_kv_index = id;
@@ -769,8 +767,8 @@ pub const InspectorWindow = struct {
         self.buildIoTab(gui, vt.area, vt, index) catch return;
     }
 
-    fn io_btn_cb(window_area: *iArea, id: usize, _: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", window_area));
+    fn io_btn_cb(cb: *CbHandle, id: usize, _: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.selected_io_index = id;
         win.needs_rebuild = true;
     }
@@ -791,7 +789,7 @@ pub const InspectorWindow = struct {
                 .custom_draw = &customButtonDraw,
                 .id = ind,
                 .cb_fn = &io_btn_cb,
-                .cb_vt = &self.area,
+                .cb_vt = &self.cbhandle,
                 .user_1 = if (self.selected_io_index == ind) 1 else 0,
             };
             const strs = [4][]const u8{ con.listen_event, con.target.items, con.input, con.value.items };
@@ -804,8 +802,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    fn ioBtnCbAdd(vt: *iArea, _: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    fn ioBtnCbAdd(cb: *CbHandle, _: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const cons = self.getConsPtr() orelse blk: {
             if (self.editor.selection.getGroupOwnerExclusive(&self.editor.groups)) |sel_id| {
                 self.editor.ecs.attach(sel_id, .connections, ecs.Connections.init(self.editor.alloc)) catch return;
@@ -819,8 +817,8 @@ pub const InspectorWindow = struct {
         self.vt.needs_rebuild = true;
     }
 
-    fn ioTextboxCb(this_window: *iArea, _: *Gui, string: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_window));
+    fn ioTextboxCb(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
         const con = &cons.list.items[self.selected_io_index];
@@ -943,7 +941,7 @@ pub const InspectorWindow = struct {
             const recent_list = ed.asset_browser.recent_mats.list.items;
             for (recent_list[0..@min(max, recent_list.len)], 0..) |rec, id| {
                 lay.addChildOpt(gui, win, ptext.PollingTexture.build(gui, tly.getArea(), ed, rec, "", .{}, .{
-                    .cb_vt = &self.area,
+                    .cb_vt = &self.cbhandle,
                     .cb_fn = recent_texture_btn_cb,
                     .id = id,
                 }));
@@ -951,8 +949,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn recent_texture_btn_cb(vt: *guis.iArea, id: usize, _: *Gui, _: *guis.iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: *Gui, _: *guis.iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const asb = &self.editor.asset_browser;
         if (id >= asb.recent_mats.list.items.len) return;
         const missing = edit.missingTexture();

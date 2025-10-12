@@ -334,7 +334,6 @@ pub const GuiWidget = struct {
     };
     ctx: *Context,
     editor: *edit.Context,
-    vt: iArea = undefined,
     cbhandle: CbHandle = .{},
     win: *iWindow,
     scroll_index: usize = 0,
@@ -354,12 +353,12 @@ pub const GuiWidget = struct {
             var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
 
             vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New layer", .{
-                .cb_vt = &self.vt,
+                .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = bi("new_group"),
             }));
             vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{
-                .commit_vt = &self.vt,
+                .commit_vt = &self.cbhandle,
                 .init_string = if (self.ctx.getLayerFromId(self.selected_ptr.*)) |l| l.name else "",
                 .commit_cb = textCb,
                 .user_id = bi("set_name"),
@@ -402,8 +401,8 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn textCb(vt: *iArea, _: *Gui, new: []const u8, id: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    fn textCb(vt: *CbHandle, _: *Gui, new: []const u8, id: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         switch (id) {
             bi("set_name") => {
                 self.ctx.setName(self.selected_ptr.*, new) catch {};
@@ -413,8 +412,8 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn btnCb(vt: *iArea, id: guis.Uid, _: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    fn btnCb(vt: *CbHandle, id: guis.Uid, _: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         switch (id) {
             bi("new_group") => {
                 if (action.createLayer(self.editor, self.selected_ptr.*, "new layer") catch null) |new_id| {
@@ -453,20 +452,18 @@ const LayerWidget = struct {
         check_color: u32 = 0xff,
     };
     vt: iArea,
+    cbhandle: guis.CbHandle = .{},
 
     opts: Opts,
     right_click_id: ?Id = null,
 
-    pub fn build(gui: *Gui, area_o: ?graph.Rect, opts: Opts) ?*iArea {
+    pub fn build(gui: *Gui, area_o: ?graph.Rect, opts: Opts) ?guis.NewVt {
         const area = area_o orelse return null;
         const self = gui.create(@This());
         self.* = .{
-            .vt = iArea.init(gui, area),
+            .vt = .{ .area = area, .deinit_fn = deinit, .draw_fn = draw },
             .opts = opts,
         };
-        self.vt.deinit_fn = &deinit;
-        self.vt.draw_fn = &draw;
-        self.vt.onclick = &onclick;
 
         const needs_dropdown = if (opts.parent.ctx.getLayerFromId(opts.id)) |lay| lay.children.items.len > 0 else false;
         const sp = area.split(.vertical, area.h * if (needs_dropdown) @as(f32, 2) else @as(f32, 1));
@@ -490,7 +487,7 @@ const LayerWidget = struct {
             }, !opts.collapse));
         self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
-        return &self.vt;
+        return .{ .vt = &self.vt, .onclick = onclick };
     }
 
     pub fn draw(vt: *iArea, d: guis.DrawState) void {
@@ -556,7 +553,7 @@ const LayerWidget = struct {
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = btns.items,
                     .btn_cb = rightClickMenuBtn,
-                    .btn_vt = vt,
+                    .btn_vt = &self.cbhandle,
                 }) catch return;
                 self.right_click_id = self.opts.id;
                 cb.gui.setTransientWindow(r_win);
@@ -564,9 +561,9 @@ const LayerWidget = struct {
         }
     }
 
-    fn rightClickMenuBtn(vt: *iArea, id: guis.Uid, gui: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        vt.dirty(gui);
+    fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, gui: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.vt.dirty(gui);
         const ed = self.opts.parent.editor;
         const sel_id = self.right_click_id orelse return;
         const bi = guis.Widget.BtnContextWindow.buttonId;

@@ -16,7 +16,7 @@ pub const PollingTexture = struct {
     pub const Opts = struct {
         tint: u32 = 0xffff_ffff,
 
-        cb_vt: ?*iArea = null,
+        cb_vt: ?*g.CbHandle = null,
         cb_fn: ?Widget.Button.ButtonCallbackT = null,
         id: usize = 0,
     };
@@ -27,29 +27,24 @@ pub const PollingTexture = struct {
     opts: Opts,
     text: []const u8,
 
-    pub fn build(gui: *Gui, area_o: ?Rect, ed: *edit.Context, vpk_id: vpk.VpkResId, comptime fmt: []const u8, args: anytype, opts: Opts) ?*iArea {
+    pub fn build(gui: *Gui, area_o: ?Rect, ed: *edit.Context, vpk_id: vpk.VpkResId, comptime fmt: []const u8, args: anytype, opts: Opts) ?g.NewVt {
         const area = area_o orelse return null;
         const self = gui.create(@This());
         var str = std.ArrayList(u8).init(gui.alloc);
         str.writer().print(fmt, args) catch return null;
 
         self.* = .{
-            .vt = iArea.init(gui, area),
+            .vt = .{ .area = area, .deinit_fn = deinit, .draw_fn = draw },
             .text = str.toOwnedSlice() catch return null,
             .vpk_id = vpk_id,
             .opts = opts,
             .ed = ed,
         };
-        self.vt.draw_fn = &draw;
-        self.vt.deinit_fn = &deinit;
-        self.vt.onclick = &onclick;
-        const missing = edit.missingTexture();
-        const tex = self.ed.getTexture(self.vpk_id) catch return &self.vt;
-        if (tex.id == missing.id) {
-            self.vt.onpoll = &pollForTexture;
-        }
 
-        return &self.vt;
+        const missing = edit.missingTexture();
+        const tex = self.ed.getTexture(self.vpk_id) catch return .{ .vt = &self.vt, .onclick = onclick };
+
+        return .{ .vt = &self.vt, .onclick = onclick, .onpoll = if (tex.id == missing.id) pollForTexture else null };
     }
 
     pub fn pollForTexture(vt: *iArea, gui: *Gui, win: *iWindow) void {

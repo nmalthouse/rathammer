@@ -61,7 +61,7 @@ pub const Translate = struct {
         mean,
         last_selected,
     } = .last_selected,
-    cb_vt: iArea = undefined,
+    cbhandle: guis.CbHandle = .{},
     win_ptr: ?*iWindow = null,
 
     /// Clicking anywhere will move in xy plane
@@ -487,11 +487,11 @@ pub const Translate = struct {
         if (guis.label(area_vt, gui, win, ly.getArea(), "Set grid", .{})) |ar|
             area_vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                 .commit_cb = &@This().textbox_cb,
-                .commit_vt = &self.cb_vt,
+                .commit_vt = &self.cbhandle,
                 .clear_on_commit = true,
             }));
         const Btn = Wg.Button.build;
-        area_vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Reset Grid", .{ .cb_fn = &btnCb, .id = 0, .cb_vt = &self.cb_vt }));
+        area_vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Reset Grid", .{ .cb_fn = &btnCb, .id = 0, .cb_vt = &self.cbhandle }));
 
         const CB = Wg.Checkbox.build;
         {
@@ -522,16 +522,16 @@ pub const Translate = struct {
         }
     }
 
-    fn btnCb(vt: *iArea, _: usize, _: *RGui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    fn btnCb(vt: *guis.CbHandle, _: usize, _: *RGui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
 
         self.ed.grid.setAll(16);
         if (self.win_ptr) |wp|
             wp.needs_rebuild = true;
     }
 
-    fn textbox_cb(vt: *iArea, _: *RGui, string: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    fn textbox_cb(vt: *guis.CbHandle, _: *RGui, string: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         self.textboxErr(string, id) catch return;
         if (self.win_ptr) |wp|
             wp.needs_rebuild = true;

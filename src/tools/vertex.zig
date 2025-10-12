@@ -43,7 +43,7 @@ pub const VertexTranslate = struct {
     vt: i3DTool,
     selected: std.AutoHashMap(ecs.EcsT.Id, Sel),
 
-    cb_vt: iArea = undefined,
+    cbhandle: guis.CbHandle = .{},
 
     /// The perpendicular distance between a vertex and the mouse's ray must be smaller than the distance from vertex to camera multiplied by this factor to be a
     /// candidate for selection.
@@ -576,14 +576,14 @@ pub const VertexTranslate = struct {
             area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.selection_mode, .{}));
         area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Modify disps", .{ .bool_ptr = &self.do_displacements }, null));
         area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "snap selected to integer", .{
-            .cb_vt = &self.cb_vt,
+            .cb_vt = &self.cbhandle,
             .cb_fn = &btn_cb,
             .id = @intFromEnum(Btn.snap_selected),
         }));
     }
 
-    pub fn btn_cb(vt: *iArea, id: usize, gui: *RGui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    pub fn btn_cb(vt: *guis.CbHandle, id: usize, gui: *RGui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         self.btn_cbErr(id, gui, win) catch return;
     }
     pub fn btn_cbErr(self: *@This(), id: usize, _: *RGui, _: *guis.iWindow) !void {

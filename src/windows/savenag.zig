@@ -33,6 +33,7 @@ pub const NagWindow = struct {
     };
 
     vt: iWindow,
+    cbhandle: guis.CbHandle = .{},
     area: iArea,
 
     editor: *Context,
@@ -41,12 +42,10 @@ pub const NagWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) !*NagWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = iArea.init(gui, Rec(0, 0, 0, 0)),
+            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
             .editor = editor,
         };
-        self.area.draw_fn = &draw;
-        self.area.deinit_fn = &area_deinit;
 
         return self;
     }
@@ -79,11 +78,11 @@ pub const NagWindow = struct {
         var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = inset };
         const Btn = Wg.Button.build;
         self.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Unsaved changes! ", null));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.area }));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.area }));
+        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle }));
+        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle }));
     }
-    pub fn btnCb(vt: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", vt));
+    pub fn btnCb(cb: *guis.CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .quit => self.should_exit = true,
             .save => {

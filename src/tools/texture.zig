@@ -67,9 +67,7 @@ pub const TextureTool = struct {
     state: enum { pick, apply } = .apply,
     ed: *Editor,
 
-    // Only used for a pointer
-    // todo, fix the gui stuff
-    cb_vt: iArea = undefined,
+    cbhandle: guis.CbHandle = .{},
     win_ptr: ?*iWindow = null,
     stupid_start: f32 = 0,
 
@@ -137,14 +135,14 @@ pub const TextureTool = struct {
             fn param(s: *TextureTool, id: GuiTextEnum) Wg.TextboxOptions {
                 return .{
                     .commit_cb = &TextureTool.textbox_cb,
-                    .commit_vt = &s.cb_vt,
+                    .commit_vt = &s.cbhandle,
                     .user_id = @intFromEnum(id),
                 };
             }
 
             fn slide(s: *TextureTool, id: GuiTextEnum, snap: f32, min: f32, max: f32, def: f32) Wg.StaticSliderOpts {
                 return .{
-                    .commit_vt = &s.cb_vt,
+                    .commit_vt = &s.cbhandle,
                     .display_bounds_while_editing = false,
                     .slide_cb = TextureTool.slideCb,
                     .commit_cb = TextureTool.slideCommit,
@@ -158,7 +156,7 @@ pub const TextureTool = struct {
 
             fn btn(s: *TextureTool, id: GuiBtnEnum) Wg.Button.Opts {
                 return .{
-                    .cb_vt = &s.cb_vt,
+                    .cb_vt = &s.cbhandle,
                     .cb_fn = &TextureTool.btn_cb,
                     .id = @intFromEnum(id),
                 };
@@ -262,8 +260,8 @@ pub const TextureTool = struct {
         }
     }
 
-    fn textbox_cb(vt: *iArea, _: *Gui, string: []const u8, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    fn textbox_cb(cb: *guis.CbHandle, _: *Gui, string: []const u8, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
         const num = std.fmt.parseFloat(f32, string) catch return;
         self.textboxErr(num, id) catch return;
@@ -309,8 +307,8 @@ pub const TextureTool = struct {
         }
     }
 
-    fn slideCb(vt: *iArea, _: *Gui, num: f32, id: usize, state: Wg.StaticSliderOpts.State) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    fn slideCb(cb: *guis.CbHandle, _: *Gui, num: f32, id: usize, state: Wg.StaticSliderOpts.State) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const text_k = @as(GuiTextEnum, @enumFromInt(id));
 
         if (self.selected_faces.items.len == 0) return;
@@ -340,14 +338,14 @@ pub const TextureTool = struct {
         }
     }
 
-    fn slideCommit(vt: *iArea, _: *Gui, num: f32, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    fn slideCommit(cb: *guis.CbHandle, _: *Gui, num: f32, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         std.debug.print("SLIDE COMMIT\n", .{});
         self.textboxErr(num, id) catch return;
     }
 
-    pub fn btn_cb(vt: *iArea, id: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
+    pub fn btn_cb(cb: *guis.CbHandle, id: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.btn_cbErr(id, gui, win) catch return;
     }
     pub fn btn_cbErr(self: *@This(), id: usize, _: *Gui, _: *guis.iWindow) !void {
