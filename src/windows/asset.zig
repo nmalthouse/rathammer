@@ -20,6 +20,7 @@ const VpkId = vpk.VpkResId;
 const log = std.log.scoped(.asset);
 
 pub const AssetBrowser = struct {
+    pub const tabs = [_][]const u8{ "texture", "model", "vpk", "fgd", "undo" };
     const Self = @This();
 
     vt: iWindow,
@@ -27,7 +28,10 @@ pub const AssetBrowser = struct {
     area: iArea,
 
     tex_browse: TextureBrowser,
+    vpk_browse: VpkBrowser,
     alloc: std.mem.Allocator,
+
+    tab_index: usize = 0,
 
     ed: *Context,
 
@@ -39,6 +43,11 @@ pub const AssetBrowser = struct {
             .ed = editor,
             .alloc = gui.alloc,
             .tex_browse = .{ .alloc = gui.alloc, .ed = editor, .win = &self.vt },
+            .vpk_browse = .{ .list = .{
+                .alloc = gui.alloc,
+                .search_vt = &self.vpk_browse.lscb,
+                .win = &self.vt,
+            }, .ed = editor, .win = &self.vt },
         };
 
         return self;
@@ -78,12 +87,14 @@ pub const AssetBrowser = struct {
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             }
         }
+        self.vpk_browse.list.appendMaster(self.ed.vpkctx.entries.keys()) catch {};
         log.info("excluded {d} materials", .{excluded});
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.tex_browse.deinit();
+        self.vpk_browse.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -100,35 +111,46 @@ pub const AssetBrowser = struct {
         self.area.clearChildren(gui, win);
         self.area.dirty(gui);
         self.tex_browse.reset();
+        self.vpk_browse.reset();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         const lay = &self.area;
 
-        self.tex_browse.build(lay, win, gui, inset);
+        lay.addChildOpt(gui, win, Wg.Tabs.build(gui, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+    }
+
+    fn buildTabs(user_vt: *iArea, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("area", user_vt));
+        const eql = std.mem.eql;
+        if (eql(u8, tab_name, "texture")) {
+            self.tex_browse.build(vt, win, gui, vt.area);
+            return;
+        }
+        if (eql(u8, tab_name, "vpk")) {
+            self.vpk_browse.build(vt, win, gui, vt.area);
+            return;
+        }
     }
 };
 
 const VpkBrowser = struct {
     const Self = @This();
-    alloc: std.mem.Allocator,
     ed: *Context,
     win: *iWindow,
 
     cbhandle: guis.CbHandle = .{},
 
-    list_search_a: ArrayList(VpkId) = .{},
-    list_search_b: ArrayList(VpkId) = .{},
+    lscb: ListSearchCb = .{
+        .search_cb = searchCb,
+    },
 
-    prev_search: ArrayList(u8) = .{},
-    scr_ptr: ?*Wg.VScroll = null,
+    list: ListSearch,
 
     pub fn deinit(self: *@This()) void {
-        self.list_search_a.deinit(self.alloc);
-        self.list_search_b.deinit(self.alloc);
-        self.prev_search.deinit(self.alloc);
+        self.list.deinit();
     }
 
     pub fn reset(self: *@This()) void {
-        self.scr_ptr = null;
+        self.list.reset();
     }
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
@@ -137,22 +159,13 @@ const VpkBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
-            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar| {
-                if (Wg.Textbox.buildOpts(gui, ar, .{
-                    .user_id = 0,
-                    .commit_vt = &self.cbhandle,
-                    .commit_cb = cb_commitTextbox,
-                    .commit_when = .on_change,
-                })) |tbvt| {
-                    lay.addChildOpt(gui, win, tbvt);
-                    gui.grabFocus(tbvt.vt, win);
-                }
+            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
+                self.list.addTextbox(lay, gui, win, ar);
+            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
+                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.list.num_result));
             }
         }
         _ = ly.getArea(); //break
-
-        self.list_search_a.clearRetainingCapacity();
-        self.list_search_a.appendSlice(self.alloc, self.mat_list.items) catch {};
 
         ly.pushRemaining();
         if (ly.getArea()) |tview| {
@@ -160,72 +173,38 @@ const VpkBrowser = struct {
                 .build_cb = buildVpkList,
                 .build_vt = &self.cbhandle,
                 .win = win,
-                .count = self.list_search_a.items.len,
+                .count = self.list.count(),
                 .item_h = gui.style.config.default_item_h,
             })) |scr| {
                 lay.addChildOpt(gui, win, scr);
-                self.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
+                self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
             }
-        }
-
-        // Main view
-        // info about matches
-        // maybe toggles or something
-        // search bar
-
-    }
-
-    fn cb_commitTextbox(cb: *CbHandle, gui: *Gui, string: []const u8, _: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        if (std.mem.eql(u8, string, self.prev_search.items))
-            return;
-        defer {
-            self.prev_search.clearRetainingCapacity();
-            self.prev_search.appendSlice(self.alloc, string) catch {};
-        }
-
-        var search_list = self.mat_list.items;
-
-        if (std.mem.startsWith(u8, string, self.prev_search.items)) {
-            self.mat_list_search_b.clearRetainingCapacity();
-            self.mat_list_search_b.appendSlice(self.alloc, self.mat_list_search_a.items) catch return;
-            search_list = self.mat_list_search_b.items;
-        }
-        const io = std.mem.indexOf;
-        self.mat_list_search_a.clearRetainingCapacity();
-        for (search_list) |item| {
-            const tt = self.ed.vpkctx.entries.get(item) orelse continue;
-            if (io(u8, tt.path, string) != null or io(u8, tt.name, string) != null)
-                self.mat_list_search_a.append(self.alloc, item) catch return;
-        }
-        if (self.scr_ptr) |scr| {
-            scr.updateCount(self.getTextureRowCount());
-            scr.index_ptr.* = 0;
-            scr.rebuild(gui, self.win);
         }
     }
 
     fn buildVpkList(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        const adj_index = index * self.num_column;
-        if (adj_index >= self.mat_list_search_a.items.len) return;
-        var tly = guis.TableLayout{
-            .columns = @intCast(self.num_column),
-            .item_height = self.getTextureRowHeight(vt.area.w),
-            .bounds = vt.area,
-        };
-        for (self.mat_list_search_a.items[adj_index..]) |mat| {
-            const tt = self.ed.vpkctx.entries.get(mat) orelse return;
-            const tint: u32 = if (mat == self.ed.asset_browser.selected_mat_vpk_id) 0xff8888_ff else 0xffff_ffff;
-            vt.addChildOpt(gui, win, ptext.PollingTexture.build(gui, tly.getArea(), self.ed, mat, "{s}/{s}", .{
-                tt.path, tt.name,
-            }, .{
-                .cb_vt = cb,
-                .cb_fn = void,
-                .id = mat,
-                .tint = tint,
-            }));
+        const list = self.list.getSlice();
+        if (index >= list.len) return;
+        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+        for (list[index..]) |item| {
+            const tt = self.ed.vpkctx.entries.get(item) orelse return;
+            const dd = vpk.decodeResourceId(item);
+            const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
+            vt.addChildOpt(gui, win, Wg.Text.build(
+                gui,
+                ly.getArea(),
+                "{s}/{s}.{s}",
+                .{ tt.path, tt.name, ext },
+            ));
         }
+    }
+
+    fn searchCb(lscb: *ListSearchCb, id: VpkId, search: []const u8) bool {
+        const self: *@This() = @alignCast(@fieldParentPtr("lscb", lscb));
+        const tt = self.ed.vpkctx.entries.get(id) orelse return false;
+        const io = std.mem.indexOf;
+        return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
     }
 };
 
@@ -246,6 +225,7 @@ const TextureBrowser = struct {
     mod_list_search: ArrayList(VpkId) = .{},
 
     num_column: usize = 12,
+    num_result: usize = 0,
 
     prev_search: ArrayList(u8) = .{},
 
@@ -278,11 +258,15 @@ const TextureBrowser = struct {
                     gui.grabFocus(tbvt.vt, win);
                 }
             }
+            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
+                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.num_result));
+            }
         }
         _ = ly.getArea(); //break
 
         self.mat_list_search_a.clearRetainingCapacity();
         self.mat_list_search_a.appendSlice(self.alloc, self.mat_list.items) catch {};
+        self.num_result = self.mat_list_search_a.items.len;
 
         ly.pushRemaining();
         if (ly.getArea()) |tview| {
@@ -336,6 +320,7 @@ const TextureBrowser = struct {
             if (io(u8, tt.path, string) != null or io(u8, tt.name, string) != null)
                 self.mat_list_search_a.append(self.alloc, item) catch return;
         }
+        self.num_result = self.mat_list_search_a.items.len;
         if (self.scr_ptr) |scr| {
             scr.updateCount(self.getTextureRowCount());
             scr.index_ptr.* = 0;
@@ -372,6 +357,97 @@ const TextureBrowser = struct {
         self.ed.asset_browser.recent_mats.put(id) catch {};
         if (self.scr_ptr) |scr| {
             scr.rebuild(gui, win);
+        }
+    }
+};
+
+const ListSearchCb = struct {
+    search_cb: *const fn (*ListSearchCb, VpkId, []const u8) bool,
+};
+const ListSearch = struct {
+    list_a: ArrayList(VpkId) = .{},
+    list_b: ArrayList(VpkId) = .{},
+    master: ArrayList(VpkId) = .{},
+    prev_search: ArrayList(u8) = .{},
+    alloc: std.mem.Allocator,
+
+    num_result: usize = 0,
+
+    cbhandle: CbHandle = .{},
+
+    scr_ptr: ?*Wg.VScroll = null,
+    win: *iWindow,
+
+    search_vt: *ListSearchCb,
+
+    pub fn reset(self: *@This()) void {
+        self.scr_ptr = null;
+
+        self.num_result = self.master.items.len;
+        //Avoid a big copy, assumes all items are unique etc
+        if (self.list_a.items.len == self.master.items.len) return;
+
+        self.list_a.clearRetainingCapacity();
+        self.list_a.appendSlice(self.alloc, self.master.items) catch {};
+    }
+
+    pub fn appendMaster(self: *@This(), slice: []const VpkId) !void {
+        try self.master.appendSlice(self.alloc, slice);
+    }
+
+    pub fn count(self: *const @This()) usize {
+        return self.list_a.items.len;
+    }
+
+    pub fn getSlice(self: *const @This()) []const VpkId {
+        return self.list_a.items;
+    }
+
+    pub fn deinit(self: *@This()) void {
+        self.list_a.deinit(self.alloc);
+        self.list_b.deinit(self.alloc);
+        self.master.deinit(self.alloc);
+        self.prev_search.deinit(self.alloc);
+    }
+
+    pub fn addTextbox(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, area: Rect) void {
+        if (Wg.Textbox.buildOpts(gui, area, .{
+            .user_id = 0,
+            .commit_vt = &self.cbhandle,
+            .commit_cb = ListSearch.cb_commitTextbox,
+            .commit_when = .on_change,
+        })) |tbvt| {
+            lay.addChildOpt(gui, win, tbvt);
+            gui.grabFocus(tbvt.vt, win);
+        }
+    }
+
+    fn cb_commitTextbox(cb: *CbHandle, gui: *Gui, string: []const u8, _: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        if (std.mem.eql(u8, string, self.prev_search.items))
+            return;
+        defer {
+            self.prev_search.clearRetainingCapacity();
+            self.prev_search.appendSlice(self.alloc, string) catch {};
+        }
+
+        var search_list = self.master.items;
+
+        if (std.mem.startsWith(u8, string, self.prev_search.items)) {
+            self.list_b.clearRetainingCapacity();
+            self.list_b.appendSlice(self.alloc, self.list_a.items) catch return;
+            search_list = self.list_b.items;
+        }
+        self.list_a.clearRetainingCapacity();
+        for (search_list) |item| {
+            if (self.search_vt.search_cb(self.search_vt, item, string))
+                self.list_a.append(self.alloc, item) catch return;
+        }
+        self.num_result = self.list_a.items.len;
+        if (self.scr_ptr) |scr| {
+            scr.updateCount(self.list_a.items.len);
+            scr.index_ptr.* = 0;
+            scr.rebuild(gui, self.win);
         }
     }
 };

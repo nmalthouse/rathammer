@@ -69,22 +69,20 @@ pub const Context = struct {
     /// Map a resource string to numeric id
     const IdMap = struct {
         /// All strings are stored by parent vpk.Context.arena
-        map: std.StringHashMap(u32),
-        lut: std.ArrayList([]const u8), //Strings owned by arena
+        alloc: std.mem.Allocator,
+        map: std.StringArrayHashMapUnmanaged(u32),
+        lut: std.ArrayListUnmanaged([]const u8), //Strings owned by arena
         counter: u32 = 0,
         mutex: std.Thread.Mutex = .{},
 
         pub fn init(alloc: std.mem.Allocator) @This() {
-            return .{
-                .map = std.StringHashMap(u32).init(alloc),
-                .lut = std.ArrayList([]const u8).init(alloc),
-            };
+            return .{ .map = .{}, .lut = .{}, .alloc = alloc };
         }
 
         pub fn deinit(self: *@This()) void {
             self.mutex.lock();
-            self.map.deinit();
-            self.lut.deinit();
+            self.map.deinit(self.alloc);
+            self.lut.deinit(self.alloc);
         }
 
         pub fn getName(self: *@This(), id: u32) ?[]const u8 {
@@ -102,8 +100,8 @@ pub const Context = struct {
 
             self.counter += 1;
             const new_id = self.counter;
-            try self.lut.append(res_name);
-            try self.map.put(res_name, new_id);
+            try self.lut.append(self.alloc, res_name);
+            try self.map.put(self.alloc, res_name, new_id);
             return new_id;
         }
 
@@ -113,7 +111,6 @@ pub const Context = struct {
             return self.map.get(res_name);
         }
     };
-    const IdEntryMap = std.AutoHashMap(VpkResId, Entry);
 
     const Dir = struct {
         prefix: []const u8,
@@ -167,7 +164,7 @@ pub const Context = struct {
     res_map: IdMap,
 
     /// This maps a encodeResourceId id to a vpk entry
-    entries: IdEntryMap,
+    entries: std.AutoArrayHashMapUnmanaged(VpkResId, Entry) = .{},
 
     loose_dirs: std.ArrayList(std.fs.Dir),
     dirs: std.ArrayList(Dir),
@@ -192,7 +189,6 @@ pub const Context = struct {
             .extension_map = IdMap.init(alloc),
             .path_map = IdMap.init(alloc),
             .res_map = IdMap.init(alloc),
-            .entries = IdEntryMap.init(alloc),
             .loose_dirs = std.ArrayList(std.fs.Dir).init(alloc),
             .name_buf = std.ArrayList(u8).init(alloc),
 
@@ -225,7 +221,7 @@ pub const Context = struct {
         self.extension_map.deinit();
         self.path_map.deinit();
         self.res_map.deinit();
-        self.entries.deinit();
+        self.entries.deinit(self.alloc);
     }
 
     //Not thread safe
@@ -326,7 +322,7 @@ pub const Context = struct {
                             const fname_stored = try self.string_storage.store(split.name);
                             const fname_id = try self.res_map.getPut(fname_stored);
                             const res_id = encodeResourceId(ext_id, path_id, fname_id);
-                            const entry = try self.entries.getOrPut(res_id);
+                            const entry = try self.entries.getOrPut(self.alloc, res_id);
                             if (!entry.found_existing) {
                                 entry.value_ptr.* = Entry{
                                     .res_id = res_id,
@@ -617,7 +613,7 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, fbs: *std.io.FixedBufferS
                 const fname_stored = try self.string_storage.store(fname);
                 const fname_id = try self.res_map.getPut(fname_stored);
                 const res_id = encodeResourceId(ext_id, path_id, fname_id);
-                const entry = try self.entries.getOrPut(res_id);
+                const entry = try self.entries.getOrPut(self.alloc, res_id);
                 if (!entry.found_existing) {
                     entry.value_ptr.* = Context.Entry{
                         .res_id = res_id,
