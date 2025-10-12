@@ -147,7 +147,7 @@ pub const GuiPane = struct {
 
     pub fn draw_fn(vt: *iPane, screen_area: graph.Rect, editor: *Editor, _: ViewDrawState, pane_id: PaneId) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.gui_ptr.window_collector.append(self.window_vt) catch return;
+        self.gui_ptr.window_collector.append(self.gui_ptr.alloc, self.window_vt) catch return;
         self.gui_ptr.updateWindowSize(self.window_vt, screen_area) catch return;
         if (editor.panes.grab.owns(pane_id)) {
             self.gui_ptr.update(&.{self.window_vt}) catch return;

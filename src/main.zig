@@ -23,6 +23,7 @@ const NagWindow = @import("windows/savenag.zig").NagWindow;
 const PauseWindow = @import("windows/pause.zig").PauseWindow;
 const ConsoleWindow = @import("windows/console.zig").Console;
 const InspectorWindow = @import("windows/inspector.zig").InspectorWindow;
+const AssetBrowser = @import("windows/asset.zig").AssetBrowser;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
 const panereg = @import("pane.zig");
 const json_map = @import("json_map.zig");
@@ -432,6 +433,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     try gui.addWindow(&inspector_win.vt, Rec(0, 300, 1000, 1000));
     const nag_win = try NagWindow.create(&gui, editor);
     try gui.addWindow(&nag_win.vt, Rec(0, 300, 1000, 1000));
+    const asset_win = try AssetBrowser.create(&gui, editor);
+    try gui.addWindow(&asset_win.vt, Rec(0, 0, 100, 1000));
+    try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
 
     const launch_win = try LaunchWindow.create(&gui, editor);
     if (args.map == null) { //Only build the recents list if we don't have a map
@@ -478,6 +482,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const texture_pane = try editor.panes.add(try OldGuiPane.create(editor.panes.alloc, editor, .texture, &os9gui));
     const model_pane = try editor.panes.add(try OldGuiPane.create(editor.panes.alloc, editor, .model, &os9gui));
     const model_preview_pane = try editor.panes.add(try OldGuiPane.create(editor.panes.alloc, editor, .model_view, &os9gui));
+
+    const use_old_texture = false;
+    const asset_pane = try editor.panes.add(try panereg.GuiPane.create(editor.panes.alloc, &gui, &asset_win.vt));
+
     editor.edit_state.inspector_pane_id = inspector_pane;
 
     loadctx.cb("Loading");
@@ -545,7 +553,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         },
     });
     try ws.workspaces.append(main_tab);
-    try ws.workspaces.append(ws.newArea(.{ .pane = texture_pane }));
+    try ws.workspaces.append(ws.newArea(.{ .pane = if (use_old_texture) texture_pane else asset_pane }));
     try ws.workspaces.append(ws.newArea(.{ .sub = .{
         .split = .{ .k = .vert, .perc = 0.4 },
         .left = ws.newArea(.{ .pane = model_pane }),
@@ -667,7 +675,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             console_win.focus(&gui);
             console_win.area.dirty(&gui);
             try gui.update(&.{&console_win.vt});
-            try gui.window_collector.append(&console_win.vt);
+            try gui.window_collector.append(gui.alloc, &console_win.vt);
         }
 
         editor.panes.grab.endFrame();
