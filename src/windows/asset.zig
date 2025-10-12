@@ -16,6 +16,7 @@ const vpk = @import("../vpk.zig");
 const ArrayList = std.ArrayListUnmanaged;
 const ptext = @import("widget_texture.zig");
 const VpkId = vpk.VpkResId;
+const inspector = @import("inspector.zig");
 
 const log = std.log.scoped(.asset);
 
@@ -29,6 +30,7 @@ pub const AssetBrowser = struct {
 
     tex_browse: TextureBrowser,
     vpk_browse: VpkBrowser,
+    mod_browse: ModelBrowser,
     alloc: std.mem.Allocator,
 
     tab_index: usize = 0,
@@ -48,6 +50,7 @@ pub const AssetBrowser = struct {
                 .search_vt = &self.vpk_browse.lscb,
                 .win = &self.vt,
             }, .ed = editor, .win = &self.vt },
+            .mod_browse = .{ .list = .{ .alloc = gui.alloc, .search_vt = &self.mod_browse.lscb, .win = &self.vt }, .ed = editor, .win = &self.vt },
         };
 
         return self;
@@ -82,7 +85,7 @@ pub const AssetBrowser = struct {
                 }
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             } else if (id == mdl) {
-                try self.tex_browse.mod_list.append(self.alloc, item.key_ptr.*);
+                try self.mod_browse.list.master.append(self.mod_browse.list.alloc, item.key_ptr.*);
             } else if (id == png) {
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             }
@@ -95,6 +98,7 @@ pub const AssetBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.tex_browse.deinit();
         self.vpk_browse.deinit();
+        self.mod_browse.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -112,6 +116,7 @@ pub const AssetBrowser = struct {
         self.area.dirty(gui);
         self.tex_browse.reset();
         self.vpk_browse.reset();
+        self.mod_browse.reset();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         const lay = &self.area;
 
@@ -127,6 +132,10 @@ pub const AssetBrowser = struct {
         }
         if (eql(u8, tab_name, "vpk")) {
             self.vpk_browse.build(vt, win, gui, vt.area);
+            return;
+        }
+        if (eql(u8, tab_name, "model")) {
+            self.mod_browse.build(vt, win, gui, vt.area);
             return;
         }
     }
@@ -168,17 +177,15 @@ const VpkBrowser = struct {
         _ = ly.getArea(); //break
 
         ly.pushRemaining();
-        if (ly.getArea()) |tview| {
-            if (Wg.VScroll.build(gui, tview, .{
-                .build_cb = buildVpkList,
-                .build_vt = &self.cbhandle,
-                .win = win,
-                .count = self.list.count(),
-                .item_h = gui.style.config.default_item_h,
-            })) |scr| {
-                lay.addChildOpt(gui, win, scr);
-                self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
-            }
+        if (Wg.VScroll.build(gui, ly.getArea(), .{
+            .build_cb = buildVpkList,
+            .build_vt = &self.cbhandle,
+            .win = win,
+            .count = self.list.count(),
+            .item_h = gui.style.config.default_item_h,
+        })) |scr| {
+            lay.addChildOpt(gui, win, scr);
+            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
         }
     }
 
@@ -196,6 +203,85 @@ const VpkBrowser = struct {
                 ly.getArea(),
                 "{s}/{s}.{s}",
                 .{ tt.path, tt.name, ext },
+            ));
+        }
+    }
+
+    fn searchCb(lscb: *ListSearchCb, id: VpkId, search: []const u8) bool {
+        const self: *@This() = @alignCast(@fieldParentPtr("lscb", lscb));
+        const tt = self.ed.vpkctx.entries.get(id) orelse return false;
+        const io = std.mem.indexOf;
+        return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
+    }
+};
+
+const ModelBrowser = struct {
+    const Self = @This();
+    ed: *Context,
+    win: *iWindow,
+
+    cbhandle: guis.CbHandle = .{},
+
+    lscb: ListSearchCb = .{
+        .search_cb = searchCb,
+    },
+
+    list: ListSearch,
+
+    pub fn deinit(self: *@This()) void {
+        self.list.deinit();
+    }
+
+    pub fn reset(self: *@This()) void {
+        self.list.reset();
+    }
+
+    pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
+        const sp = area.split(.vertical, area.w / 2);
+        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = sp[0] };
+        if (ly.getArea()) |header| {
+            const header_col = 4;
+            var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
+            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
+                self.list.addTextbox(lay, gui, win, ar);
+            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
+                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.list.num_result));
+            }
+        }
+        _ = ly.getArea(); //break
+
+        ly.pushRemaining();
+        if (Wg.VScroll.build(gui, ly.getArea(), .{
+            .build_cb = buildModList,
+            .build_vt = &self.cbhandle,
+            .win = win,
+            .count = self.list.count(),
+            .item_h = gui.style.config.default_item_h,
+        })) |scr| {
+            lay.addChildOpt(gui, win, scr);
+            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
+        }
+    }
+
+    fn buildModList(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const list = self.list.getSlice();
+        if (index >= list.len) return;
+        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+        for (list[index..], index..) |item, i| {
+            const tt = self.ed.vpkctx.entries.get(item) orelse return;
+
+            vt.addChildOpt(gui, win, Wg.Button.build(
+                gui,
+                ly.getArea(),
+                tt.name,
+                .{
+                    .id = i,
+                    .cb_vt = &self.list.cbhandle,
+                    .cb_fn = ListSearch.btnCb,
+                    .custom_draw = inspector.customButtonDraw,
+                    .user_1 = if (self.list.selected_index == i) 1 else 0,
+                },
             ));
         }
     }
@@ -379,6 +465,7 @@ const ListSearch = struct {
     win: *iWindow,
 
     search_vt: *ListSearchCb,
+    selected_index: usize = 0,
 
     pub fn reset(self: *@This()) void {
         self.scr_ptr = null;
@@ -449,5 +536,10 @@ const ListSearch = struct {
             scr.index_ptr.* = 0;
             scr.rebuild(gui, self.win);
         }
+    }
+
+    fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.selected_index = id;
     }
 };

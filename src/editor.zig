@@ -111,8 +111,14 @@ pub const Context = struct {
     /// Store static strings for the lifetime of application
     string_storage: StringStorage,
 
+    /// Stores all the world state, solids, entities, disp, etc.
+    ecs: EcsT,
+    groups: ecs.Groups,
+
     /// Stores undo state, most changes to world state (ecs) should be done through a undo vtable
     undoctx: undo.UndoContext,
+
+    layers: Layer.Context,
 
     /// This sucks, clean it up
     fgd_ctx: fgd.EntCtx,
@@ -131,16 +137,11 @@ pub const Context = struct {
     /// Gui widget
     asset_browser: assetbrowse.AssetBrowserGui,
 
-    /// Stores all the world state, solids, entities, disp, etc.
-    ecs: EcsT,
-    groups: ecs.Groups,
-
     async_asset_load: thread_pool.Context,
     /// Used to track tool txtures, TODO turn this into transparent_map, sticking all $alphatest and $translucent in here for
     /// alpha draw ordering
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     autovis: autovis.VisContext,
-    layers: Layer.Context,
 
     shell: *shell.CommandCtx,
 
