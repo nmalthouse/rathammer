@@ -221,12 +221,14 @@ const ModelBrowser = struct {
     win: *iWindow,
 
     cbhandle: guis.CbHandle = .{},
+    selected_index: usize = 0,
 
     lscb: ListSearchCb = .{
         .search_cb = searchCb,
     },
 
     list: ListSearch,
+    scroll_index: usize = 0,
 
     pub fn deinit(self: *@This()) void {
         self.list.deinit();
@@ -237,10 +239,9 @@ const ModelBrowser = struct {
     }
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
-        const sp = area.split(.vertical, area.w / 2);
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = sp[0] };
+        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = area };
         if (ly.getArea()) |header| {
-            const header_col = 4;
+            const header_col = 2;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
             if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
@@ -257,6 +258,7 @@ const ModelBrowser = struct {
             .win = win,
             .count = self.list.count(),
             .item_h = gui.style.config.default_item_h,
+            .index_ptr = &self.scroll_index,
         })) |scr| {
             lay.addChildOpt(gui, win, scr);
             self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
@@ -277,10 +279,10 @@ const ModelBrowser = struct {
                 tt.name,
                 .{
                     .id = i,
-                    .cb_vt = &self.list.cbhandle,
-                    .cb_fn = ListSearch.btnCb,
+                    .cb_vt = &self.cbhandle,
+                    .cb_fn = btnCb,
                     .custom_draw = inspector.customButtonDraw,
-                    .user_1 = if (self.list.selected_index == i) 1 else 0,
+                    .user_1 = if (self.selected_index == i) 1 else 0,
                 },
             ));
         }
@@ -292,9 +294,22 @@ const ModelBrowser = struct {
         const io = std.mem.indexOf;
         return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
     }
+
+    fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.selected_index = id;
+        if (id < self.list.list_a.items.len) {
+            const vpkid = self.list.list_a.items[id];
+            self.ed.asset_browser.selected_model_vpk_id = vpkid;
+        }
+        self.win.needs_rebuild = true;
+    }
 };
 
 const TextureBrowser = struct {
+    const MAX_COL = 16;
+    const MIN_COL = 4;
+    const DEF_COL = 12;
     const Self = @This();
     alloc: std.mem.Allocator,
     ed: *Context,
@@ -310,7 +325,7 @@ const TextureBrowser = struct {
 
     mod_list_search: ArrayList(VpkId) = .{},
 
-    num_column: usize = 12,
+    num_column: usize = DEF_COL,
     num_result: usize = 0,
 
     prev_search: ArrayList(u8) = .{},
@@ -347,6 +362,16 @@ const TextureBrowser = struct {
             if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
                 lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.num_result));
             }
+            if (guis.label(lay, gui, win, hy.getArea(), "Columns", .{})) |ar| {
+                lay.addChildOpt(gui, win, Wg.StaticSlider.build(gui, ar, null, .{
+                    .min = MIN_COL,
+                    .max = MAX_COL,
+                    .default = @floatFromInt(self.num_column),
+                    .clamp_edits = true,
+                    .commit_cb = slide_commit,
+                    .commit_vt = &self.cbhandle,
+                }));
+            }
         }
         _ = ly.getArea(); //break
 
@@ -373,6 +398,14 @@ const TextureBrowser = struct {
         // maybe toggles or something
         // search bar
 
+    }
+
+    fn slide_commit(cb: *CbHandle, _: *Gui, num: f32, _: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        if (num > MAX_COL or num < MIN_COL) return;
+        self.num_column = @intFromFloat(num);
+
+        self.win.needs_rebuild = true;
     }
 
     fn getTextureRowCount(self: *const Self) usize {
@@ -457,6 +490,8 @@ const ListSearch = struct {
     prev_search: ArrayList(u8) = .{},
     alloc: std.mem.Allocator,
 
+    list_a_built_with_hash: u64 = 0,
+
     num_result: usize = 0,
 
     cbhandle: CbHandle = .{},
@@ -470,12 +505,17 @@ const ListSearch = struct {
     pub fn reset(self: *@This()) void {
         self.scr_ptr = null;
 
-        self.num_result = self.master.items.len;
-        //Avoid a big copy, assumes all items are unique etc
-        if (self.list_a.items.len == self.master.items.len) return;
+        if (self.list_a_built_with_hash != getHash(self.prev_search.items)) {
+            self.list_a.clearRetainingCapacity();
+            self.list_a.appendSlice(self.alloc, self.master.items) catch {};
+        }
+        self.num_result = self.list_a.items.len;
+        return;
+    }
 
-        self.list_a.clearRetainingCapacity();
-        self.list_a.appendSlice(self.alloc, self.master.items) catch {};
+    fn getHash(str: []const u8) u64 {
+        const ha = std.hash.Wyhash.hash;
+        return ha(0, str);
     }
 
     pub fn appendMaster(self: *@This(), slice: []const VpkId) !void {
@@ -503,6 +543,7 @@ const ListSearch = struct {
             .commit_vt = &self.cbhandle,
             .commit_cb = ListSearch.cb_commitTextbox,
             .commit_when = .on_change,
+            .init_string = self.prev_search.items,
         })) |tbvt| {
             lay.addChildOpt(gui, win, tbvt);
             gui.grabFocus(tbvt.vt, win);
@@ -516,6 +557,7 @@ const ListSearch = struct {
         defer {
             self.prev_search.clearRetainingCapacity();
             self.prev_search.appendSlice(self.alloc, string) catch {};
+            self.list_a_built_with_hash = getHash(self.prev_search.items);
         }
 
         var search_list = self.master.items;

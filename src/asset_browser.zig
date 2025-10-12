@@ -192,41 +192,38 @@ pub const AssetBrowserGui = struct {
         editor: *edit.Context,
         draw: *graph.ImmediateDrawingContext,
     ) !void {
-        const selected_index = self.selected_index_model;
-        if (selected_index < self.model_list_sub.items.len) {
-            const sp = pane_area;
-            self.model_cam.updateDebugMove(if (win.mouse.left == .high) cam_state else .{});
-            const screen_area = pane_area;
-            const x: i32 = @intFromFloat(screen_area.x);
-            const y: i32 = @intFromFloat(screen_area.y);
-            const w: i32 = @intFromFloat(screen_area.w);
-            const h: i32 = @intFromFloat(screen_area.h);
+        const selected_mod = self.selected_model_vpk_id orelse return;
+        const sp = pane_area;
+        self.model_cam.updateDebugMove(if (win.mouse.left == .high) cam_state else .{});
+        const screen_area = pane_area;
+        const x: i32 = @intFromFloat(screen_area.x);
+        const y: i32 = @intFromFloat(screen_area.y);
+        const w: i32 = @intFromFloat(screen_area.w);
+        const h: i32 = @intFromFloat(screen_area.h);
 
-            graph.c.glViewport(x, y, w, h);
-            graph.c.glScissor(x, y, w, h);
-            graph.c.glEnable(graph.c.GL_SCISSOR_TEST);
-            defer graph.c.glDisable(graph.c.GL_SCISSOR_TEST);
-            //todo
-            //defer loading of all textures
+        graph.c.glViewport(x, y, w, h);
+        graph.c.glScissor(x, y, w, h);
+        graph.c.glEnable(graph.c.GL_SCISSOR_TEST);
+        defer graph.c.glDisable(graph.c.GL_SCISSOR_TEST);
+        //todo
+        //defer loading of all textures
 
-            const modid = self.model_list_sub.items[selected_index];
-            self.name_buf.clearRetainingCapacity();
-            //try name_buf.writer().print("models/{s}/{s}.mdl", .{ modname[0], modname[1] });
-            //draw.cube(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10), 0xffffffff);
-            if (editor.models.get(modid)) |mod| {
-                if (mod.mesh) |mm| {
-                    const view = self.model_cam.getMatrix(sp.w / sp.h, 1, 64 * 512);
-                    const mat = graph.za.Mat4.identity();
-                    mm.drawSimple(view, mat, editor.draw_state.basic_shader);
-                }
-            } else {
-                if (editor.vpkctx.entries.get(modid)) |tt| {
-                    try self.name_buf.writer().print("{s}/{s}.mdl", .{ tt.path, tt.name });
-                    _ = try editor.loadModel(self.name_buf.items);
-                }
+        self.name_buf.clearRetainingCapacity();
+        //try name_buf.writer().print("models/{s}/{s}.mdl", .{ modname[0], modname[1] });
+        //draw.cube(Vec3.new(0, 0, 0), Vec3.new(10, 10, 10), 0xffffffff);
+        if (editor.models.get(selected_mod)) |mod| {
+            if (mod.mesh) |mm| {
+                const view = self.model_cam.getMatrix(sp.w / sp.h, 1, 64 * 512);
+                const mat = graph.za.Mat4.identity();
+                mm.drawSimple(view, mat, editor.draw_state.basic_shader);
             }
-            try draw.flush(null, self.model_cam);
+        } else {
+            if (editor.vpkctx.entries.get(selected_mod)) |tt| {
+                try self.name_buf.writer().print("{s}/{s}.mdl", .{ tt.path, tt.name });
+                _ = try editor.loadModel(self.name_buf.items);
+            }
         }
+        try draw.flush(null, self.model_cam);
     }
 
     pub fn drawEditWindow(
