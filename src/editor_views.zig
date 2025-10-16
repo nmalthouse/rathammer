@@ -19,8 +19,6 @@ const eql = std.mem.eql;
 const Window = graph.SDL.Window;
 const action = @import("actions.zig");
 
-const panereg = @import("pane.zig");
-
 pub const Main3DView = struct {
     const iWindow = G.iWindow;
     const iArea = G.iArea;
@@ -95,6 +93,7 @@ pub const Main3DView = struct {
         self.ed.draw_state.cam3d.updateDebugMove(cam_state);
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
+        ed.handleMisc3DKeys();
         draw3Dview(self.ed, vt.area.area, self.drawctx, gui.font, gui.style.config.text_h) catch return;
     }
 
@@ -519,21 +518,3 @@ pub fn draw3Dview(
     try self.draw_state.screen_space_text_ctx.flush(null, null);
     try draw.flush(null, null);
 }
-
-const Split = @import("splitter.zig");
-pub const Tab = struct {
-    split: []Split.Op,
-    panes: []panereg.PaneId,
-
-    pub fn newSplit(s: []Split.Op, i: *usize, sp: []const Split.Op) []Split.Op {
-        @memcpy(s[i.* .. i.* + sp.len], sp);
-        defer i.* += sp.len;
-        return s[i.* .. i.* + sp.len];
-    }
-
-    pub fn newPane(p: []panereg.PaneId, pi: *usize, ps: []const panereg.PaneId) []panereg.PaneId {
-        @memcpy(p[pi.* .. pi.* + ps.len], ps);
-        defer pi.* += ps.len;
-        return p[pi.* .. pi.* + ps.len];
-    }
-};

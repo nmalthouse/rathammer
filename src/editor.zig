@@ -45,7 +45,6 @@ const shell = @import("shell.zig");
 const grid_stuff = @import("grid.zig");
 const class_tracker = @import("class_track.zig");
 const version = @import("version.zig").version;
-const pane = @import("pane.zig");
 const app = @import("app.zig");
 
 const async_util = @import("async.zig");
@@ -151,7 +150,6 @@ pub const Context = struct {
 
     classtrack: class_tracker.Tracker,
 
-    panes: pane.PaneReg,
     stack_owns_input: bool = false,
     stack_grabbed_mouse: bool = false,
 
@@ -228,7 +226,6 @@ pub const Context = struct {
         lmouse: ButtonState = .low,
         rmouse: ButtonState = .low,
         mpos: graph.Vec2f = undefined,
-        inspector_pane_id: usize = 100000,
 
         selected_layer: Layer.Id = .none,
     } = .{},
@@ -319,7 +316,6 @@ pub const Context = struct {
             .string_storage = try StringStorage.init(alloc),
             .asset_browser = assetbrowse.AssetBrowserGui.init(alloc),
             .tools = tool_def.ToolRegistry.init(alloc),
-            .panes = pane.PaneReg.init(alloc),
             .csgctx = try csg.Context.init(alloc),
             .clipctx = clipper.ClipCtx.init(alloc),
             .vpkctx = try vpk.Context.init(alloc),
@@ -429,7 +425,6 @@ pub const Context = struct {
         self.autovis.deinit();
         self.layers.deinit();
         self.tools.deinit();
-        self.panes.deinit();
         self.tool_res_map.deinit();
         self.undoctx.deinit();
         self.ecs.deinit();
@@ -1601,21 +1596,25 @@ pub const Context = struct {
         }
     }
 
-    pub fn handleMisc3DKeys(ed: *Self, tabs: anytype) void {
+    pub fn handleTabKeys(ed: *Self, tabs: anytype) void {
         const config = &ed.config;
         const ds = &ed.draw_state;
+        for (config.keys.workspace.items, 0..) |b, i| {
+            if (ed.win.isBindState(b.b, .rising))
+                ds.tab_index = i;
+        }
+        ds.tab_index = @min(ds.tab_index, tabs.len - 1);
+    }
+
+    pub fn handleMisc3DKeys(ed: *Self) void {
+        const config = &ed.config;
 
         { //key binding stuff
-            for (config.keys.workspace.items, 0..) |b, i| {
-                if (ed.win.isBindState(b.b, .rising))
-                    ds.tab_index = i;
-            }
 
             if (ed.isBindState(config.keys.grid_inc.b, .rising))
                 ed.grid.double();
             if (ed.isBindState(config.keys.grid_dec.b, .rising))
                 ed.grid.half();
-            ds.tab_index = @min(ds.tab_index, tabs.len - 1);
 
             {
                 for (config.keys.tool.items, 0..) |b, i| {

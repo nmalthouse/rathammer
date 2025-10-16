@@ -13,7 +13,6 @@ const vpk = @import("vpk.zig");
 const edit = @import("editor.zig");
 const Editor = @import("editor.zig").Context;
 const Vec3 = V3f;
-const Os9Gui = graph.gui_app.Os9Gui;
 const Gui = graph.Gui;
 const Split = @import("splitter.zig");
 const editor_view = @import("editor_views.zig");
@@ -25,7 +24,6 @@ const ConsoleWindow = @import("windows/console.zig").Console;
 const InspectorWindow = @import("windows/inspector.zig").InspectorWindow;
 const AssetBrowser = @import("windows/asset.zig").AssetBrowser;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
-const panereg = @import("pane.zig");
 const json_map = @import("json_map.zig");
 const fs = @import("fs.zig");
 
@@ -70,79 +68,11 @@ fn event_cb(ev: graph.c.SDL_UserEvent) void {
     }
 }
 
-//Deprecate this please
-//wrapper to make the old gui stuff work with pane reg
-//singleton on kind
-pub const OldGuiPane = struct {
-    const Self = @This();
-    const guis = graph.RGui;
-    const Gui = guis.Gui;
-
-    const Kind = enum {
-        texture,
-        model,
-        model_view,
-    };
-
-    vt: panereg.iPane,
-
-    editor: *Editor,
-    os9gui: *Os9Gui,
-    kind: Kind,
-
-    pub fn create(alloc: std.mem.Allocator, ed: *Editor, kind: Kind, os9gui: *Os9Gui) !*panereg.iPane {
-        var ret = try alloc.create(@This());
-        ret.* = .{
-            .vt = .{
-                .deinit_fn = &deinit,
-                .draw_fn = &draw_fn,
-            },
-            .kind = kind,
-            .os9gui = os9gui,
-            .editor = ed,
-        };
-        return &ret.vt;
-    }
-
-    pub fn draw_fn(vt: *panereg.iPane, pane_area: graph.Rect, editor: *Editor, vd: panereg.ViewDrawState, pane_id: panereg.PaneId) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        switch (self.kind) {
-            .model => {
-                editor.asset_browser.drawEditWindow(pane_area, self.os9gui, editor, .model) catch return;
-            },
-            .texture => {
-                editor.asset_browser.drawEditWindow(pane_area, self.os9gui, editor, .texture) catch return;
-            },
-            .model_view => {
-                _ = editor.panes.grab.trySetGrab(pane_id, editor.win.mouse.left == .high);
-                editor.asset_browser.drawModelPreview(
-                    editor.win,
-                    pane_area,
-                    vd.camstate,
-                    editor,
-                    vd.draw,
-                ) catch return;
-            },
-        }
-    }
-
-    pub fn deinit(vt: *panereg.iPane, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        alloc.destroy(self);
-    }
-};
-
 pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
     const sc = graph.c.SDL_GetWindowDisplayScale(win.win);
     if (sc == 0)
         return error.sdl;
     return sc;
-}
-
-var font_ptr: ?*graph.OnlineFont = null;
-fn flush_cb() void {
-    if (font_ptr) |fp|
-        fp.syncBitmapToGL();
 }
 
 pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, gui_dstate: G.DrawState, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool) !enum { cont, exit, unpause } {
@@ -402,16 +332,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer editor.deinit();
     std.debug.print("edit init took {d} us\n", .{time_init.read() / std.time.ns_per_us});
 
-    var os9gui = try Os9Gui.init(alloc, try app_cwd.dir.openDir("ratgraph", .{}), gui_scale, .{
-        .cache_dir = editor.dirs.pref,
-        .font_size_px = scaled_text_height,
-        .item_height = scaled_item_height,
-        .font = &font.font,
-    });
-    defer os9gui.deinit();
-    draw.preflush_cb = &flush_cb;
-    font_ptr = os9gui.ofont;
-
     loadctx.cb("Loading gui");
     var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font);
     defer gui.deinit();
@@ -437,6 +357,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const asset_win = try AssetBrowser.create(&gui, editor);
     const asset_pane = try gui.addWindow(&asset_win.vt, Rec(0, 0, 100, 1000), .{});
     try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
+
+    const main_2d_id = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .y), .Empty, .{ .put_fbo = false });
+    const main_2d_id2 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .x), .Empty, .{ .put_fbo = false });
+    const main_2d_id3 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .z), .Empty, .{ .put_fbo = false });
 
     const launch_win = try LaunchWindow.create(&gui, editor);
     if (args.map == null) { //Only build the recents list if we don't have a map
@@ -476,8 +400,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     _ = try gui.addWindow(&console_win.vt, Rec(0, 0, 800, 600), .{});
 
     const main_3d_id = try gui.addWindow(try editor_view.Main3DView.create(editor, &gui, &draw), .Empty, .{ .put_fbo = false });
-
-    //editor.edit_state.inspector_pane_id = inspector_pane;
 
     loadctx.cb("Loading");
 
@@ -524,27 +446,29 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         },
     });
 
-    //const main_2d_tab = ws.newArea(.{
-    //    .sub = .{
-    //        .split = .{ .k = .vert, .perc = 0.5 },
-    //        .left = ws.newArea(.{ .sub = .{
-    //            .split = .{ .k = .horiz, .perc = 0.5 },
-    //            .left = ws.newArea(.{ .pane = main_3d_id }),
-    //            .right = ws.newArea(.{ .pane = main_2d_id3 }),
-    //        } }),
-    //        .right = ws.newArea(.{ .sub = .{
-    //            .split = .{ .k = .vert, .perc = 0.5 },
-    //            .left = ws.newArea(.{ .sub = .{
-    //                .split = .{ .k = .horiz, .perc = 0.5 },
-    //                .left = ws.newArea(.{ .pane = main_2d_id }),
-    //                .right = ws.newArea(.{ .pane = main_2d_id2 }),
-    //            } }),
-    //            .right = ws.newArea(.{ .pane = inspector_pane }),
-    //        } }),
-    //    },
-    //});
+    const main_2d_tab = ws.newArea(.{
+        .sub = .{
+            .split = .{ .k = .vert, .perc = 0.5 },
+            .left = ws.newArea(.{ .sub = .{
+                .split = .{ .k = .horiz, .perc = 0.5 },
+                .left = ws.newArea(.{ .pane = main_3d_id }),
+                .right = ws.newArea(.{ .pane = main_2d_id3 }),
+            } }),
+            .right = ws.newArea(.{ .sub = .{
+                .split = .{ .k = .vert, .perc = 0.5 },
+                .left = ws.newArea(.{ .sub = .{
+                    .split = .{ .k = .horiz, .perc = 0.5 },
+                    .left = ws.newArea(.{ .pane = main_2d_id }),
+                    .right = ws.newArea(.{ .pane = main_2d_id2 }),
+                } }),
+                .right = ws.newArea(.{ .pane = inspector_pane }),
+            } }),
+        },
+    });
     try ws.workspaces.append(main_tab);
+
     try ws.workspaces.append(ws.newArea(.{ .pane = asset_pane }));
+    try ws.workspaces.append(main_2d_tab);
     //try ws.workspaces.append(ws.newArea(.{ .sub = .{
     //    .split = .{ .k = .vert, .perc = 0.4 },
     //    .left = ws.newArea(.{ .pane = model_pane }),
@@ -592,10 +516,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
         editor.edit_state.mpos = win.mouse.pos;
 
-        const is_full: Gui.InputState = .{ .mouse = win.mouse, .key_state = &win.key_state, .keys = win.keys.slice(), .mod_state = win.mod };
-        const is = is_full;
-        try os9gui.resetFrame(is, &win);
-
         const winrect = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
         gui.clamp_window = winrect;
         graph.c.glEnable(graph.c.GL_BLEND);
@@ -627,6 +547,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             if (win.isBindState(bind.b, .rising))
                 inspector_win.setTab(ind);
         }
+        editor.handleTabKeys(ws.workspaces.items);
 
         try gui.pre_update();
         gui.active_windows.clearRetainingCapacity();
@@ -636,7 +557,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                 try gui.active_windows.append(gui.alloc, win_vt);
                 try gui.updateWindowSize(win_vt, pane_area);
                 //TODO put this in the places that should have it 2
-                editor.handleMisc3DKeys(ws.workspaces.items);
             }
         }
         try gui.update();
@@ -647,7 +567,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         //    try gui.window_collector.append(gui.alloc, &console_win.vt);
         //}
 
-        try os9gui.drawGui(&draw);
         try gui.draw(gui_dstate, false);
         gui.drawFbos(&draw);
 
