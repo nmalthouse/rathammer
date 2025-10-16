@@ -1,6 +1,7 @@
 const std = @import("std");
 const graph = @import("graph");
 const R = graph.Rect;
+const G = graph.RGui;
 //const R = struct { x: f32, y: f32, w: f32, h: f32 };
 
 const Operation = enum { left, right, top, bottom };
@@ -51,7 +52,7 @@ test {
 
 pub const Orientation = enum { vert, horiz };
 pub const Area = union(enum) {
-    pane: ?usize,
+    pane: G.WindowId,
     sub: struct {
         split: struct { k: Orientation = .vert, perc: f32 = 1 }, //Default split gives left all, right nothing
         left: *Area,
@@ -87,7 +88,7 @@ pub const Splits = struct {
     const Self = @This();
     pub const Output = struct {
         R,
-        ?usize,
+        G.WindowId,
     };
 
     arena: std.heap.ArenaAllocator,
@@ -173,7 +174,7 @@ pub const Splits = struct {
 pub fn flattenTree(
     root_area: R,
     tree: *Area,
-    output_list: *std.ArrayList(struct { R, ?usize }),
+    output_list: *std.ArrayList(struct { R, G.WindowId }),
     output_handles: *std.ArrayList(ResizeHandle),
 ) !void {
     switch (tree.*) {

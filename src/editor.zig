@@ -152,9 +152,10 @@ pub const Context = struct {
     classtrack: class_tracker.Tracker,
 
     panes: pane.PaneReg,
+    stack_owns_input: bool = false,
+    stack_grabbed_mouse: bool = false,
 
     tools: tool_def.ToolRegistry,
-    //panes: eviews.PaneReg,
     paused: bool = true,
     has_loaded_map: bool = false,
 
@@ -711,12 +712,12 @@ pub const Context = struct {
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
-        if (!self.panes.stackOwns()) return false;
+        if (!self.stack_owns_input) return false;
         return self.win.isBindState(bind, state);
     }
 
     pub fn mouseState(self: *const Self) graph.SDL.MouseState {
-        if (!self.panes.stackOwns()) return .{};
+        if (!self.stack_owns_input) return .{};
         return self.win.mouse;
     }
 
@@ -986,7 +987,7 @@ pub const Context = struct {
     pub fn screenRay(self: *Self, screen_area: graph.Rect, view_3d: Mat4) []const raycast.RcastItem {
         const rc = util3d.screenSpaceRay(
             screen_area.dim(),
-            if (self.panes.grab.was_grabbed) screen_area.center() else self.edit_state.mpos,
+            if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos,
             view_3d,
         );
         return self.rayctx.findNearestSolid(&self.ecs, rc[0], rc[1], &self.csgctx, false) catch &.{};
@@ -1357,7 +1358,7 @@ pub const Context = struct {
     pub fn camRay(self: *Self, area: graph.Rect, view: Mat4) [2]Vec3 {
         return util3d.screenSpaceRay(
             area.dim(),
-            if (self.panes.grab.was_grabbed) area.center() else self.edit_state.mpos,
+            if (self.stack_grabbed_mouse) area.center() else self.edit_state.mpos,
             view,
         );
     }

@@ -10,76 +10,120 @@ const cubeFromBounds = Editor.cubeFromBounds;
 const Solid = Editor.Solid;
 const AABB = Editor.AABB;
 const raycast = @import("raycast_solid.zig");
-const Gui = graph.Gui;
+const G = graph.RGui;
 const fgd = @import("fgd.zig");
 const undo = @import("undo.zig");
 const tools = @import("tools.zig");
 const ecs = @import("ecs.zig");
 const eql = std.mem.eql;
-const Os9Gui = graph.Os9Gui;
 const Window = graph.SDL.Window;
 const action = @import("actions.zig");
 
 const panereg = @import("pane.zig");
 
 pub const Main3DView = struct {
-    vt: panereg.iPane,
+    const iWindow = G.iWindow;
+    const iArea = G.iArea;
+    const Gui = G.Gui;
+    const DrawState = G.DrawState;
 
-    font: *graph.FontUtil.PublicFontInterface,
-    fh: f32,
+    vt: G.iWindow,
+    area: G.iArea,
 
-    grab_when: enum {
-        shift_low,
-        shift_high,
-        toggle,
-    } = .toggle,
+    ed: *Context,
+    drawctx: *graph.ImmediateDrawingContext,
+
     // only used when grab_when == .toggle
     grab_toggled: bool = false,
 
-    pub fn draw_fn(vt: *panereg.iPane, screen_area: graph.Rect, editor: *Context, d: panereg.ViewDrawState, pane_id: panereg.PaneId) void {
+    pub fn update(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        const grab_when = editor.config.mouse_grab_when;
+        const can_grab = gui.canGrabMouseOverride(vt);
+        self.ed.stack_owns_input = can_grab;
+        defer self.ed.stack_owns_input = false;
+
+        const grab_when = self.ed.config.mouse_grab_when;
+        const prev_grab_tog = self.grab_toggled;
         switch (grab_when) {
             .toggle => {
-                if (editor.isBindState(editor.config.keys.mouse_capture.b, .rising)) {
+                if (self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .rising)) {
                     self.grab_toggled = !self.grab_toggled;
                 }
             },
             else => {},
         }
-        const shift_high = switch (grab_when) {
-            .key_low => !editor.isBindState(editor.config.keys.mouse_capture.b, .high),
-            .key_high => editor.isBindState(editor.config.keys.mouse_capture.b, .high),
+
+        //These are named wrt high shift uncapturing
+        const should_grab = can_grab and switch (grab_when) {
+            .key_low => !self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .high),
+            .key_high => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .high),
             .toggle => self.grab_toggled,
         };
-        switch (editor.panes.grab.trySetGrab(pane_id, shift_high)) {
-            else => {},
-            .ungrabbed => {
-                const center = screen_area.center();
-                graph.c.SDL_WarpMouseInWindow(d.win.win, center.x, center.y);
-            },
+        const ungrab_rising = switch (grab_when) {
+            .key_low => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .rising),
+            .key_high => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .falling),
+            .toggle => !self.grab_toggled and self.grab_toggled != prev_grab_tog,
+        };
+
+        const win = gui.sdl_win;
+        gui.setGrabOverride(vt, should_grab or (can_grab and win.mouse.left != .low), .{ .hide_pointer = should_grab });
+        if (ungrab_rising and can_grab) {
+            const center = self.area.area.center();
+            graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, center.x, center.y);
         }
 
-        editor.draw_state.cam3d.updateDebugMove(if (editor.panes.grab.owns(pane_id)) d.camstate else .{});
-        draw3Dview(editor, screen_area, d.draw, self.font, self.fh) catch return;
-    }
-
-    pub fn create(alloc: std.mem.Allocator, font: *graph.FontUtil.PublicFontInterface, font_h: f32) !*panereg.iPane {
-        var ret = try alloc.create(@This());
-        ret.* = .{
-            .vt = .{
-                .deinit_fn = &@This().deinit,
-                .draw_fn = &@This().draw_fn,
-            },
-            .font = font,
-            .fh = font_h,
+        const ed = self.ed;
+        const cam_state = graph.ptypes.Camera3D.MoveState{
+            .down = win.bindHigh(ed.config.keys.cam_down.b),
+            .up = win.bindHigh(ed.config.keys.cam_up.b),
+            .left = win.bindHigh(ed.config.keys.cam_strafe_l.b),
+            .right = win.bindHigh(ed.config.keys.cam_strafe_r.b),
+            .fwd = win.bindHigh(ed.config.keys.cam_forward.b),
+            .bwd = win.bindHigh(ed.config.keys.cam_back.b),
+            .mouse_delta = if (should_grab) win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .{ .x = 0, .y = 0 },
+            .scroll_delta = win.mouse.wheel_delta.y,
+            //.speed_perc = @as(f32, if (win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
         };
-        return &ret.vt;
+
+        if (can_grab) {
+            self.ed.edit_state.lmouse = win.mouse.left;
+            self.ed.edit_state.rmouse = win.mouse.right;
+        } else {
+            self.ed.edit_state.lmouse = .low;
+            self.ed.edit_state.rmouse = .low;
+        }
+        self.ed.draw_state.cam3d.updateDebugMove(cam_state);
+        self.ed.stack_grabbed_mouse = should_grab;
+        defer self.ed.stack_grabbed_mouse = false;
+        draw3Dview(self.ed, vt.area.area, self.drawctx, gui.font, gui.style.config.text_h) catch return;
     }
 
-    pub fn deinit(vt: *panereg.iPane, alloc: std.mem.Allocator) void {
+    pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {
+        var self = try gui.alloc.create(@This());
+        self.* = .{
+            .area = .{ .area = graph.Rec(0, 0, 0, 0), .deinit_fn = area_deinit, .draw_fn = draw },
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .drawctx = drawctx,
+            .ed = ed,
+        };
+        self.vt.update_fn = update;
+
+        return &self.vt;
+    }
+
+    pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        alloc.destroy(self);
+        _ = gui;
+        self.area.area = area;
+    }
+
+    pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
+
+    pub fn draw(_: *iArea, _: DrawState) void {}
+
+    pub fn deinit(vt: *G.iWindow, gui: *G.Gui) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        gui.alloc.destroy(self);
     }
 };
 
