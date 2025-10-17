@@ -984,7 +984,7 @@ pub const Context = struct {
     pub fn screenRay(self: *Self, screen_area: graph.Rect, view_3d: Mat4) []const raycast.RcastItem {
         const rc = util3d.screenSpaceRay(
             screen_area.dim(),
-            if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos,
+            if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos.sub(screen_area.pos()),
             view_3d,
         );
         return self.rayctx.findNearestSolid(&self.ecs, rc[0], rc[1], &self.csgctx, false) catch &.{};
@@ -1355,7 +1355,7 @@ pub const Context = struct {
     pub fn camRay(self: *Self, area: graph.Rect, view: Mat4) [2]Vec3 {
         return util3d.screenSpaceRay(
             area.dim(),
-            if (self.stack_grabbed_mouse) area.center() else self.edit_state.mpos,
+            if (self.stack_grabbed_mouse) area.center() else self.edit_state.mpos.sub(area.pos()),
             view,
         );
     }
