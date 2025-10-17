@@ -11,6 +11,7 @@ const eql = std.mem.eql;
 const Allocator = std.mem.Allocator;
 const stringToEnum = std.meta.stringToEnum;
 const log = std.log.scoped(.fgd);
+const ArrayList = std.ArrayListUnmanaged;
 
 //TODO this parser sucks
 // Should work with hl2, portal2, portal, cstrike, tf2.
@@ -86,18 +87,17 @@ pub const FgdTokenizer = struct {
 
     alloc: Allocator,
 
-    params: std.ArrayList(Token),
+    params: ArrayList(Token) = .{},
 
     pub fn init(slice: []const u8, alloc: Allocator) @This() {
         return .{
             .slice = slice,
             .alloc = alloc,
-            .params = std.ArrayList(Token).init(alloc),
         };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.params.deinit();
+        self.params.deinit(self.alloc);
     }
 
     fn controlChar(char: u8) ?Tag {
@@ -390,21 +390,17 @@ pub const EntCtx = struct {
 
     string_alloc: std.heap.ArenaAllocator,
     alloc: Allocator,
-    ents: std.ArrayList(EntClass),
+    ents: ArrayList(EntClass) = .{},
 
-    base: std.StringHashMap(usize), // classname -> ents.items[index]
+    base: std.StringHashMapUnmanaged(usize) = .{}, // classname -> ents.items[index]
 
-    all_input_map: std.StringHashMap(usize),
-    all_inputs: std.ArrayList(EntClass.Io),
+    all_input_map: std.StringHashMapUnmanaged(usize) = .{},
+    all_inputs: ArrayList(EntClass.Io) = .{},
 
     pub fn init(alloc: Allocator) Self {
         return .{
             .string_alloc = std.heap.ArenaAllocator.init(alloc),
             .alloc = alloc,
-            .ents = std.ArrayList(EntClass).init(alloc),
-            .base = std.StringHashMap(usize).init(alloc),
-            .all_input_map = std.StringHashMap(usize).init(alloc),
-            .all_inputs = std.ArrayList(EntClass.Io).init(alloc),
         };
     }
 
@@ -418,8 +414,8 @@ pub const EntCtx = struct {
             .input => {
                 if (self.all_input_map.contains(io.name)) return;
                 const index = self.all_inputs.items.len;
-                try self.all_input_map.put(io.name, index);
-                try self.all_inputs.append(io);
+                try self.all_input_map.put(self.alloc, io.name, index);
+                try self.all_inputs.append(self.alloc, io);
             },
         }
     }
@@ -428,10 +424,10 @@ pub const EntCtx = struct {
         for (self.ents.items) |*item| {
             item.deinit();
         }
-        self.base.deinit();
-        self.ents.deinit();
-        self.all_input_map.deinit();
-        self.all_inputs.deinit();
+        self.base.deinit(self.alloc);
+        self.ents.deinit(self.alloc);
+        self.all_input_map.deinit(self.alloc);
+        self.all_inputs.deinit(self.alloc);
         self.string_alloc.deinit();
     }
 
@@ -463,8 +459,8 @@ pub const EntClass = struct {
                 mask: u32,
                 name: []const u8,
             };
-            choices: std.ArrayList(KV),
-            flags: std.ArrayList(Flag),
+            choices: ArrayList(KV),
+            flags: ArrayList(Flag),
             color255: void,
             material: void,
             model: void,
@@ -477,12 +473,12 @@ pub const EntClass = struct {
         doc_string: []const u8,
         is_derived: bool = false,
 
-        pub fn deinit(self: *@This()) void {
+        pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
             if (self.is_derived)
                 return;
             switch (self.type) {
-                .choices => |cc| cc.deinit(),
-                .flags => |cc| cc.deinit(),
+                .choices => |*cc| cc.deinit(alloc),
+                .flags => |*cc| cc.deinit(alloc),
                 else => {},
             }
         }
@@ -496,15 +492,16 @@ pub const EntClass = struct {
         type: Type,
         doc: []const u8,
     };
-    io_data: std.ArrayList(Io),
-    io: std.StringHashMap(usize),
-    ///Indexes into io_data
-    inputs: std.ArrayList(usize),
-    outputs: std.ArrayList(usize),
 
-    field_data: std.ArrayList(Field),
-    fields: std.StringHashMap(usize),
-    //fields: std.ArrayList(Field),
+    alloc: std.mem.Allocator,
+    io_data: ArrayList(Io) = .{},
+    io: std.StringHashMapUnmanaged(usize) = .{},
+    ///Indexes into io_data
+    inputs: ArrayList(usize) = .{},
+    outputs: ArrayList(usize) = .{},
+
+    field_data: ArrayList(Field) = .{},
+    fields: std.StringHashMapUnmanaged(usize) = .{},
     name: []const u8 = "",
     doc: []const u8 = "",
     iconsprite: []const u8 = "",
@@ -512,27 +509,20 @@ pub const EntClass = struct {
     has_hull: bool = false,
 
     pub fn init(alloc: Allocator) Self {
-        return .{
-            .inputs = std.ArrayList(usize).init(alloc),
-            .outputs = std.ArrayList(usize).init(alloc),
-            .io_data = std.ArrayList(Io).init(alloc),
-            .io = std.StringHashMap(usize).init(alloc),
-            .field_data = std.ArrayList(Field).init(alloc),
-            .fields = std.StringHashMap(usize).init(alloc),
-        };
+        return .{ .alloc = alloc };
     }
 
     //Assumes all fields are already alloced
     pub fn addField(self: *Self, field: Field) !void {
         if (self.fields.contains(field.name)) {
             var f = field;
-            f.deinit();
+            f.deinit(self.alloc);
             return;
         }
 
         const index = self.field_data.items.len;
-        try self.fields.put(field.name, index);
-        try self.field_data.append(field);
+        try self.fields.put(self.alloc, field.name, index);
+        try self.field_data.append(self.alloc, field);
     }
 
     /// Assumes all fields are alloced
@@ -540,11 +530,11 @@ pub const EntClass = struct {
         if (self.io.contains(io.name)) return;
 
         const index = self.io_data.items.len;
-        try self.io.put(io.name, index);
-        try self.io_data.append(io);
+        try self.io.put(self.alloc, io.name, index);
+        try self.io_data.append(self.alloc, io);
         switch (io.kind) {
-            .input => try self.inputs.append(index),
-            .output => try self.outputs.append(index),
+            .input => try self.inputs.append(self.alloc, index),
+            .output => try self.outputs.append(self.alloc, index),
         }
     }
 
@@ -558,8 +548,8 @@ pub const EntClass = struct {
             var cc = parent.field_data.items[item.value_ptr.*];
             cc.is_derived = true;
             const index = self.field_data.items.len;
-            try self.fields.put(item.key_ptr.*, index);
-            try self.field_data.append(cc);
+            try self.fields.put(self.alloc, item.key_ptr.*, index);
+            try self.field_data.append(self.alloc, cc);
         }
 
         var io_it = parent.io.iterator();
@@ -572,13 +562,13 @@ pub const EntClass = struct {
 
     pub fn deinit(self: *Self) void {
         for (self.field_data.items) |*item|
-            item.deinit();
-        self.field_data.deinit();
-        self.fields.deinit();
-        self.io.deinit();
-        self.io_data.deinit();
-        self.inputs.deinit();
-        self.outputs.deinit();
+            item.deinit(self.alloc);
+        self.field_data.deinit(self.alloc);
+        self.fields.deinit(self.alloc);
+        self.io.deinit(self.alloc);
+        self.io_data.deinit(self.alloc);
+        self.inputs.deinit(self.alloc);
+        self.outputs.deinit(self.alloc);
     }
 };
 
@@ -700,7 +690,7 @@ pub const ParseCtx = struct {
                                 const next = try tkz.next() orelse return error.syntax;
                                 switch (next.tag) {
                                     else => {
-                                        try tkz.params.append(next);
+                                        try tkz.params.append(tkz.alloc, next);
                                     }, // add to param list
                                     .r_paren => break,
                                 }
@@ -775,8 +765,8 @@ pub const ParseCtx = struct {
                 switch (directive) {
                     else => {
                         const index = ctx.ents.items.len;
-                        try ctx.ents.append(new_class);
-                        try ctx.base.put(new_class.name, index);
+                        try ctx.ents.append(ctx.alloc, new_class);
+                        try ctx.base.put(ctx.alloc, new_class.name, index);
                     },
                 }
             },
@@ -915,7 +905,7 @@ pub const ParseCtx = struct {
         if (stringToEnum(TypeStr, self.sanitizeIdent(tkz.getSlice(type_tok)))) |st| {
             switch (st) {
                 .choices, .@"*choices" => {
-                    var new_choices = std.ArrayList(EntClass.Field.Type.KV).init(ctx.alloc);
+                    var new_choices = ArrayList(EntClass.Field.Type.KV){};
                     _ = try tkz.expectNext(.equals);
                     _ = try tkz.expectNextEatNewline(.l_bracket);
                     while (true) {
@@ -924,7 +914,7 @@ pub const ParseCtx = struct {
                             .plain_string, .quoted_string => {
                                 _ = try tkz.expectNext(.colon);
                                 const val = try tkz.expectNext(.quoted_string);
-                                try new_choices.append(.{
+                                try new_choices.append(ctx.alloc, .{
                                     try ctx.dupeString(tkz.getSlice(n1)),
                                     try ctx.dupeString(tkz.getSlice(val)),
                                 });
@@ -938,7 +928,7 @@ pub const ParseCtx = struct {
                 .flags => {
                     _ = try tkz.expectNext(.equals);
                     _ = try tkz.expectNextEatNewline(.l_bracket);
-                    var new_flags = std.ArrayList(EntClass.Field.Type.Flag).init(ctx.alloc);
+                    var new_flags = ArrayList(EntClass.Field.Type.Flag){};
                     while (true) {
                         const n1 = try tkz.nextEatNewline() orelse return error.choiceMis;
                         switch (n1.tag) {
@@ -950,7 +940,7 @@ pub const ParseCtx = struct {
                                 //TODO make this optional
                                 const def = try tkz.expectNext(.plain_string);
                                 const defint = try std.fmt.parseInt(u32, tkz.getSlice(def), 10);
-                                try new_flags.append(.{
+                                try new_flags.append(ctx.alloc, .{
                                     .on = defint > 0,
                                     .name = try ctx.dupeString(tkz.getSlice(mask_name)),
                                     .mask = mask,

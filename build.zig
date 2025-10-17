@@ -10,23 +10,29 @@ pub fn build(b: *std.Build) void {
 
     const mapbuilder = b.addExecutable(.{
         .name = "mapbuilder",
-        .root_source_file = b.path("src/map_builder.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/map_builder.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const jsonToVmf = b.addExecutable(.{
         .name = "jsonmaptovmf",
-        .root_source_file = b.path("src/jsonToVmf.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/jsonToVmf.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     const hammer_exe = b.addExecutable(.{
         .name = "rathammer",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     const ratdep = b.dependency("ratgraph", .{ .target = target, .optimize = optimize });
     const uuid_dep = b.dependency("uuid", .{ .target = target, .optimize = optimize });
@@ -75,11 +81,11 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
-    const exe_unit_tests = b.addTest(.{
+    const exe_unit_tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("src/test.zig"),
         .target = target,
         .optimize = optimize,
-    });
+    }) });
     exe_unit_tests.root_module.addImport("graph", ratmod);
     exe_unit_tests.root_module.addOptions("config", opts);
     exe_unit_tests.root_module.addImport("uuidlib", uuidmod);

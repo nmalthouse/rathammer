@@ -102,7 +102,8 @@ pub const InspectorWindow = struct {
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
     pub fn draw(vt: *iArea, d: DrawState) void {
-        GuiHelp.drawWindowFrame(d, vt.area);
+        //GuiHelp.drawWindowFrame(d, vt.area);
+        d.ctx.rect(vt.area, d.nstyle.color.bg);
     }
 
     pub fn setTab(self: *Self, tab_index: usize) void {
