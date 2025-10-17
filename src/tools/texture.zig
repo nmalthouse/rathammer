@@ -344,9 +344,9 @@ pub const TextureTool = struct {
         self.textboxErr(num, id) catch return;
     }
 
-    pub fn btn_cb(cb: *guis.CbHandle, id: usize, gui: *Gui, win: *iWindow) void {
+    pub fn btn_cb(cb: *guis.CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.btn_cbErr(id, gui, win) catch return;
+        self.btn_cbErr(id, dat.gui, win) catch return;
     }
     pub fn btn_cbErr(self: *@This(), id: usize, _: *Gui, _: *guis.iWindow) !void {
         const btn_k = @as(GuiBtnEnum, @enumFromInt(id));

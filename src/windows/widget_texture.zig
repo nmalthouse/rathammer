@@ -82,6 +82,6 @@ pub const PollingTexture = struct {
 
         vt.dirty(cb.gui);
         if (self.opts.cb_fn) |cbfn|
-            cbfn(self.opts.cb_vt orelse return, self.opts.id, cb.gui, win);
+            cbfn(self.opts.cb_vt orelse return, self.opts.id, cb, win);
     }
 };

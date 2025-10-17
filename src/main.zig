@@ -23,6 +23,7 @@ const PauseWindow = @import("windows/pause.zig").PauseWindow;
 const ConsoleWindow = @import("windows/console.zig").Console;
 const InspectorWindow = @import("windows/inspector.zig").InspectorWindow;
 const AssetBrowser = @import("windows/asset.zig").AssetBrowser;
+const MenuBar = @import("windows/menubar.zig").MenuBar;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
 const json_map = @import("json_map.zig");
 const fs = @import("fs.zig");
@@ -358,6 +359,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const asset_pane = try gui.addWindow(&asset_win.vt, Rec(0, 0, 100, 1000), .{});
     try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
 
+    const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), Rec(0, 0, 1, 1), .{});
+
     const main_2d_id = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .y), .Empty, .{ .put_fbo = false });
     const main_2d_id2 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .x), .Empty, .{ .put_fbo = false });
     const main_2d_id3 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .z), .Empty, .{ .put_fbo = false });
@@ -440,24 +443,32 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer ws.deinit();
     const main_tab = ws.newArea(.{
         .sub = .{
-            .split = .{ .k = .vert, .perc = 0.67 },
-            .left = ws.newArea(.{ .pane = main_3d_id }),
-            .right = ws.newArea(.{ .pane = inspector_pane }),
+            .split = .{ .k = .horiz, .pos = gui.style.config.default_item_h, .kind = .abs },
+
+            .left = ws.newArea(.{ .pane = menu_bar }),
+
+            .right = ws.newArea(.{
+                .sub = .{
+                    .split = .{ .k = .vert, .pos = 0.67 },
+                    .left = ws.newArea(.{ .pane = main_3d_id }),
+                    .right = ws.newArea(.{ .pane = inspector_pane }),
+                },
+            }),
         },
     });
 
     const main_2d_tab = ws.newArea(.{
         .sub = .{
-            .split = .{ .k = .vert, .perc = 0.5 },
+            .split = .{ .k = .vert, .pos = 0.5 },
             .left = ws.newArea(.{ .sub = .{
-                .split = .{ .k = .horiz, .perc = 0.5 },
+                .split = .{ .k = .horiz, .pos = 0.5 },
                 .left = ws.newArea(.{ .pane = main_3d_id }),
                 .right = ws.newArea(.{ .pane = main_2d_id3 }),
             } }),
             .right = ws.newArea(.{ .sub = .{
-                .split = .{ .k = .vert, .perc = 0.5 },
+                .split = .{ .k = .vert, .pos = 0.5 },
                 .left = ws.newArea(.{ .sub = .{
-                    .split = .{ .k = .horiz, .perc = 0.5 },
+                    .split = .{ .k = .horiz, .pos = 0.5 },
                     .left = ws.newArea(.{ .pane = main_2d_id }),
                     .right = ws.newArea(.{ .pane = main_2d_id2 }),
                 } }),
@@ -470,7 +481,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     try ws.workspaces.append(ws.newArea(.{ .pane = asset_pane }));
     try ws.workspaces.append(main_2d_tab);
     //try ws.workspaces.append(ws.newArea(.{ .sub = .{
-    //    .split = .{ .k = .vert, .perc = 0.4 },
+    //    .split = .{ .k = .vert, .pos = 0.4 },
     //    .left = ws.newArea(.{ .pane = model_pane }),
     //    .right = ws.newArea(.{ .pane = model_preview_pane }),
     //} }));
@@ -493,8 +504,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (win.isBindState(config.keys.pause.b, .rising)) {
             editor.paused = !editor.paused;
         }
-        //if (console_active)
-        //editor.panes.grab.override();
 
         if (editor.paused) {
             switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, gui_dstate, &loadctx, editor, pause_win.should_exit)) {
@@ -505,14 +514,11 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
         draw.real_screen_dimensions = win.screen_dimensions.toF();
 
-        //win.grabMouse(editor.draw_state.grab.is);
         win.pumpEvents(.poll);
         //POSONE please and thank you.
         frame_time = frame_timer.read();
         frame_timer.reset();
-        //const perc_of_60fps: f32 = @as(f32, @floatFromInt(frame_time)) / std.time.ns_per_ms / 16;
-        //if (win.mouse.pos.x >= draw.screen_dimensions.x - 40)
-        //    graph.c.SDL_WarpMouseInWindow(win.win, 10, win.mouse.pos.y);
+        editor.draw_state.frame_time_ms = @as(f32, @floatFromInt(frame_time)) / std.time.ns_per_ms;
 
         editor.edit_state.mpos = win.mouse.pos;
 
@@ -531,8 +537,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             }
             last_frame_group_owner = new_id;
         }
-        //const tab = tabs[editor.draw_state.tab_index];
-        //const areas = Split.fillBuf(tab.split, &areas_buf, winrect);
 
         if (win.isBindState(config.keys.toggle_console.b, .rising)) {
             console_active = !console_active;
@@ -556,16 +560,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             if (gui.getWindowId(out[1])) |win_vt| {
                 try gui.active_windows.append(gui.alloc, win_vt);
                 try gui.updateWindowSize(win_vt, pane_area);
-                //TODO put this in the places that should have it 2
             }
         }
         try gui.update();
-        //if (console_active) {
-        //    console_win.focus(&gui);
-        //    console_win.area.dirty(&gui);
-        //    try gui.update(&.{&console_win.vt});
-        //    try gui.window_collector.append(gui.alloc, &console_win.vt);
-        //}
 
         try gui.draw(gui_dstate, false);
         gui.drawFbos(&draw);

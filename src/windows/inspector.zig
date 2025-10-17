@@ -282,7 +282,7 @@ pub const InspectorWindow = struct {
         self.editor.autovis.enabled.items[id] = val;
         self.editor.rebuildAutoVis() catch return;
     }
-    fn misc_btn_cb(cb: *CbHandle, btn_id: usize, _: *Gui, _: *iWindow) void {
+    fn misc_btn_cb(cb: *CbHandle, btn_id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.misc_btn_cbErr(btn_id) catch return;
     }
@@ -503,7 +503,7 @@ pub const InspectorWindow = struct {
                     switch (req_f.type) {
                         .model, .material => {
                             const H = struct {
-                                fn btn_cb(cbb: *CbHandle, id: u64, _: *Gui, _: *iWindow) void {
+                                fn btn_cb(cbb: *CbHandle, id: u64, _: guis.MouseCbState, _: *iWindow) void {
                                     // if msb of id is set, its a texture not model
                                     // hacky yea.
                                     const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cbb));
@@ -698,9 +698,8 @@ pub const InspectorWindow = struct {
         self.setKvStr(id, string);
     }
 
-    pub fn select_kv_cb(cb: *CbHandle, id: usize, gui: *Gui, win: *iWindow) void {
+    pub fn select_kv_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        _ = gui;
         win.needs_rebuild = true;
         self.selected_kv_index = id;
         //We need to rebuild buttons to show the selected mark
@@ -767,7 +766,7 @@ pub const InspectorWindow = struct {
         self.buildIoTab(gui, vt.area, vt, index) catch return;
     }
 
-    fn io_btn_cb(cb: *CbHandle, id: usize, _: *Gui, win: *iWindow) void {
+    fn io_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.selected_io_index = id;
         win.needs_rebuild = true;
@@ -802,7 +801,7 @@ pub const InspectorWindow = struct {
         }
     }
 
-    fn ioBtnCbAdd(cb: *CbHandle, _: usize, _: *Gui, _: *iWindow) void {
+    fn ioBtnCbAdd(cb: *CbHandle, _: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const cons = self.getConsPtr() orelse blk: {
             if (self.editor.selection.getGroupOwnerExclusive(&self.editor.groups)) |sel_id| {
@@ -949,7 +948,7 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: *Gui, _: *guis.iWindow) void {
+    pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *guis.iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const asb = &self.editor.asset_browser;
         if (id >= asb.recent_mats.list.items.len) return;

@@ -81,7 +81,7 @@ pub const NagWindow = struct {
         self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle }));
         self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle }));
     }
-    pub fn btnCb(cb: *guis.CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    pub fn btnCb(cb: *guis.CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .quit => self.should_exit = true,

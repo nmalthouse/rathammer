@@ -128,7 +128,7 @@ pub const LaunchWindow = struct {
         }
     }
 
-    pub fn loadBtn(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    pub fn loadBtn(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.recents.items.len) return;
 
@@ -141,7 +141,7 @@ pub const LaunchWindow = struct {
         self.editor.paused = false;
     }
 
-    pub fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    pub fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .quit => self.should_exit = true,

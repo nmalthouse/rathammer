@@ -158,6 +158,7 @@ pub const Context = struct {
     has_loaded_map: bool = false,
 
     draw_state: struct {
+        frame_time_ms: f32 = 16,
         init_asset_count: usize = 0, //Used to indicate we are loading things
 
         active_lights: usize = 0,

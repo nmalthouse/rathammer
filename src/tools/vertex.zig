@@ -582,9 +582,9 @@ pub const VertexTranslate = struct {
         }));
     }
 
-    pub fn btn_cb(vt: *guis.CbHandle, id: usize, gui: *RGui, win: *iWindow) void {
+    pub fn btn_cb(vt: *guis.CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
-        self.btn_cbErr(id, gui, win) catch return;
+        self.btn_cbErr(id, dat.gui, win) catch return;
     }
     pub fn btn_cbErr(self: *@This(), id: usize, _: *RGui, _: *guis.iWindow) !void {
         const btn_k = @as(Btn, @enumFromInt(id));

@@ -7,16 +7,16 @@ pub const NotifyCtx = struct {
     const Item = struct {
         msg: []const u8, //Allocated
         color: u32,
-        time_left_ms: i64,
+        time_left_ms: f32,
     };
 
     strbuf: std.ArrayList(u8),
     alloc: std.mem.Allocator,
 
     items: std.ArrayList(Item),
-    time: i64,
+    time: f32,
 
-    pub fn init(alloc: std.mem.Allocator, time_ms: i64) Self {
+    pub fn init(alloc: std.mem.Allocator, time_ms: f32) Self {
         return .{
             .strbuf = std.ArrayList(u8).init(alloc),
             .items = std.ArrayList(Item).init(alloc),
@@ -46,7 +46,7 @@ pub const NotifyCtx = struct {
     }
 
     /// The returned slice becomes invalid if submitNotify or getSlice is called.
-    pub fn getSlice(self: *Self, dt_ms: i64) ![]const Item {
+    pub fn getSlice(self: *Self, dt_ms: f32) ![]const Item {
         if (dt_ms > 0) {
             var remove_index: ?usize = null;
             for (self.items.items, 0..) |*item, i| {

@@ -412,7 +412,7 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn btnCb(vt: *CbHandle, id: guis.Uid, _: *Gui, win: *iWindow) void {
+    fn btnCb(vt: *CbHandle, id: guis.Uid, _: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         switch (id) {
             bi("new_group") => {
@@ -561,9 +561,9 @@ const LayerWidget = struct {
         }
     }
 
-    fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, gui: *Gui, _: *iWindow) void {
+    fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.vt.dirty(gui);
+        self.vt.dirty(dat.gui);
         const ed = self.opts.parent.editor;
         const sel_id = self.right_click_id orelse return;
         const bi = guis.Widget.BtnContextWindow.buttonId;

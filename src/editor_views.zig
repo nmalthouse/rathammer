@@ -71,16 +71,17 @@ pub const Main3DView = struct {
         }
 
         const ed = self.ed;
+        const perc_of_60fps = ed.draw_state.frame_time_ms / 16.0;
         const cam_state = graph.ptypes.Camera3D.MoveState{
-            .down = win.bindHigh(ed.config.keys.cam_down.b),
-            .up = win.bindHigh(ed.config.keys.cam_up.b),
-            .left = win.bindHigh(ed.config.keys.cam_strafe_l.b),
-            .right = win.bindHigh(ed.config.keys.cam_strafe_r.b),
-            .fwd = win.bindHigh(ed.config.keys.cam_forward.b),
-            .bwd = win.bindHigh(ed.config.keys.cam_back.b),
+            .down = ed.isBindState(ed.config.keys.cam_down.b, .high),
+            .up = ed.isBindState(ed.config.keys.cam_up.b, .high),
+            .left = ed.isBindState(ed.config.keys.cam_strafe_l.b, .high),
+            .right = ed.isBindState(ed.config.keys.cam_strafe_r.b, .high),
+            .fwd = ed.isBindState(ed.config.keys.cam_forward.b, .high),
+            .bwd = ed.isBindState(ed.config.keys.cam_back.b, .high),
             .mouse_delta = if (should_grab) win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .{ .x = 0, .y = 0 },
-            .scroll_delta = win.mouse.wheel_delta.y,
-            //.speed_perc = @as(f32, if (win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
+            .scroll_delta = if (can_grab) win.mouse.wheel_delta.y else 0,
+            .speed_perc = @as(f32, if (win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
         };
 
         if (can_grab) {
@@ -468,7 +469,7 @@ pub fn draw3Dview(
         const MANY_COLOR = 0xfc58d6ff;
         const HIDDEN_COLOR = 0x20B2AAff;
 
-        var mt = graph.MultiLineText.start(draw, screen_area.pos(), font);
+        var mt = graph.MultiLineText.start(draw, .{ .x = 0, .y = 0 }, font);
         if (self.draw_state.init_asset_count > 0) {
             mt.textFmt("Loading assets: {d}", .{self.draw_state.init_asset_count}, fh, col);
         }
@@ -495,7 +496,7 @@ pub fn draw3Dview(
         }
         {
             //TODO put an actual dt here
-            const notify_slice = try self.notifier.getSlice(16);
+            const notify_slice = try self.notifier.getSlice(self.draw_state.frame_time_ms);
             for (notify_slice) |n| {
                 mt.text(n.msg, fh, n.color);
             }

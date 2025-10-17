@@ -112,7 +112,7 @@ pub const PauseWindow = struct {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
-    pub fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    pub fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
             .unpause => self.editor.paused = false,
@@ -333,7 +333,7 @@ pub const PauseWindow = struct {
         }
     }
 
-    pub fn btn_help_cb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    pub fn btn_help_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.texts.items.len) return;
         self.selected_text_i = id;

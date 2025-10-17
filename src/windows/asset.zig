@@ -295,7 +295,7 @@ const ModelBrowser = struct {
         return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
     }
 
-    fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
+    fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.selected_index = id;
         if (id < self.list.list_a.items.len) {
@@ -470,12 +470,12 @@ const TextureBrowser = struct {
         }
     }
 
-    fn cb_tex_btn(cb: *CbHandle, id: usize, gui: *Gui, win: *iWindow) void {
+    fn cb_tex_btn(cb: *CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.ed.asset_browser.selected_mat_vpk_id = id;
         self.ed.asset_browser.recent_mats.put(id) catch {};
         if (self.scr_ptr) |scr| {
-            scr.rebuild(gui, win);
+            scr.rebuild(dat.gui, win);
         }
     }
 };

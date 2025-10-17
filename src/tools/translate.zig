@@ -522,7 +522,7 @@ pub const Translate = struct {
         }
     }
 
-    fn btnCb(vt: *guis.CbHandle, _: usize, _: *RGui, _: *iWindow) void {
+    fn btnCb(vt: *guis.CbHandle, _: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
 
         self.ed.grid.setAll(16);

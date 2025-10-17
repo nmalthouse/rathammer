@@ -51,10 +51,23 @@ test {
 }
 
 pub const Orientation = enum { vert, horiz };
+//Default split gives left all, right nothing
+pub const Split = struct {
+    k: Orientation = .vert,
+    pos: f32 = 1,
+    kind: enum { perc, abs } = .perc,
+
+    fn calcThing(self: @This(), width: f32) f32 {
+        return switch (self.kind) {
+            .perc => width * self.pos,
+            .abs => self.pos,
+        };
+    }
+};
 pub const Area = union(enum) {
     pane: G.WindowId,
     sub: struct {
-        split: struct { k: Orientation = .vert, perc: f32 = 1 }, //Default split gives left all, right nothing
+        split: Split,
         left: *Area,
         right: *Area,
     },
@@ -71,15 +84,21 @@ const Workspace = struct {};
 
 fn splitR(r: R, op: anytype, pad: f32) [3]R {
     switch (op.k) {
-        .vert => return [3]R{
-            .{ .x = r.x, .y = r.y, .w = r.w * op.perc - pad, .h = r.h },
-            .{ .x = r.x + r.w * op.perc + pad, .y = r.y, .w = r.w - (r.w * op.perc) - pad, .h = r.h },
-            .{ .x = r.x + r.w * op.perc - pad, .w = pad * 2, .y = r.y, .h = r.h },
+        .vert => {
+            const w = op.calcThing(r.w);
+            return [3]R{
+                .{ .x = r.x, .y = r.y, .w = w - pad, .h = r.h },
+                .{ .x = r.x + w + pad, .y = r.y, .w = r.w - w - pad, .h = r.h },
+                .{ .x = r.x + w - pad, .w = pad * 2, .y = r.y, .h = r.h },
+            };
         },
-        .horiz => return [3]R{
-            .{ .x = r.x, .y = r.y, .h = r.h * op.perc - pad, .w = r.w },
-            .{ .y = r.y + r.h * op.perc + pad, .x = r.x, .h = r.h - (r.h * op.perc) - pad, .w = r.w },
-            .{ .x = r.x, .w = r.w, .y = r.y + r.h * op.perc - pad, .h = pad * 2 },
+        .horiz => {
+            const h = op.calcThing(r.h);
+            return [3]R{
+                .{ .x = r.x, .y = r.y, .h = h - pad, .w = r.w },
+                .{ .y = r.y + h + pad, .x = r.x, .h = r.h - h - pad, .w = r.w },
+                .{ .x = r.x, .w = r.w, .y = r.y + h - pad, .h = pad * 2 },
+            };
         },
     }
 }
@@ -179,20 +198,21 @@ pub fn flattenTree(
 ) !void {
     switch (tree.*) {
         .sub => |t| {
-            const sp = splitR(root_area, t.split, 5);
+            const sp = splitR(root_area, t.split, if (t.split.kind == .perc) 5 else 0);
             try flattenTree(sp[0], t.left, output_list, output_handles);
             try flattenTree(sp[1], t.right, output_list, output_handles);
-            try output_handles.append(
-                .{
-                    .perc_ptr = &tree.sub.split.perc,
-                    .k = t.split.k,
-                    .r = sp[2],
-                    .perc_screenspace = switch (t.split.k) {
-                        .vert => root_area.w,
-                        .horiz => root_area.h,
+            if (t.split.kind == .perc)
+                try output_handles.append(
+                    .{
+                        .perc_ptr = &tree.sub.split.pos,
+                        .k = t.split.k,
+                        .r = sp[2],
+                        .perc_screenspace = switch (t.split.k) {
+                            .vert => root_area.w,
+                            .horiz => root_area.h,
+                        },
                     },
-                },
-            );
+                );
         },
         .pane => |p| try output_list.append(.{ root_area, p }),
     }
@@ -201,10 +221,10 @@ pub fn flattenTree(
 test {
     const alloc = std.testing.allocator;
     const root = Area{
-        .split = .{ .k = .vert, .perc = 0.5 },
+        .split = .{ .k = .vert, .pos = 0.5 },
         .left = null, // index 0
         .right = &Area{
-            .split = .{ .k = .horiz, .perc = 0.5 },
+            .split = .{ .k = .horiz, .pos = 0.5 },
             .left = null, //Index 1
             .right = null, //index 2
         },
