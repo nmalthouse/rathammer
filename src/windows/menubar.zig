@@ -10,7 +10,9 @@ const iWindow = guis.iWindow;
 const iArea = guis.iArea;
 const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
+const async_util = @import("../async.zig");
 const label = guis.label;
+const action = @import("../actions.zig");
 
 const btn_id = Wg.BtnContextWindow.buttonId;
 const BtnMap = Wg.BtnContextWindow.ButtonMapping;
@@ -30,11 +32,6 @@ const FileBtns = [_]BtnMap{
 const Menu = struct {
     []const u8,
     Wg.BtnContextWindow.ButtonList,
-};
-
-var ViewBtn = [_]BtnMap{
-    .{ btn_id("draw_sprite"), "Draw Sprites", .{ .checkbox = false } },
-    .{ btn_id("draw_mod"), "Draw Models", .{ .checkbox = false } },
 };
 
 const menus = [_][]const u8{
@@ -100,6 +97,9 @@ pub const MenuBar = struct {
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null));
             ar.x += b + p.x;
+
+            self.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + p.x, null), &self.ed.renderer.mode, .{}));
+            ar.x += b + p.x;
         }
     }
 
@@ -120,8 +120,16 @@ pub const MenuBar = struct {
     }
 
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
-        _ = cb;
-        _ = id;
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        switch (id) {
+            btn_id("save") => action.trySave(self.ed) catch {},
+            btn_id("save-as") => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
+            btn_id("quit") => self.ed.win.should_exit = true,
+            btn_id("undo") => action.undo(self.ed),
+            btn_id("redo") => action.redo(self.ed),
+
+            else => {},
+        }
     }
 
     pub fn checkbox_cb(cb: *guis.CbHandle, _: *Gui, val: bool, id: usize) void {
@@ -141,6 +149,19 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id("draw_sprite"), "Draw Sprites", .{ .checkbox = tog.sprite } },
                     .{ btn_id("draw_mod"), "Draw Models", .{ .checkbox = tog.models } },
+                });
+            },
+            btn_id("file") => {
+                return try aa.dupe(BtnMap, &[_]BtnMap{
+                    .{ btn_id("save"), "save", .btn },
+                    .{ btn_id("save-as"), "save-as", .btn },
+                    .{ btn_id("quit"), "quit", .btn },
+                });
+            },
+            btn_id("edit") => {
+                return try aa.dupe(BtnMap, &[_]BtnMap{
+                    .{ btn_id("undo"), "undo", .btn },
+                    .{ btn_id("redo"), "redo", .btn },
                 });
             },
             else => return &TodoBtns,

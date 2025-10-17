@@ -46,6 +46,7 @@ const grid_stuff = @import("grid.zig");
 const class_tracker = @import("class_track.zig");
 const version = @import("version.zig").version;
 const app = @import("app.zig");
+const action = @import("actions.zig");
 
 const async_util = @import("async.zig");
 const util3d = @import("util_3d.zig");
@@ -1475,13 +1476,7 @@ pub const Context = struct {
             try self.notify("Autosaved: {s}", .{basename}, colors.good);
         }
         if (win.isBindState(self.config.keys.save.b, .rising)) {
-            if (self.loaded_map_name) |basename| {
-                self.saveAndNotify(basename, self.loaded_map_path orelse "") catch |err| {
-                    try self.notify("Failed saving map: {!}", .{err}, colors.bad);
-                };
-            } else {
-                try async_util.SdlFileData.spawn(self.alloc, &self.async_asset_load, .save_map);
-            }
+            try action.trySave(self);
         }
         if (win.isBindState(self.config.keys.save_new.b, .rising)) {
             try async_util.SdlFileData.spawn(self.alloc, &self.async_asset_load, .save_map);

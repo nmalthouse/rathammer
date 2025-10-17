@@ -7,11 +7,13 @@ const Vec3 = graph.za.Vec3;
 const graph = @import("graph");
 const Ed = editor.Context;
 const raycast = @import("raycast_solid.zig");
+const async_util = @import("async.zig");
 const RaycastSlice = []const raycast.RcastItem;
 const vpk = @import("vpk.zig");
 const util3d = @import("util_3d.zig");
 const Lays = @import("layer.zig");
 const LayerId = Lays.Id;
+const colors = @import("colors.zig").colors;
 
 pub fn deleteSelected(ed: *Ed) !void {
     const selection = ed.getSelected();
@@ -510,4 +512,14 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
         }
     }
     ustack.apply(ed);
+}
+
+pub fn trySave(ed: *Ed) !void {
+    if (ed.loaded_map_name) |basename| {
+        ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
+            try ed.notify("Failed saving map: {!}", .{err}, colors.bad);
+        };
+    } else {
+        try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);
+    }
 }
