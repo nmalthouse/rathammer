@@ -153,15 +153,6 @@ pub const InspectorWindow = struct {
         ly.padding.right = 10;
         ly.padding.top = 10;
         const a = &self.area;
-
-        const ds = &self.editor.draw_state;
-        {
-            var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-            const CB = Wg.Checkbox.build;
-            a.addChildOpt(gui, vt, CB(gui, hy.getArea(), "draw sprite", .{ .bool_ptr = &ds.tog.sprite }, null));
-            a.addChildOpt(gui, vt, CB(gui, hy.getArea(), "draw models", .{ .bool_ptr = &ds.tog.models }, null));
-            a.addChildOpt(gui, vt, CB(gui, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null));
-        }
         ly.pushRemaining();
         a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &tabs, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
     }
@@ -181,7 +172,7 @@ pub const InspectorWindow = struct {
                     win,
                     Wg.Checkbox.build(gui, ly.getArea(), filter.name, .{
                         .cb_fn = &checkbox_cb_auto_vis,
-                        .cb_vt = win.area,
+                        .cb_vt = &self.cbhandle,
                         .user_id = i,
                     }, self.editor.autovis.enabled.items[i]),
                 );
@@ -276,8 +267,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn checkbox_cb_auto_vis(user: *iArea, _: *Gui, val: bool, id: usize) void {
-        const self: *InspectorWindow = @alignCast(@fieldParentPtr("area", user));
+    pub fn checkbox_cb_auto_vis(cb: *CbHandle, _: *Gui, val: bool, id: usize) void {
+        const self: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.editor.autovis.enabled.items.len) return;
         self.editor.autovis.enabled.items[id] = val;
         self.editor.rebuildAutoVis() catch return;
@@ -423,7 +414,7 @@ pub const InspectorWindow = struct {
                         const packed_id: u64 = @as(u64, @intCast(flag.mask)) << 32 | cb_id;
                         lay.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), flag.name, .{
                             .cb_fn = &cb_commitCheckbox,
-                            .cb_vt = win.area,
+                            .cb_vt = &self.cbhandle,
                             .user_id = packed_id,
                         }, is_set));
                     }
@@ -535,7 +526,7 @@ pub const InspectorWindow = struct {
                                 const checked = !std.mem.eql(u8, value.slice(), ch.items[0][0]);
                                 a.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar, "", .{
                                     .cb_fn = &cb_commitCheckbox,
-                                    .cb_vt = win.area,
+                                    .cb_vt = &self.cbhandle,
                                     .user_id = cb_id,
                                 }, checked));
                             } else {
@@ -673,8 +664,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn cb_commitCheckbox(this_window: *iArea, _: *Gui, val: bool, id: u64) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_window));
+    pub fn cb_commitCheckbox(cb: *CbHandle, _: *Gui, val: bool, id: u64) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const upper: u32 = @intCast(id >> 32);
         if (upper != 0) { //we store flags in upper 32
             const lower = id << 32 >> 32; //Clear upper

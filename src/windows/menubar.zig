@@ -12,25 +12,33 @@ const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 
-const buttons = [_][]const u8{
-    "File",
-    "Edit",
-    "View",
-    "Options",
-    "Tools",
-    "Help",
-};
-
 const btn_id = Wg.BtnContextWindow.buttonId;
 const BtnMap = Wg.BtnContextWindow.ButtonMapping;
+const TodoBtns = [_]BtnMap{
+    .{ btn_id("TODO"), "TODO. This menu is a placeholder!", .btn },
+};
 const FileBtns = [_]BtnMap{
-    .{ btn_id("copy"), "All of this is placeholder!" },
-    .{ btn_id("copy"), "It does not work yet." },
-    .{ btn_id("copy"), "new" },
-    .{ btn_id("copy"), "save" },
-    .{ btn_id("copy"), "save as" },
-    .{ btn_id("copy"), "other stuff" },
-    .{ btn_id("paste"), "Quit" },
+    .{ btn_id("copy"), "All of this is placeholder!", .btn },
+    .{ btn_id("copy"), "It does not work yet.", .btn },
+    .{ btn_id("copy"), "new", .btn },
+    .{ btn_id("copy"), "save", .btn },
+    .{ btn_id("copy"), "save as", .{ .checkbox = false } },
+    .{ btn_id("copy"), "other stuff", .btn },
+    .{ btn_id("paste"), "Quit", .btn },
+};
+
+const Menu = struct {
+    []const u8,
+    Wg.BtnContextWindow.ButtonList,
+};
+
+var ViewBtn = [_]BtnMap{
+    .{ btn_id("draw_sprite"), "Draw Sprites", .{ .checkbox = false } },
+    .{ btn_id("draw_mod"), "Draw Models", .{ .checkbox = false } },
+};
+
+const menus = [_][]const u8{
+    "file", "edit", "view", "options", "help",
 };
 
 pub const MenuBar = struct {
@@ -38,14 +46,14 @@ pub const MenuBar = struct {
     cbhandle: guis.CbHandle = .{},
     area: iArea,
 
-    editor: *Context,
+    ed: *Context,
 
     pub fn create(gui: *Gui, editor: *Context) !*iWindow {
         const self = gui.create(@This());
         self.* = .{
             .area = .{ .area = .{}, .draw_fn = draw, .deinit_fn = area_deinit },
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
-            .editor = editor,
+            .ed = editor,
         };
 
         return &self.vt;
@@ -72,16 +80,26 @@ pub const MenuBar = struct {
         var ar = self.area.area;
         if (self.area.children.items.len != 0) @panic("fucked up"); // code assumes
         const p = gui.font.textBounds("  ", gui.style.config.text_h);
-        for (buttons, 0..) |btn, i| {
-            const b = gui.font.textBounds(btn, gui.style.config.text_h);
+        for (menus, 0..) |menu, i| {
+            const b = gui.font.textBounds(menu, gui.style.config.text_h);
             const pad = p.x;
 
-            self.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b.x + pad, null), btn, .{
+            self.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b.x + pad, null), menu, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),
             }));
             ar.x += b.x + pad;
+        }
+
+        {
+            const name = "ignore groups";
+            const b = Wg.Checkbox.getWidth(gui, name, .{});
+
+            self.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + p.x, null), name, .{
+                .bool_ptr = &self.ed.selection.ignore_groups,
+            }, null));
+            ar.x += b + p.x;
         }
     }
 
@@ -92,8 +110,9 @@ pub const MenuBar = struct {
             dat.gui,
             child.area.pos().add(.{ .x = 0, .y = self.area.area.h }),
             .{
-                .buttons = &FileBtns,
+                .buttons = self.getMenu(menus[uid]) catch return,
                 .btn_cb = rightClickMenuBtn,
+                .checkbox_cb = checkbox_cb,
                 .btn_vt = &self.cbhandle,
             },
         ) catch return;
@@ -103,5 +122,28 @@ pub const MenuBar = struct {
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
         _ = cb;
         _ = id;
+    }
+
+    pub fn checkbox_cb(cb: *guis.CbHandle, _: *Gui, val: bool, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        switch (id) {
+            btn_id("draw_sprite") => self.ed.draw_state.tog.sprite = val,
+            btn_id("draw_mod") => self.ed.draw_state.tog.models = val,
+            else => {},
+        }
+    }
+
+    fn getMenu(self: *MenuBar, menu: []const u8) !Wg.BtnContextWindow.ButtonList {
+        const aa = self.ed.frame_arena.allocator();
+        switch (Wg.BtnContextWindow.buttonIdRuntime(menu)) {
+            btn_id("view") => {
+                const tog = self.ed.draw_state.tog;
+                return try aa.dupe(BtnMap, &[_]BtnMap{
+                    .{ btn_id("draw_sprite"), "Draw Sprites", .{ .checkbox = tog.sprite } },
+                    .{ btn_id("draw_mod"), "Draw Models", .{ .checkbox = tog.models } },
+                });
+            },
+            else => return &TodoBtns,
+        }
     }
 };

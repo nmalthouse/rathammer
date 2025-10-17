@@ -472,7 +472,7 @@ const LayerWidget = struct {
         self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[0], "", .{
             .style = .check,
             .cb_fn = check_cb,
-            .cb_vt = &self.vt,
+            .cb_vt = &self.cbhandle,
             .user_id = @intFromEnum(opts.id),
             .cross_color = opts.check_color,
         }, opts.enabled));
@@ -481,7 +481,7 @@ const LayerWidget = struct {
             self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[1], "", .{
                 .style = .dropdown,
                 .cb_fn = collapse_cb,
-                .cb_vt = &self.vt,
+                .cb_vt = &self.cbhandle,
                 .user_id = @intFromEnum(opts.id),
                 .cross_color = gui.nstyle.color.drop_down_arrow,
             }, !opts.collapse));
@@ -505,16 +505,16 @@ const LayerWidget = struct {
         gui.alloc.destroy(self);
     }
 
-    pub fn check_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn check_cb(cb: *CbHandle, gui: *Gui, checked: bool, uid: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.opts.parent.ctx.setEnabledCascade(@enumFromInt(@as(u16, @intCast(uid))), checked) catch return;
         self.opts.parent.editor.rebuildVisGroups() catch return;
         self.opts.win.needs_rebuild = true;
         _ = gui;
     }
 
-    pub fn collapse_cb(vt: *iArea, gui: *Gui, checked: bool, uid: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+    pub fn collapse_cb(cb: *CbHandle, gui: *Gui, checked: bool, uid: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.opts.parent.ctx.setCollapse(@enumFromInt((uid)), !checked);
         self.opts.win.needs_rebuild = true;
         _ = gui;
@@ -535,20 +535,20 @@ const LayerWidget = struct {
                 var btns = ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
                 const allow_move = !self.opts.parent.ctx.isChildOf(self.opts.parent.selected_ptr.*, self.opts.id);
 
-                btns.append(aa, .{ bi("cancel"), "cancel " }) catch {};
-                btns.append(aa, .{ bi("move_selected"), "-> put" }) catch {};
-                btns.append(aa, .{ bi("select_all"), "<- select" }) catch {};
-                btns.append(aa, .{ bi("duplicate"), "duplicate" }) catch {};
-                btns.append(aa, .{ bi("add_child"), "new child" }) catch {};
-                btns.append(aa, .{ bi("noop"), "" }) catch {};
+                btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
+                btns.append(aa, .{ bi("move_selected"), "-> put", .btn }) catch {};
+                btns.append(aa, .{ bi("select_all"), "<- select", .btn }) catch {};
+                btns.append(aa, .{ bi("duplicate"), "duplicate", .btn }) catch {};
+                btns.append(aa, .{ bi("add_child"), "new child", .btn }) catch {};
+                btns.append(aa, .{ bi("noop"), "", .btn }) catch {};
                 if (self.opts.id != .none) { //Root cannot be deleted or merged
-                    btns.append(aa, .{ bi("delete"), "delete layer" }) catch {};
-                    btns.append(aa, .{ bi("merge"), "^ merge up" }) catch {};
+                    btns.append(aa, .{ bi("delete"), "delete layer", .btn }) catch {};
+                    btns.append(aa, .{ bi("merge"), "^ merge up", .btn }) catch {};
                     if (allow_move)
-                        btns.append(aa, .{ bi("attach_sib"), "attach as sibling" }) catch {};
+                        btns.append(aa, .{ bi("attach_sib"), "attach as sibling", .btn }) catch {};
                 }
                 if (allow_move)
-                    btns.append(aa, .{ bi("attach_child"), "attach as child" }) catch {};
+                    btns.append(aa, .{ bi("attach_child"), "attach as child", .btn }) catch {};
 
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = btns.items,
