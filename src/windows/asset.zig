@@ -30,7 +30,6 @@ pub const AssetBrowser = struct {
 
     tex_browse: TextureBrowser,
     vpk_browse: VpkBrowser,
-    mod_browse: ModelBrowser,
     alloc: std.mem.Allocator,
 
     tab_index: usize = 0,
@@ -50,7 +49,6 @@ pub const AssetBrowser = struct {
                 .search_vt = &self.vpk_browse.lscb,
                 .win = &self.vt,
             }, .ed = editor, .win = &self.vt },
-            .mod_browse = .{ .list = .{ .alloc = gui.alloc, .search_vt = &self.mod_browse.lscb, .win = &self.vt }, .ed = editor, .win = &self.vt },
         };
 
         return self;
@@ -61,6 +59,7 @@ pub const AssetBrowser = struct {
         vpkctx: *vpk.Context,
         exclude_prefix: []const u8,
         material_exclude_list: []const []const u8,
+        mod_browse: *ModelBrowser,
     ) !void {
         vpkctx.mutex.lock();
         defer vpkctx.mutex.unlock();
@@ -85,7 +84,7 @@ pub const AssetBrowser = struct {
                 }
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             } else if (id == mdl) {
-                try self.mod_browse.list.master.append(self.mod_browse.list.alloc, item.key_ptr.*);
+                try mod_browse.list.appendMaster(&.{item.key_ptr.*});
             } else if (id == png) {
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             }
@@ -98,7 +97,6 @@ pub const AssetBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.tex_browse.deinit();
         self.vpk_browse.deinit();
-        self.mod_browse.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -116,7 +114,6 @@ pub const AssetBrowser = struct {
         self.area.dirty(gui);
         self.tex_browse.reset();
         self.vpk_browse.reset();
-        self.mod_browse.reset();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         const lay = &self.area;
 
@@ -132,10 +129,6 @@ pub const AssetBrowser = struct {
         }
         if (eql(u8, tab_name, "vpk")) {
             self.vpk_browse.build(vt, win, gui, vt.area);
-            return;
-        }
-        if (eql(u8, tab_name, "model")) {
-            self.mod_browse.build(vt, win, gui, vt.area);
             return;
         }
     }
@@ -215,10 +208,11 @@ const VpkBrowser = struct {
     }
 };
 
-const ModelBrowser = struct {
+pub const ModelBrowser = struct {
     const Self = @This();
-    ed: *Context,
-    win: *iWindow,
+
+    vt: iWindow,
+    area: iArea,
 
     cbhandle: guis.CbHandle = .{},
     selected_index: usize = 0,
@@ -226,20 +220,54 @@ const ModelBrowser = struct {
     lscb: ListSearchCb = .{
         .search_cb = searchCb,
     },
+    ed: *Context,
 
     list: ListSearch,
     scroll_index: usize = 0,
 
-    pub fn deinit(self: *@This()) void {
+    pub fn deinit(vt: *iWindow, gui: *Gui) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.list.deinit();
+        vt.deinit(gui);
+        gui.alloc.destroy(self);
     }
 
     pub fn reset(self: *@This()) void {
         self.list.reset();
     }
 
-    pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
-        var ly = gui.dstate.vLayout(area);
+    pub fn create(gui: *Gui, editor: *Context) !*ModelBrowser {
+        const self = gui.create(@This());
+        self.* = .{
+            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .ed = editor,
+            .list = .{
+                .search_vt = &self.lscb,
+                .alloc = gui.alloc,
+                .win = &self.vt,
+            },
+        };
+
+        return self;
+    }
+
+    pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
+
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
+        GuiHelp.drawWindowFrame(d, vt.area);
+    }
+
+    pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
+        self.area.area = area;
+        self.area.clearChildren(gui, win);
+        self.area.dirty(gui);
+        const lay = &self.area;
+        const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
+        self.list.reset();
+
+        var ly = gui.dstate.vLayout(inset);
         if (ly.getArea()) |header| {
             const header_col = 2;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
@@ -252,7 +280,9 @@ const ModelBrowser = struct {
         _ = ly.getArea(); //break
 
         ly.pushRemaining();
-        if (Wg.VScroll.build(gui, ly.getArea(), .{
+        const main_area = ly.getArea() orelse return;
+
+        if (Wg.VScroll.build(gui, main_area, .{
             .build_cb = buildModList,
             .build_vt = &self.cbhandle,
             .win = win,
@@ -276,7 +306,7 @@ const ModelBrowser = struct {
             vt.addChildOpt(gui, win, Wg.Button.build(
                 gui,
                 ly.getArea(),
-                tt.name,
+                self.ed.printScratch("{s}/{s}", .{ tt.path, tt.name }) catch "err",
                 .{
                     .id = i,
                     .cb_vt = &self.cbhandle,
@@ -300,9 +330,87 @@ const ModelBrowser = struct {
         self.selected_index = id;
         if (id < self.list.list_a.items.len) {
             const vpkid = self.list.list_a.items[id];
-            self.ed.asset_browser.selected_model_vpk_id = vpkid;
+            self.ed.edit_state.selected_model_vpk_id = vpkid;
         }
-        self.win.needs_rebuild = true;
+        self.vt.needs_rebuild = true;
+    }
+};
+
+pub const ModelPreview = struct {
+    const Vec3 = graph.za.Vec3;
+    vt: iWindow,
+    area: iArea,
+
+    drawctx: *graph.ImmediateDrawingContext,
+    ed: *Context,
+    model_cam: graph.Camera3D = .{ .pos = Vec3.new(0, -100, 0), .up = .z, .move_speed = 20 },
+
+    pub fn create(ed: *Context, gui: *Gui, drawctx: *graph.ImmediateDrawingContext) !*iWindow {
+        var self = try gui.alloc.create(@This());
+        self.* = .{
+            .area = .{ .area = graph.Rec(0, 0, 0, 0), .deinit_fn = area_deinit, .draw_fn = drawfn },
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .drawctx = drawctx,
+            .ed = ed,
+        };
+        self.vt.update_fn = update;
+
+        return &self.vt;
+    }
+
+    pub fn update(vt: *iWindow, gui: *Gui) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const win = gui.sdl_win;
+        const mdown = win.mouse.left == .high;
+        const grabit = gui.canGrabMouseOverride(vt) and mdown;
+        self.ed.stack_owns_input = grabit;
+        defer self.ed.stack_owns_input = false;
+        const selected_mod = self.ed.edit_state.selected_model_vpk_id orelse return;
+        const sp = self.area.area;
+
+        gui.setGrabOverride(vt, grabit, .{ .hide_pointer = grabit });
+        self.model_cam.updateDebugMove(self.ed.getCam3DMove(grabit));
+
+        const screen_area = self.area.area;
+        const x: i32 = @intFromFloat(screen_area.x);
+        const y: i32 = @intFromFloat(screen_area.y);
+        const w: i32 = @intFromFloat(screen_area.w);
+        const h: i32 = @intFromFloat(screen_area.h);
+
+        graph.c.glViewport(x, y, w, h);
+        graph.c.glScissor(x, y, w, h);
+        graph.c.glEnable(graph.c.GL_SCISSOR_TEST);
+        defer graph.c.glDisable(graph.c.GL_SCISSOR_TEST);
+
+        if (self.ed.models.get(selected_mod)) |mod| {
+            if (mod.mesh) |mm| {
+                const view = self.model_cam.getMatrix(sp.w / sp.h, 1, 64 * 512);
+                const mat = graph.za.Mat4.identity();
+                mm.drawSimple(view, mat, self.ed.draw_state.basic_shader);
+            }
+        } else {
+            if (self.ed.vpkctx.entries.get(selected_mod)) |tt| {
+                const name = self.ed.printScratch("{s}/{s}.mdl", .{ tt.path, tt.name }) catch return;
+                _ = self.ed.loadModel(name) catch return;
+            }
+        }
+        self.drawctx.flush(null, self.model_cam) catch {};
+    }
+
+    pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = gui;
+        self.area.area = area;
+    }
+
+    pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
+
+    pub fn drawfn(_: *iArea, _: *Gui, _: *DrawState) void {}
+
+    pub fn deinit(vt: *iWindow, gui: *Gui) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        vt.deinit(gui);
+        gui.alloc.destroy(self);
     }
 };
 

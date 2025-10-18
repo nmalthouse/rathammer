@@ -147,11 +147,6 @@ pub const PauseWindow = struct {
         self.area.area = area;
         self.area.clearChildren(gui, vt);
         self.area.dirty(gui);
-        //self.layout.reset(gui, vt);
-        //start a vlayout
-        //var ly = Vert{ .area = vt.area };
-        //const max_w = gui.style.config.default_item_h * 30;
-        //const w = @min(max_w, inset.w);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
         _ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
 

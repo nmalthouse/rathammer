@@ -230,6 +230,7 @@ pub const Context = struct {
         mpos: graph.Vec2f = undefined,
 
         selected_layer: Layer.Id = .none,
+        selected_model_vpk_id: ?vpk.VpkResId = null,
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 
@@ -711,6 +712,22 @@ pub const Context = struct {
     pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
         if (!self.stack_owns_input) return false;
         return self.win.isBindState(bind, state);
+    }
+
+    pub fn getCam3DMove(ed: *const Self, do_look: bool) graph.ptypes.Camera3D.MoveState {
+        const perc_of_60fps = ed.draw_state.frame_time_ms / 16.0;
+
+        return graph.ptypes.Camera3D.MoveState{
+            .down = ed.isBindState(ed.config.keys.cam_down.b, .high),
+            .up = ed.isBindState(ed.config.keys.cam_up.b, .high),
+            .left = ed.isBindState(ed.config.keys.cam_strafe_l.b, .high),
+            .right = ed.isBindState(ed.config.keys.cam_strafe_r.b, .high),
+            .fwd = ed.isBindState(ed.config.keys.cam_forward.b, .high),
+            .bwd = ed.isBindState(ed.config.keys.cam_back.b, .high),
+            .mouse_delta = if (do_look and ed.stack_owns_input) ed.win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .zero,
+            .scroll_delta = if (ed.stack_owns_input) ed.win.mouse.wheel_delta.y else 0,
+            .speed_perc = @as(f32, if (ed.win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
+        };
     }
 
     pub fn mouseState(self: *const Self) graph.SDL.MouseState {

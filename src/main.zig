@@ -22,7 +22,7 @@ const NagWindow = @import("windows/savenag.zig").NagWindow;
 const PauseWindow = @import("windows/pause.zig").PauseWindow;
 const ConsoleWindow = @import("windows/console.zig").Console;
 const InspectorWindow = @import("windows/inspector.zig").InspectorWindow;
-const AssetBrowser = @import("windows/asset.zig").AssetBrowser;
+const AssetBrowser = @import("windows/asset.zig");
 const MenuBar = @import("windows/menubar.zig").MenuBar;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
 const json_map = @import("json_map.zig");
@@ -347,9 +347,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const inspector_pane = try gui.addWindow(&inspector_win.vt, Rec(0, 300, 1000, 1000), .{});
     const nag_win = try NagWindow.create(&gui, editor);
     _ = try gui.addWindow(&nag_win.vt, Rec(0, 300, 1000, 1000), .{});
-    const asset_win = try AssetBrowser.create(&gui, editor);
+    const asset_win = try AssetBrowser.AssetBrowser.create(&gui, editor);
     const asset_pane = try gui.addWindow(&asset_win.vt, Rec(0, 0, 100, 1000), .{});
-    try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
+    const model_browse = try AssetBrowser.ModelBrowser.create(&gui, editor);
+    const model_win = try gui.addWindow(&model_browse.vt, Rec(0, 0, 100, 100), .{});
+    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, &gui, &draw), Rec(0, 0, 100, 100), .{});
+    try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
 
     const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), Rec(0, 0, 1, 1), .{});
 
@@ -471,13 +474,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     try ws.workspaces.append(main_tab);
 
     try ws.workspaces.append(ws.newArea(.{ .pane = asset_pane }));
+    try ws.workspaces.append(ws.newArea(.{
+        .sub = .{
+            .split = .{ .k = .vert, .pos = 0.4 },
+            .left = ws.newArea(.{ .pane = model_win }),
+            .right = ws.newArea(.{ .pane = model_prev }),
+        },
+    }));
     try ws.workspaces.append(main_2d_tab);
-    //try ws.workspaces.append(ws.newArea(.{ .sub = .{
-    //    .split = .{ .k = .vert, .pos = 0.4 },
-    //    .left = ws.newArea(.{ .pane = model_pane }),
-    //    .right = ws.newArea(.{ .pane = model_preview_pane }),
-    //} }));
-    //try ws.workspaces.append(main_2d_tab);
 
     var tab_outputs = std.ArrayList(struct { graph.Rect, ?usize }).init(alloc);
     defer tab_outputs.deinit();

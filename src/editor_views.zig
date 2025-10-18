@@ -70,19 +70,7 @@ pub const Main3DView = struct {
             graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, center.x, center.y);
         }
 
-        const ed = self.ed;
-        const perc_of_60fps = ed.draw_state.frame_time_ms / 16.0;
-        const cam_state = graph.ptypes.Camera3D.MoveState{
-            .down = ed.isBindState(ed.config.keys.cam_down.b, .high),
-            .up = ed.isBindState(ed.config.keys.cam_up.b, .high),
-            .left = ed.isBindState(ed.config.keys.cam_strafe_l.b, .high),
-            .right = ed.isBindState(ed.config.keys.cam_strafe_r.b, .high),
-            .fwd = ed.isBindState(ed.config.keys.cam_forward.b, .high),
-            .bwd = ed.isBindState(ed.config.keys.cam_back.b, .high),
-            .mouse_delta = if (should_grab) win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .{ .x = 0, .y = 0 },
-            .scroll_delta = if (can_grab) win.mouse.wheel_delta.y else 0,
-            .speed_perc = @as(f32, if (win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
-        };
+        const cam_state = self.ed.getCam3DMove(should_grab);
 
         if (can_grab) {
             self.ed.edit_state.lmouse = win.mouse.left;
@@ -94,7 +82,7 @@ pub const Main3DView = struct {
         self.ed.draw_state.cam3d.updateDebugMove(cam_state);
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
-        ed.handleMisc3DKeys();
+        self.ed.handleMisc3DKeys();
         draw3Dview(self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.style.config.text_h) catch return;
     }
 
@@ -123,6 +111,7 @@ pub const Main3DView = struct {
 
     pub fn deinit(vt: *G.iWindow, gui: *G.Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        vt.deinit(gui);
         gui.alloc.destroy(self);
     }
 };
