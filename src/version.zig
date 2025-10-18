@@ -4,6 +4,9 @@ const builtin = @import("builtin");
 
 const std = @import("std");
 
+pub const help_url = "https://github.com/nmalthouse/rathammer/blob/maste r/doc/start.md";
+pub const project_url = "https://github.com/nmalthouse/rathammer";
+
 const sp = " ";
 pub const version_string = @tagName(builtin.mode) ++ sp ++
     @tagName(builtin.target.os.tag) ++ sp ++

@@ -13,6 +13,7 @@ const Context = @import("../editor.zig").Context;
 const async_util = @import("../async.zig");
 const label = guis.label;
 const action = @import("../actions.zig");
+const version = @import("../version.zig");
 
 const btn_id = Wg.BtnContextWindow.buttonId;
 const BtnMap = Wg.BtnContextWindow.ButtonMapping;
@@ -126,6 +127,12 @@ pub const MenuBar = struct {
             btn_id("quit") => self.ed.win.should_exit = true,
             btn_id("undo") => action.undo(self.ed),
             btn_id("redo") => action.redo(self.ed),
+            btn_id("open_help_url") => {
+                _ = graph.c.SDL_OpenURL(version.help_url);
+            },
+            btn_id("open_project_url") => {
+                _ = graph.c.SDL_OpenURL(version.project_url);
+            },
 
             else => {},
         }
@@ -161,6 +168,12 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id("undo"), "undo", .btn },
                     .{ btn_id("redo"), "redo", .btn },
+                });
+            },
+            btn_id("help") => {
+                return try aa.dupe(BtnMap, &[_]BtnMap{
+                    .{ btn_id("open_project_url"), "Open Github", .btn },
+                    .{ btn_id("open_help_url"), "Open Help", .btn },
                 });
             },
             else => return &TodoBtns,
