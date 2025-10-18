@@ -310,7 +310,7 @@ pub const CubeDraw = struct {
     }
 
     fn commitPrimitive(self: *@This(), ed: *Editor, center: Vec3, prim: *const prim_gen.Primitive, opts: struct { select: bool = false, rot: Mat3 }) !void {
-        const vpk_id = ed.asset_browser.selected_mat_vpk_id orelse 0;
+        const vpk_id = ed.edit_state.selected_texture_vpk_id orelse 0;
         self.last_height = @abs(self.start.z() - self.end.z());
         const new_ids = try actions.createSolid(ed, prim, vpk_id, center, opts.rot, opts.select);
         if (new_ids.len > 0) {

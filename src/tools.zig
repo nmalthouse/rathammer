@@ -390,7 +390,7 @@ pub const PlaceEntity = struct {
             const p = pot[0];
             const point = self.grid.snapV3(p.point);
             const mat1 = graph.za.Mat4.fromTranslate(point);
-            const model_id = self.asset_browser.selected_model_vpk_id;
+            const model_id = self.edit_state.selected_model_vpk_id;
             //TODO only draw the model if default entity class has a model
             const mod = blk: {
                 const omod = self.models.get(model_id orelse break :blk null);

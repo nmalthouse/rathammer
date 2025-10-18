@@ -353,12 +353,12 @@ pub const TextureTool = struct {
         switch (btn_k) {
             else => {},
             .apply_selection => {
-                const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
+                const selected_mat = (self.ed.edit_state.selected_texture_vpk_id) orelse return;
                 try action.applyTextureToSelection(self.ed, selected_mat);
                 return;
             },
             .apply_faces => {
-                const selected_mat = (self.ed.asset_browser.selected_mat_vpk_id) orelse return;
+                const selected_mat = (self.ed.edit_state.selected_texture_vpk_id) orelse return;
                 if (self.selected_faces.items.len > 0) {
                     const ustack = try self.ed.undoctx.pushNewFmt("texture apply", .{});
                     defer ustack.apply(self.ed);
@@ -484,7 +484,7 @@ pub const TextureTool = struct {
                 self.state = if (pick) .pick else .apply;
                 switch (self.state) {
                     .apply => {
-                        const currently_selected = (editor.asset_browser.selected_mat_vpk_id) orelse break :blk;
+                        const currently_selected = (editor.edit_state.selected_texture_vpk_id) orelse break :blk;
                         const source = src: {
                             if (dupe) {
                                 if (try self.getCurrentlySelected(editor)) |f| {
@@ -535,7 +535,7 @@ pub const TextureTool = struct {
                     .pick => {
                         if (side.tex_id == edit.missingTexture().id) return; //Missing texture
                         try editor.asset_browser.recent_mats.put(side.tex_id);
-                        editor.asset_browser.selected_mat_vpk_id = side.tex_id;
+                        editor.edit_state.selected_texture_vpk_id = side.tex_id;
                     },
                 }
             }

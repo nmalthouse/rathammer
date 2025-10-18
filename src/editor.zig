@@ -231,6 +231,7 @@ pub const Context = struct {
 
         selected_layer: Layer.Id = .none,
         selected_model_vpk_id: ?vpk.VpkResId = null,
+        selected_texture_vpk_id: ?vpk.VpkResId = null,
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 
@@ -393,7 +394,6 @@ pub const Context = struct {
         self.asset_atlas = try graph.AssetBake.AssetMap.initTextureFromManifest(self.alloc, self.dirs.pref, "packed");
 
         //try gameinfo.loadGameinfo(self.alloc, base_dir, game_dir, &self.vpkctx, loadctx);
-        try self.asset_browser.populate(&self.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items);
         try fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd, args.fgd orelse game_conf.fgd);
 
         //The order in which these are registered maps to the order 'tool' keybinds are specified in config.vdf
@@ -1171,7 +1171,7 @@ pub const Context = struct {
                     }
                 }
                 if (self.asset_browser.recent_mats.list.items.len > 0) {
-                    self.asset_browser.selected_mat_vpk_id = self.asset_browser.recent_mats.list.items[0];
+                    self.edit_state.selected_texture_vpk_id = self.asset_browser.recent_mats.list.items[0];
                 }
             } else |_| {} //This data is not essential to parse
         }

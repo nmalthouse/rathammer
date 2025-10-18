@@ -21,7 +21,7 @@ const inspector = @import("inspector.zig");
 const log = std.log.scoped(.asset);
 
 pub const AssetBrowser = struct {
-    pub const tabs = [_][]const u8{ "texture", "model", "vpk", "fgd", "undo" };
+    pub const tabs = [_][]const u8{ "texture", "vpk", "fgd", "undo" };
     const Self = @This();
 
     vt: iWindow,
@@ -131,6 +131,12 @@ pub const AssetBrowser = struct {
             self.vpk_browse.build(vt, win, gui, vt.area);
             return;
         }
+    }
+
+    fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        _ = id;
+        self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
 };
 
@@ -286,7 +292,7 @@ pub const ModelBrowser = struct {
 
         var ly = gui.dstate.vLayout(inset);
         if (ly.getArea()) |header| {
-            const header_col = 3;
+            const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
             if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
@@ -305,6 +311,7 @@ pub const ModelBrowser = struct {
                     self.ed.config.keys.down_line.b.nameFull(&buf),
                 }));
             }
+            lay.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 }));
         }
         _ = ly.getArea(); //break
 
@@ -367,6 +374,12 @@ pub const ModelBrowser = struct {
             self.ed.edit_state.selected_model_vpk_id = vpkid;
         }
         self.vt.needs_rebuild = true;
+    }
+
+    fn btnAcceptCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        _ = id;
+        self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
 };
 
@@ -514,6 +527,7 @@ const TextureBrowser = struct {
                     .commit_vt = &self.cbhandle,
                 }));
             }
+            lay.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnCb, .id = 0 }));
         }
         _ = ly.getArea(); //break
 
@@ -600,7 +614,7 @@ const TextureBrowser = struct {
         };
         for (self.mat_list_search_a.items[adj_index..]) |mat| {
             const tt = self.ed.vpkctx.entries.get(mat) orelse return;
-            const tint: u32 = if (mat == self.ed.asset_browser.selected_mat_vpk_id) 0xff8888_ff else 0xffff_ffff;
+            const tint: u32 = if (mat == self.ed.edit_state.selected_texture_vpk_id) 0xff8888_ff else 0xffff_ffff;
             vt.addChildOpt(gui, win, ptext.PollingTexture.build(gui, tly.getArea(), self.ed, mat, "{s}/{s}", .{
                 tt.path, tt.name,
             }, .{
@@ -614,11 +628,17 @@ const TextureBrowser = struct {
 
     fn cb_tex_btn(cb: *CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.ed.asset_browser.selected_mat_vpk_id = id;
+        self.ed.edit_state.selected_texture_vpk_id = id;
         self.ed.asset_browser.recent_mats.put(id) catch {};
         if (self.scr_ptr) |scr| {
             scr.rebuild(dat.gui, win);
         }
+    }
+
+    fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        _ = id;
+        self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
 };
 

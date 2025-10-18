@@ -407,7 +407,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
     const ustack = try ed.undoctx.pushNewFmt("Clip", .{});
     for (selected) |sel_id| {
         const solid = ed.getComponent(sel_id, .solid) orelse continue;
-        var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.asset_browser.selected_mat_vpk_id);
+        var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.edit_state.selected_texture_vpk_id);
 
         ed.selection.list.clear();
         try ustack.append(.{ .create_destroy = try .create(ustack.alloc, sel_id, .destroy) });

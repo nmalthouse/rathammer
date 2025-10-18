@@ -916,7 +916,7 @@ pub const InspectorWindow = struct {
     pub fn selectedTextureWidget(self: *Self, lay: *iArea, gui: *Gui, win: *iWindow, area: graph.Rect) void {
         const ed = self.editor;
         const sp = area.split(.vertical, area.w / 2);
-        if (ed.asset_browser.selected_mat_vpk_id) |id| {
+        if (ed.edit_state.selected_texture_vpk_id) |id| {
             const tt = ed.vpkctx.entries.get(id) orelse return;
             lay.addChildOpt(gui, win, ptext.PollingTexture.build(gui, sp[0], ed, id, "{s}/{s}", .{
                 tt.path, tt.name,
@@ -944,7 +944,7 @@ pub const InspectorWindow = struct {
         const vpk_id = asb.recent_mats.list.items[id];
         const tex = self.editor.getTexture(vpk_id) catch return;
         if (tex.id == missing.id) return;
-        asb.selected_mat_vpk_id = vpk_id;
+        self.editor.edit_state.selected_texture_vpk_id = vpk_id;
         self.vt.needs_rebuild = true;
     }
 };
