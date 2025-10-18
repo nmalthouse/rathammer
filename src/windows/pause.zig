@@ -108,7 +108,7 @@ pub const PauseWindow = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
@@ -169,7 +169,7 @@ pub const PauseWindow = struct {
         const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "keybinds")) {
             const info = @typeInfo(@TypeOf(self.editor.config.keys));
-            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+            var ly = gui.dstate.vLayout(vt.area);
             inline for (info.@"struct".fields) |field| {
                 const key = @field(self.editor.config.keys, field.name);
                 if (@TypeOf(key) == Config.Keybind) {
@@ -181,7 +181,7 @@ pub const PauseWindow = struct {
             }
         }
         if (eql(u8, tab, "mapprops")) {
-            var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+            var ly = gui.dstate.vLayout(vt.area);
             if (guis.label(vt, gui, win, ly.getArea(), "Set skybox: ", .{})) |ar|
                 vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
                     .init_string = "",
@@ -191,7 +191,7 @@ pub const PauseWindow = struct {
                 }));
         }
         if (eql(u8, tab, "graphics")) {
-            var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+            var ly = gui.dstate.vLayout(vt.area);
             const ps = &self.editor.draw_state.planes;
             const ed = self.editor;
             const max = 512 * 64;
@@ -236,7 +236,7 @@ pub const PauseWindow = struct {
                     .slide = .{ .snap = 64 },
                 }));
             if (guis.label(vt, gui, win, ly.getArea(), "Gui Tint", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Colorpicker.build(gui, ar, gui.tint, .{
+                vt.addChildOpt(gui, win, Wg.Colorpicker.build(gui, ar, gui.dstate.tint, .{
                     .commit_vt = &self.area,
                     .commit_cb = &commitColor,
                 }));
@@ -254,11 +254,7 @@ pub const PauseWindow = struct {
                 vt.addChildOpt(gui, win, St(gui, ar, &ed.draw_state.cam_near_plane, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } }));
         }
         if (eql(u8, tab, "main")) {
-            var ly = guis.VerticalLayout{
-                .padding = .{},
-                .item_height = gui.style.config.default_item_h,
-                .bounds = vt.area,
-            };
+            var ly = gui.dstate.vLayout(vt.area);
             ly.padding.left = 10;
             ly.padding.right = 10;
             ly.padding.top = 10;
@@ -315,7 +311,7 @@ pub const PauseWindow = struct {
             //ly.pushHeight(Wg.TextView.heightForN(gui, 4));
             ly.pushRemaining();
             const help_area = ly.getArea() orelse return;
-            const sp = help_area.split(.vertical, gui.style.config.text_h * 9);
+            const sp = help_area.split(.vertical, gui.dstate.style.config.text_h * 9);
 
             if (self.selected_text_i < self.texts.items.len) {
                 vt.addChildOpt(gui, win, Wg.TextView.build(gui, sp[1], &.{self.texts.items[self.selected_text_i].text.items}, win, .{
@@ -356,7 +352,7 @@ pub const PauseWindow = struct {
 
     pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, window: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+        var ly = gui.dstate.vLayout(vt.area);
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
             //vt.addChildOpt(gui, window, Wg.Text.build(gui, ly.getArea(), "{s}", .{text.name.items}));
@@ -372,7 +368,7 @@ pub const PauseWindow = struct {
 
     pub fn commitColor(window_area: *iArea, gui: *Gui, color: u32, _: usize) void {
         _ = window_area;
-        gui.tint = color;
+        gui.dstate.tint = color;
     }
 
     pub fn checkbox_cb_auto_vis(user: *iArea, _: *Gui, val: bool, id: usize) void {
@@ -438,11 +434,7 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) v
             }
         }
     };
-    var ly = guis.VerticalLayout{
-        .padding = .{},
-        .item_height = gui.style.config.default_item_h,
-        .bounds = ar,
-    };
+    var ly = gui.dstate.vLayout(ar);
 
     if (self.editor.visgroups.getRoot()) |vg| {
         Helper.recur(&self.editor.visgroups, vg, 0, gui, &ly, area, &self.vt);

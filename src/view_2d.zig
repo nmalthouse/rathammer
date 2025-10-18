@@ -137,7 +137,7 @@ pub const Ctx2dView = struct {
             .view_3d = &view_3d,
             .cam2d = &self.cam,
             .draw = draw,
-            .text_param = .{ .px_size = 10, .color = 0xffff_ffff, .font = gui.font },
+            .text_param = .{ .px_size = 10, .color = 0xffff_ffff, .font = gui.dstate.font },
         };
         if (ed.getCurrentTool()) |tool_vt| {
             const selected = ed.getSelected();
@@ -168,7 +168,7 @@ pub const Ctx2dView = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn drawfn(_: *iArea, _: DrawState) void {}
+    pub fn drawfn(_: *iArea, _: *Gui, _: *DrawState) void {}
 
     pub fn deinit(vt: *G.iWindow, gui: *G.Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));

@@ -75,7 +75,7 @@ pub const LaunchWindow = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
@@ -91,7 +91,7 @@ pub const LaunchWindow = struct {
         //const w = @min(max_w, inset.w);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = inset };
+        var ly = gui.dstate.vLayout(inset);
         const Btn = Wg.Button.build;
         self.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome ", null));
         self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
@@ -101,7 +101,7 @@ pub const LaunchWindow = struct {
         const SZ = 5;
         self.area.addChildOpt(gui, win, Wg.VScroll.build(gui, ly.getArea(), .{
             .count = self.recents.items.len,
-            .item_h = gui.style.config.default_item_h * SZ,
+            .item_h = gui.dstate.style.config.default_item_h * SZ,
             .build_cb = buildScroll,
             .build_vt = &self.cbhandle,
             .win = win,
@@ -110,14 +110,14 @@ pub const LaunchWindow = struct {
 
     pub fn buildScroll(cb: *CbHandle, area: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h * 5, .bounds = area.area };
+        var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.style.config.default_item_h * 5, .bounds = area.area };
         if (index >= self.recents.items.len) return;
-        const text_bound = gui.font.textBounds("_Load_", gui.style.config.text_h);
+        const text_bound = gui.dstate.font.textBounds("_Load_", gui.dstate.style.config.text_h);
         for (self.recents.items[index..], 0..) |rec, i| {
             const ar = scrly.getArea() orelse return;
             const sp = ar.split(.vertical, ar.h);
 
-            var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = sp[1] };
+            var ly = gui.dstate.vLayout(sp[1]);
             area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), rec.name, null));
             if (rec.tex) |tex|
                 area.addChildOpt(gui, win, Wg.GLTexture.build(gui, sp[0], tex, tex.rect(), .{}));

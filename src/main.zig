@@ -76,7 +76,7 @@ pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
     return sc;
 }
 
-pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, gui_dstate: G.DrawState, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool) !enum { cont, exit, unpause } {
+pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool) !enum { cont, exit, unpause } {
     if (!editor.paused)
         return .unpause;
     if (win.isBindState(editor.config.keys.quit.b, .rising) or should_exit)
@@ -88,7 +88,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
     try editor.update(win);
 
     {
-        const max_w = gui.style.config.default_item_h * 30;
+        const max_w = gui.dstate.style.config.default_item_h * 30;
         const area = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
         const w = @min(max_w, area.w);
         const side_l = (area.w - w);
@@ -98,8 +98,8 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         try gui.pre_update();
         try gui.updateWindowSize(win_vt, winrect);
         try gui.update();
-        try gui.draw(gui_dstate, false);
-        gui.drawFbos(draw);
+        try gui.draw(false);
+        gui.drawFbos();
     }
     try draw.flush(null, null);
     try loadctx.loadedSplash(win.keys.len > 0);
@@ -334,21 +334,13 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     std.debug.print("edit init took {d} us\n", .{time_init.read() / std.time.ns_per_us});
 
     loadctx.cb("Loading gui");
-    var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font);
+    var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font, &draw);
     defer gui.deinit();
-    gui.style.config.default_item_h = scaled_item_height;
-    gui.style.config.text_h = scaled_text_height;
-    gui.scale = gui_scale;
-    gui.tint = config.gui_tint;
-    const nstyle = G.Style{};
-    const gui_dstate = G.DrawState{
-        .ctx = &draw,
-        .font = &font.font,
-        .style = &gui.style,
-        .gui = &gui,
-        .scale = gui_scale,
-        .nstyle = &nstyle,
-    };
+    gui.dstate.style.config.default_item_h = scaled_item_height;
+    gui.dstate.style.config.text_h = scaled_text_height;
+    gui.dstate.scale = gui_scale;
+    gui.dstate.tint = config.gui_tint;
+    //gui.dstate.nstyle.color = G.DarkColorscheme;
     const inspector_win = InspectorWindow.create(&gui, editor);
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
     _ = try gui.addWindow(&pause_win.vt, Rec(0, 300, 1000, 1000), .{});
@@ -421,7 +413,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
             while (!win.should_exit) {
-                switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, gui_dstate, &loadctx, editor, launch_win.should_exit)) {
+                switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, &loadctx, editor, launch_win.should_exit)) {
                     .exit => break,
                     .unpause => break,
                     .cont => continue,
@@ -443,7 +435,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer ws.deinit();
     const main_tab = ws.newArea(.{
         .sub = .{
-            .split = .{ .k = .horiz, .pos = gui.style.config.default_item_h, .kind = .abs },
+            .split = .{ .k = .horiz, .pos = gui.dstate.style.config.default_item_h, .kind = .abs },
 
             .left = ws.newArea(.{ .pane = menu_bar }),
 
@@ -506,7 +498,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
 
         if (editor.paused) {
-            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, gui_dstate, &loadctx, editor, pause_win.should_exit)) {
+            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit)) {
                 .cont => continue :main_loop,
                 .exit => break :main_loop,
                 .unpause => editor.paused = false,
@@ -564,8 +556,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
         try gui.update();
 
-        try gui.draw(gui_dstate, false);
-        gui.drawFbos(&draw);
+        try gui.draw(false);
+        gui.drawFbos();
 
         draw.setViewport(null);
         try loadctx.loadedSplash(win.keys.len > 0);
@@ -580,7 +572,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
                 break; //The map has been saved async
             }
-            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, gui_dstate, &loadctx, editor, nag_win.should_exit)) {
+            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit)) {
                 .exit => break,
                 .unpause => break,
                 .cont => continue,

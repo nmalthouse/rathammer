@@ -95,7 +95,7 @@ pub const Main3DView = struct {
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
         ed.handleMisc3DKeys();
-        draw3Dview(self.ed, vt.area.area, self.drawctx, gui.font, gui.style.config.text_h) catch return;
+        draw3Dview(self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.style.config.text_h) catch return;
     }
 
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {
@@ -119,7 +119,7 @@ pub const Main3DView = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(_: *iArea, _: DrawState) void {}
+    pub fn draw(_: *iArea, _: *Gui, _: *DrawState) void {}
 
     pub fn deinit(vt: *G.iWindow, gui: *G.Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));

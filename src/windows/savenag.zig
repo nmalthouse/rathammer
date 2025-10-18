@@ -59,7 +59,7 @@ pub const NagWindow = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
@@ -75,7 +75,7 @@ pub const NagWindow = struct {
         //const w = @min(max_w, inset.w);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = inset };
+        var ly = gui.dstate.vLayout(inset);
         const Btn = Wg.Button.build;
         self.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Unsaved changes! ", null));
         self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle }));

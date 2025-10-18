@@ -72,7 +72,7 @@ pub const Console = struct {
         self.area.clearChildren(gui, vt);
         self.area.dirty(gui);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
-        const item_height = gui.style.config.default_item_h;
+        const item_height = gui.dstate.style.config.default_item_h;
         const sp = inset.split(.horizontal, inset.h - item_height);
         const text_area = sp[0];
         const command = sp[1];

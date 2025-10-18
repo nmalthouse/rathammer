@@ -63,14 +63,14 @@ pub const PollingTexture = struct {
         gui.alloc.destroy(self);
     }
 
-    pub fn draw(vt: *iArea, d: g.DrawState) void {
+    pub fn draw(vt: *iArea, _: *g.Gui, d: *g.DrawState) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         const tex = self.ed.getTexture(self.vpk_id) catch return;
         const r = vt.area;
         d.ctx.rect(r, d.style.config.colors.background); //Proper transparent, no overdraw on defer
         d.ctx.rectTexTint(r, tex.rect(), self.opts.tint, tex);
         if (self.text.len > 0) {
-            const h = @min(d.gui.style.config.default_item_h, r.h);
+            const h = @min(d.style.config.default_item_h, r.h);
             const tr = graph.Rec(r.x, r.y + r.h - h, r.w, h);
             d.ctx.rect(tr, 0xff);
             d.ctx.textClipped(tr, "{s}", .{self.text}, d.textP(0xffff_ffff), .left);

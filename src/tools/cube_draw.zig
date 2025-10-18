@@ -111,7 +111,7 @@ pub const CubeDraw = struct {
             \\Or, hold q and aim at a entity, left click to set this as the new position.
             \\Change the grid size with 'R' and 'F'
         ;
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 7));
         area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,

@@ -105,7 +105,7 @@ pub const AssetBrowser = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
@@ -164,7 +164,7 @@ const VpkBrowser = struct {
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
         const sp = area.split(.vertical, area.w / 2);
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = sp[0] };
+        var ly = gui.dstate.vLayout(sp[0]);
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
@@ -182,7 +182,7 @@ const VpkBrowser = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.list.count(),
-            .item_h = gui.style.config.default_item_h,
+            .item_h = gui.dstate.style.config.default_item_h,
         })) |scr| {
             lay.addChildOpt(gui, win, scr);
             self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
@@ -193,7 +193,7 @@ const VpkBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+        var ly = gui.dstate.vLayout(vt.area);
         for (list[index..]) |item| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
             const dd = vpk.decodeResourceId(item);
@@ -239,7 +239,7 @@ const ModelBrowser = struct {
     }
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = area };
+        var ly = gui.dstate.vLayout(area);
         if (ly.getArea()) |header| {
             const header_col = 2;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
@@ -257,7 +257,7 @@ const ModelBrowser = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.list.count(),
-            .item_h = gui.style.config.default_item_h,
+            .item_h = gui.dstate.style.config.default_item_h,
             .index_ptr = &self.scroll_index,
         })) |scr| {
             lay.addChildOpt(gui, win, scr);
@@ -269,7 +269,7 @@ const ModelBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+        var ly = gui.dstate.vLayout(vt.area);
         for (list[index..], index..) |item, i| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
 
@@ -344,7 +344,7 @@ const TextureBrowser = struct {
     }
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
-        var ly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.style.config.default_item_h, .bounds = area };
+        var ly = gui.dstate.vLayout(area);
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };

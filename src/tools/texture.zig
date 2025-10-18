@@ -162,7 +162,7 @@ pub const TextureTool = struct {
                 };
             }
         };
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = gui.dstate.vLayout(area_vt.area);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space }));
         {

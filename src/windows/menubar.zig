@@ -64,7 +64,7 @@ pub const MenuBar = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         d.ctx.rect(vt.area, d.nstyle.color.bg);
     }
 
@@ -76,30 +76,29 @@ pub const MenuBar = struct {
 
         var ar = self.area.area;
         if (self.area.children.items.len != 0) @panic("fucked up"); // code assumes
-        const p = gui.font.textBounds("  ", gui.style.config.text_h);
+        const pad = gui.dstate.minWidgetWidth("  ");
         for (menus, 0..) |menu, i| {
-            const b = gui.font.textBounds(menu, gui.style.config.text_h);
-            const pad = p.x;
+            const b = gui.dstate.minWidgetWidth(menu);
 
-            self.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b.x + pad, null), menu, .{
+            self.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b + pad, null), menu, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),
             }));
-            ar.x += b.x + pad;
+            ar.x += b + pad;
         }
 
         {
             const name = "ignore groups";
             const b = Wg.Checkbox.getWidth(gui, name, .{});
 
-            self.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + p.x, null), name, .{
+            self.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + pad, null), name, .{
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null));
-            ar.x += b + p.x;
+            ar.x += b + pad;
 
-            self.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + p.x, null), &self.ed.renderer.mode, .{}));
-            ar.x += b + p.x;
+            self.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{}));
+            ar.x += b + pad;
         }
     }
 

@@ -345,12 +345,12 @@ pub const GuiWidget = struct {
     }
 
     pub fn build(self: *Self, gui: *Gui, win: *iWindow, vt: *iArea, area: graph.Rect) !void {
-        const item_h = gui.style.config.default_item_h;
+        const item_h = gui.dstate.style.config.default_item_h;
         const bot_count = 3;
         const bot_h = item_h * bot_count;
         const sp = area.split(.horizontal, area.h - bot_h);
         {
-            var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = sp[1] };
+            var ly = gui.dstate.vLayout(sp[1]);
 
             vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New layer", .{
                 .cb_vt = &self.cbhandle,
@@ -370,7 +370,7 @@ pub const GuiWidget = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.ctx.layers.items.len,
-            .item_h = gui.style.config.default_item_h,
+            .item_h = item_h,
             .index_ptr = &self.scroll_index,
         }));
     }
@@ -383,8 +383,8 @@ pub const GuiWidget = struct {
         list.append(.{ .ptr = self.ctx.root, .depth = 0 }) catch return;
         countNodes(self.ctx.root, &list, 1) catch return;
         if (index >= list.items.len) return;
-        const item_h = gui.style.config.default_item_h;
-        var ly = guis.VerticalLayout{ .item_height = item_h, .bounds = ar.area };
+        const item_h = gui.dstate.style.config.default_item_h;
+        var ly = gui.dstate.vLayout(ar.area);
         for (list.items[index..]) |item| {
             const ar_p = ly.getArea() orelse continue;
             const area = ar_p.split(.vertical, @as(f32, @floatFromInt(item.depth)) * item_h)[1];
@@ -483,14 +483,14 @@ const LayerWidget = struct {
                 .cb_fn = collapse_cb,
                 .cb_vt = &self.cbhandle,
                 .user_id = @intFromEnum(opts.id),
-                .cross_color = gui.nstyle.color.drop_down_arrow,
+                .cross_color = gui.dstate.nstyle.color.drop_down_arrow,
             }, !opts.collapse));
         self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
 
         return .{ .vt = &self.vt, .onclick = onclick };
     }
 
-    pub fn draw(vt: *iArea, d: guis.DrawState) void {
+    pub fn draw(vt: *iArea, _: *guis.Gui, d: *guis.DrawState) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         const col: u32 = if (self.opts.selected) 0x6097dbff else d.nstyle.color.bg;
         d.ctx.rect(vt.area, col);

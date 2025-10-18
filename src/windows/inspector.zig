@@ -101,7 +101,7 @@ pub const InspectorWindow = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
-    pub fn draw(vt: *iArea, d: DrawState) void {
+    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
         //GuiHelp.drawWindowFrame(d, vt.area);
         d.ctx.rect(vt.area, d.nstyle.color.bg);
     }
@@ -145,11 +145,7 @@ pub const InspectorWindow = struct {
         //const sp1 = vt.area.area.split(.horizontal, vt.area.area.h * 0.5);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, sp1);
         const w = inset.w;
-        var ly = guis.VerticalLayout{
-            .padding = .{},
-            .item_height = gui.style.config.default_item_h,
-            .bounds = Rec(inset.x, inset.y, w, inset.h),
-        };
+        var ly = gui.dstate.vLayout(Rec(inset.x, inset.y, w, inset.h));
         ly.padding.left = 10;
         ly.padding.right = 10;
         ly.padding.top = 10;
@@ -165,7 +161,7 @@ pub const InspectorWindow = struct {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
             self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
 
-            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp2[1] };
+            var ly = gui.dstate.vLayout(sp2[1]);
 
             for (self.editor.autovis.filters.items, 0..) |filter, i| {
                 vt.addChildOpt(
@@ -185,7 +181,7 @@ pub const InspectorWindow = struct {
         if (eql(u8, tab_name, "props")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
             {
-                var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp[0] };
+                var ly = gui.dstate.vLayout(sp[0]);
                 ly.padding.left = 10;
                 ly.padding.right = 10;
                 ly.padding.top = 10;
@@ -196,7 +192,7 @@ pub const InspectorWindow = struct {
                 .build_cb = buildValueEditor,
                 .build_vt = &self.cbhandle,
                 .win = win,
-                .scroll_mul = gui.style.config.default_item_h * 4,
+                .scroll_mul = gui.dstate.style.config.default_item_h * 4,
                 .scroll_y = true,
                 .scroll_x = false,
             }));
@@ -204,7 +200,7 @@ pub const InspectorWindow = struct {
         }
         if (eql(u8, tab_name, "io")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
-            var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = sp[1] };
+            var ly = gui.dstate.vLayout(sp[1]);
             ly.padding.left = 10;
             ly.padding.right = 10;
             ly.padding.top = 10;
@@ -360,7 +356,7 @@ pub const InspectorWindow = struct {
                     .build_vt = &self.cbhandle,
                     .win = win,
                     .count = fields.len,
-                    .item_h = gui.style.config.default_item_h,
+                    .item_h = gui.dstate.style.config.default_item_h,
                     .index_ptr = &self.kv_scroll_index,
                 }));
             }
@@ -378,7 +374,7 @@ pub const InspectorWindow = struct {
 
     // If a kv is selected, this edits it
     fn buildValueEditorErr(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) !void {
-        var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = lay.area };
+        var ly = gui.dstate.vLayout(lay.area);
         ly.padding.left = 10;
         ly.padding.right = 10;
         ly.padding.top = 0;
@@ -461,7 +457,7 @@ pub const InspectorWindow = struct {
     pub fn buildScrollItemsErr(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, _: *iWindow) !void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.resetIds();
-        var ly = guis.TableLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area, .columns = 2 };
+        var ly = guis.TableLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = vt.area, .columns = 2 };
         const ed = self.editor;
         const a = vt;
         const win = &self.vt;
@@ -747,7 +743,7 @@ pub const InspectorWindow = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = cons.list.items.len,
-            .item_h = gui.style.config.default_item_h,
+            .item_h = gui.dstate.style.config.default_item_h,
             .index_ptr = &self.io_scroll_index,
         }));
     }
@@ -954,7 +950,7 @@ pub const InspectorWindow = struct {
 };
 
 /// This should only be passed to Wg.Button !
-pub fn customButtonDraw(vt: *iArea, d: DrawState) void {
+pub fn customButtonDraw(vt: *iArea, _: *Gui, d: *DrawState) void {
     const self: *Wg.Button = @alignCast(@fieldParentPtr("vt", vt));
     d.ctx.rect(vt.area, 0xffff_ffff);
     if (self.opts.user_1 == 1) {
