@@ -49,7 +49,8 @@ sudo pacman -S zenity cmake meson
 
 ### Building and running
 ```
-git clone https://github.com/nmalthouse/rathammer.git
+# Master has breaking changes, clone latest tag
+git clone https://github.com/nmalthouse/rathammer.git --branch v0.1.0 
 cd rathammer
 git submodule update --init --recursive
 cd ratgraph
