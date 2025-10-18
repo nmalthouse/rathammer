@@ -165,12 +165,13 @@ pub const PauseWindow = struct {
         if (eql(u8, tab, "keybinds")) {
             const info = @typeInfo(@TypeOf(self.editor.config.keys));
             var ly = gui.dstate.vLayout(vt.area);
+            var buf: [64]u8 = undefined;
             inline for (info.@"struct".fields) |field| {
                 const key = @field(self.editor.config.keys, field.name);
                 if (@TypeOf(key) == Config.Keybind) {
                     vt.addChildOpt(gui, win, Wg.Text.build(gui, ly.getArea(), "{s}: {s}", .{
                         field.name,
-                        key.b.name(),
+                        key.b.nameFull(&buf),
                     }));
                 }
             }

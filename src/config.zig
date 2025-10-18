@@ -63,8 +63,8 @@ pub const Config = struct {
 
         duplicate: Keybind = .{ .b = SC(.Z, 0) },
 
-        down_line: Keybind = .{ .b = KC(.j, 0) }, //j
-        up_line: Keybind = .{ .b = KC(.k, 0) }, //k
+        down_line: Keybind = .{ .b = SC(.C, 0) }, // j in dvorak
+        up_line: Keybind = .{ .b = SC(.V, 0) }, // k in dvorak
         grab_far: Keybind = .{ .b = SC(.Q, 0) },
 
         grid_inc: Keybind = .{ .b = SC(.R, 0) },

@@ -32,8 +32,8 @@ keys {
     pause           escape
     focus_search    "ctrl+keycode:f"
 
-    down_line       keycode:j
-    up_line         keycode:k
+    down_line       ctrl+scancode:c
+    up_line         ctrl+scancode:v
     grab_far        scancode:q
 
 

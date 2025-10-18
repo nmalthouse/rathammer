@@ -249,7 +249,24 @@ pub const ModelBrowser = struct {
             },
         };
 
+        self.vt.update_fn = update;
         return self;
+    }
+
+    pub fn update(vt: *iWindow, gui: *Gui) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+
+        if (gui.sdl_win.isBindState(self.ed.config.keys.up_line.b, .rising) and self.selected_index > 0) {
+            if (self.scroll_index > 0)
+                self.scroll_index -= 1;
+            self.setSelected(self.selected_index - 1);
+            vt.needs_rebuild = true;
+        }
+        if (gui.sdl_win.isBindState(self.ed.config.keys.down_line.b, .rising) and self.selected_index + 1 < self.list.count()) {
+            self.setSelected(self.selected_index + 1);
+            self.scroll_index += 1;
+            vt.needs_rebuild = true;
+        }
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
@@ -269,12 +286,24 @@ pub const ModelBrowser = struct {
 
         var ly = gui.dstate.vLayout(inset);
         if (ly.getArea()) |header| {
-            const header_col = 2;
+            const header_col = 3;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
             if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
             if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
                 lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.list.num_result));
+            }
+
+            {
+                var buf: [32]u8 = undefined;
+                const spa = hy.getArea() orelse return;
+                const sp = spa.split(.vertical, spa.w / 2);
+                lay.addChildOpt(gui, win, Wg.Text.build(gui, sp[0], "up: {s}", .{
+                    self.ed.config.keys.up_line.b.nameFull(&buf),
+                }));
+                lay.addChildOpt(gui, win, Wg.Text.build(gui, sp[1], "down: {s}", .{
+                    self.ed.config.keys.down_line.b.nameFull(&buf),
+                }));
             }
         }
         _ = ly.getArea(); //break
@@ -289,6 +318,7 @@ pub const ModelBrowser = struct {
             .count = self.list.count(),
             .item_h = gui.dstate.style.config.default_item_h,
             .index_ptr = &self.scroll_index,
+            .current_index = self.selected_index,
         })) |scr| {
             lay.addChildOpt(gui, win, scr);
             self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
@@ -327,6 +357,10 @@ pub const ModelBrowser = struct {
 
     fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.setSelected(id);
+    }
+
+    fn setSelected(self: *@This(), id: usize) void {
         self.selected_index = id;
         if (id < self.list.list_a.items.len) {
             const vpkid = self.list.list_a.items[id];
