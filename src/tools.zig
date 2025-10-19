@@ -303,11 +303,11 @@ pub const FastFaceManip = struct {
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
         const CB = Wg.Checkbox.build;
-        area_vt.addChildOpt(gui, win, CB(gui, ly.getArea(), "Draw Grid", .{ .bool_ptr = &self.draw_grid }, null));
+        _ = CB(area_vt, ly.getArea(), "Draw Grid", .{ .bool_ptr = &self.draw_grid }, null);
     }
 
     pub fn guiDoc(_: *i3DTool, os9gui: *Os9Gui, editor: *Editor, vl: *Gui.VerticalLayout) void {
@@ -379,9 +379,9 @@ pub const PlaceEntity = struct {
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
     }
 
     pub fn modelPlace(tool: *@This(), self: *Editor, td: ToolData) !void {
@@ -681,9 +681,9 @@ pub const TranslateFace = struct {
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
     }
 
     pub fn faceTranslate(tool: *@This(), self: *Editor, id: ecs.EcsT.Id, td: ToolData) !void {

@@ -27,24 +27,32 @@ pub const PollingTexture = struct {
     opts: Opts,
     text: []const u8,
 
-    pub fn build(gui: *Gui, area_o: ?Rect, ed: *edit.Context, vpk_id: vpk.VpkResId, comptime fmt: []const u8, args: anytype, opts: Opts) ?g.NewVt {
-        const area = area_o orelse return null;
+    pub fn build(parent: *iArea, area_o: ?Rect, ed: *edit.Context, vpk_id: vpk.VpkResId, comptime fmt: []const u8, args: anytype, opts: Opts) g.WgStatus {
+        const gui = parent.win_ptr.gui_ptr;
+
+        const area = area_o orelse return .failed;
         const self = gui.create(@This());
         var str = std.ArrayList(u8).init(gui.alloc);
-        str.writer().print(fmt, args) catch return null;
+        str.writer().print(fmt, args) catch return .failed;
 
+        const missing = edit.missingTexture();
+        const tex = self.ed.getTexture(self.vpk_id) catch null;
         self.* = .{
-            .vt = .{ .area = area, .deinit_fn = deinit, .draw_fn = draw },
-            .text = str.toOwnedSlice() catch return null,
+            .vt = .UNINITILIZED,
+            .text = str.toOwnedSlice() catch return .failed,
             .vpk_id = vpk_id,
             .opts = opts,
             .ed = ed,
         };
+        parent.addChild(&self.vt, .{
+            .area = area,
+            .deinit_fn = deinit,
+            .draw_fn = draw,
+            .onclick = onclick,
+            .onpoll = if (tex != null and tex.?.id == missing.id) pollForTexture else null,
+        });
 
-        const missing = edit.missingTexture();
-        const tex = self.ed.getTexture(self.vpk_id) catch return .{ .vt = &self.vt, .onclick = onclick };
-
-        return .{ .vt = &self.vt, .onclick = onclick, .onpoll = if (tex.id == missing.id) pollForTexture else null };
+        return .good;
     }
 
     pub fn pollForTexture(vt: *iArea, gui: *Gui, win: *iWindow) void {

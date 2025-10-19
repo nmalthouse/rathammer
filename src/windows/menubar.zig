@@ -48,7 +48,7 @@ pub const MenuBar = struct {
     pub fn create(gui: *Gui, editor: *Context) !*iWindow {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .ed = editor,
         };
 
@@ -79,11 +79,11 @@ pub const MenuBar = struct {
         for (menus, 0..) |menu, i| {
             const b = gui.dstate.minWidgetWidth(menu);
 
-            win.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b + pad, null), menu, .{
+            _ = Wg.Button.build(&win.area, ar.replace(null, null, b + pad, null), menu, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),
-            }));
+            });
             ar.x += b + pad;
         }
 
@@ -91,12 +91,12 @@ pub const MenuBar = struct {
             const name = "ignore groups";
             const b = Wg.Checkbox.getWidth(gui, name, .{});
 
-            win.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + pad, null), name, .{
+            _ = Wg.Checkbox.build(&win.area, ar.replace(null, null, b + pad, null), name, .{
                 .bool_ptr = &self.ed.selection.ignore_groups,
-            }, null));
+            }, null);
             ar.x += b + pad;
 
-            win.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{}));
+            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
             ar.x += b + pad;
         }
     }

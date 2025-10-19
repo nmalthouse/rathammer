@@ -37,7 +37,7 @@ pub const Console = struct {
         const self = gui.create(@This());
 
         self.* = .{
-            .vt = iWindow.init(&build, gui, &deinit, .{}),
+            .vt = iWindow.init(&build, gui, &deinit, .{}, &self.vt),
             .lines = std.ArrayList([]const u8).init(gui.alloc),
             .line_arena = std.heap.ArenaAllocator.init(gui.alloc),
             .scratch = std.ArrayList(u8).init(gui.alloc),
@@ -75,7 +75,7 @@ pub const Console = struct {
         const text_area = sp[0];
         const command = sp[1];
 
-        vt.area.addChildOpt(gui, vt, Wg.Textbox.buildOpts(gui, command, .{
+        _ = Wg.Textbox.buildOpts(&vt.area, command, .{
             .init_string = "",
             .commit_cb = &textbox_cb,
             .commit_vt = &self.cbhandle,
@@ -83,15 +83,15 @@ pub const Console = struct {
             .clear_on_commit = true,
             .restricted_charset = "`",
             .invert_restriction = true,
-        }));
+        });
         if (vt.area.children.items.len > 0) {
             gui.grabFocus(vt.area.children.items[0], vt);
         }
 
-        vt.area.addChildOpt(gui, vt, Wg.TextView.build(gui, text_area, self.lines.items, vt, .{
+        _ = Wg.TextView.build(&vt.area, text_area, self.lines.items, vt, .{
             .mode = .split_on_space,
             .force_scroll = true,
-        }));
+        });
     }
 
     pub fn focus(self: *@This(), gui: *Gui) void {

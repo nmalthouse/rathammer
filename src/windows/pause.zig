@@ -57,7 +57,7 @@ pub const PauseWindow = struct {
     pub fn create(gui: *Gui, editor: *Context, app_cwd: std.fs.Dir) !*PauseWindow {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
@@ -146,14 +146,14 @@ pub const PauseWindow = struct {
         vt.area.clearChildren(gui, vt);
         vt.area.dirty(gui);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
-        _ = vt.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
+        _ = vt.area.addEmpty(graph.Rec(0, 0, 0, 0));
 
-        vt.area.addChildOpt(gui, vt, Wg.Tabs.build(gui, inset, &.{
+        _ = Wg.Tabs.build(&vt.area, inset, &.{
             "main",
             "keybinds",
             "graphics",
             "mapprops",
-        }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index }));
+        }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
     }
 
     fn buildTabs(win_vt: *CbHandle, vt: *iArea, tab: []const u8, gui: *Gui, win: *iWindow) void {
@@ -167,85 +167,85 @@ pub const PauseWindow = struct {
             inline for (info.@"struct".fields) |field| {
                 const key = @field(self.editor.config.keys, field.name);
                 if (@TypeOf(key) == Config.Keybind) {
-                    vt.addChildOpt(gui, win, Wg.Text.build(gui, ly.getArea(), "{s}: {s}", .{
+                    _ = Wg.Text.build(vt, ly.getArea(), "{s}: {s}", .{
                         field.name,
                         key.b.nameFull(&buf),
-                    }));
+                    });
                 }
             }
         }
         if (eql(u8, tab, "mapprops")) {
             var ly = gui.dstate.vLayout(vt.area);
-            if (guis.label(vt, gui, win, ly.getArea(), "Set skybox: ", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
+            if (guis.label(vt, ly.getArea(), "Set skybox: ", .{})) |ar|
+                _ = Wg.Textbox.buildOpts(vt, ar, .{
                     .init_string = "",
                     .commit_cb = &textbox_cb,
                     .commit_vt = &self.cbhandle,
                     .user_id = @intFromEnum(Textboxes.set_skyname),
-                }));
+                });
         }
         if (eql(u8, tab, "graphics")) {
             var ly = gui.dstate.vLayout(vt.area);
             const ps = &self.editor.draw_state.planes;
             const ed = self.editor;
             const max = 512 * 64;
-            if (guis.label(vt, gui, win, ly.getArea(), "p0", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ps[0], .{ .min = 0.1, .max = max, .default = 462 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "p1", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ps[1], .{ .min = 0.1, .max = max, .default = 1300 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "p2", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ps[2], .{ .min = 0.1, .max = max, .default = 4200 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "p3", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ps[3], .{ .min = 4096, .max = max, .default = 16400 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "pad", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &ed.draw_state.pad, 1, 4096, .{}));
-            if (guis.label(vt, gui, win, ly.getArea(), "index", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &ed.draw_state.index, 0, 5, .{}));
-            if (guis.label(vt, gui, win, ly.getArea(), "gamma", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.renderer.gamma, .{ .min = 0.1, .max = 3, .default = 1.45, .slide = .{ .snap = 0.1 } }));
-            if (guis.label(vt, gui, win, ly.getArea(), "exposure", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.renderer.exposure, .{ .min = 0.1, .max = 10, .default = 1, .slide = .{ .snap = 0.1 } }));
-            if (guis.label(vt, gui, win, ly.getArea(), "pitch", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.renderer.pitch, .{ .min = 0, .max = 90, .default = -30 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "yaw", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.renderer.yaw, .{ .min = 0, .max = 360, .default = 0 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "lightMul", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.draw_state.light_mul, .{ .min = 0.01, .max = 1, .default = 0.11 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "const add", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.draw_state.const_add, .{ .min = -1, .max = 1, .default = 0 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "ambient scale", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.renderer.ambient_scale, .{ .min = -10, .max = 100, .default = 1 }));
-            if (guis.label(vt, gui, win, ly.getArea(), "res scale", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.StaticSlider.build(gui, ar, &ed.renderer.res_scale, .{
+            if (guis.label(vt, ly.getArea(), "p0", .{})) |ar|
+                _ = St(vt, ar, &ps[0], .{ .min = 0.1, .max = max, .default = 462 });
+            if (guis.label(vt, ly.getArea(), "p1", .{})) |ar|
+                _ = St(vt, ar, &ps[1], .{ .min = 0.1, .max = max, .default = 1300 });
+            if (guis.label(vt, ly.getArea(), "p2", .{})) |ar|
+                _ = St(vt, ar, &ps[2], .{ .min = 0.1, .max = max, .default = 4200 });
+            if (guis.label(vt, ly.getArea(), "p3", .{})) |ar|
+                _ = St(vt, ar, &ps[3], .{ .min = 4096, .max = max, .default = 16400 });
+            if (guis.label(vt, ly.getArea(), "pad", .{})) |ar|
+                _ = Wg.Slider.build(vt, ar, &ed.draw_state.pad, 1, 4096, .{});
+            if (guis.label(vt, ly.getArea(), "index", .{})) |ar|
+                _ = Wg.Slider.build(vt, ar, &ed.draw_state.index, 0, 5, .{});
+            if (guis.label(vt, ly.getArea(), "gamma", .{})) |ar|
+                _ = St(vt, ar, &ed.renderer.gamma, .{ .min = 0.1, .max = 3, .default = 1.45, .slide = .{ .snap = 0.1 } });
+            if (guis.label(vt, ly.getArea(), "exposure", .{})) |ar|
+                _ = St(vt, ar, &ed.renderer.exposure, .{ .min = 0.1, .max = 10, .default = 1, .slide = .{ .snap = 0.1 } });
+            if (guis.label(vt, ly.getArea(), "pitch", .{})) |ar|
+                _ = St(vt, ar, &ed.renderer.pitch, .{ .min = 0, .max = 90, .default = -30 });
+            if (guis.label(vt, ly.getArea(), "yaw", .{})) |ar|
+                _ = St(vt, ar, &ed.renderer.yaw, .{ .min = 0, .max = 360, .default = 0 });
+            if (guis.label(vt, ly.getArea(), "lightMul", .{})) |ar|
+                _ = St(vt, ar, &ed.draw_state.light_mul, .{ .min = 0.01, .max = 1, .default = 0.11 });
+            if (guis.label(vt, ly.getArea(), "const add", .{})) |ar|
+                _ = St(vt, ar, &ed.draw_state.const_add, .{ .min = -1, .max = 1, .default = 0 });
+            if (guis.label(vt, ly.getArea(), "ambient scale", .{})) |ar|
+                _ = St(vt, ar, &ed.renderer.ambient_scale, .{ .min = -10, .max = 100, .default = 1 });
+            if (guis.label(vt, ly.getArea(), "res scale", .{})) |ar|
+                _ = Wg.StaticSlider.build(vt, ar, &ed.renderer.res_scale, .{
                     .min = 0.1,
                     .max = 1,
                     .default = 1,
                     .slide = .{ .snap = 0.1 },
-                }));
-            if (guis.label(vt, gui, win, ly.getArea(), "light render dist", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.StaticSlider.build(gui, ar, &ed.renderer.light_render_dist, .{
+                });
+            if (guis.label(vt, ly.getArea(), "light render dist", .{})) |ar|
+                _ = Wg.StaticSlider.build(vt, ar, &ed.renderer.light_render_dist, .{
                     .min = 16,
                     .max = 4096,
                     .default = 1024,
                     .slide = .{ .snap = 64 },
-                }));
-            if (guis.label(vt, gui, win, ly.getArea(), "Gui Tint", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Colorpicker.build(gui, ar, gui.dstate.tint, .{
+                });
+            if (guis.label(vt, ly.getArea(), "Gui Tint", .{})) |ar|
+                _ = Wg.Colorpicker.build(vt, ar, gui.dstate.tint, .{
                     .commit_vt = &self.cbhandle,
                     .commit_cb = &commitColor,
-                }));
+                });
 
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "draw skybox", .{ .bool_ptr = &ed.draw_state.tog.skybox }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "lighting", .{ .bool_ptr = &ed.renderer.do_lighting }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "copy depth", .{ .bool_ptr = &ed.renderer.copy_depth }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "light debug", .{ .bool_ptr = &ed.renderer.debug_light_coverage }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "do hdr", .{ .bool_ptr = &ed.renderer.do_hdr_buffer }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Draw outline", .{ .bool_ptr = &ed.draw_state.draw_outlines }, null));
-            vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Draw displacement solid", .{ .bool_ptr = &ed.draw_state.draw_displacment_solid }, null));
-            if (guis.label(vt, gui, win, ly.getArea(), "far clip", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.draw_state.cam_far_plane, .{ .min = 512 * 64, .max = 512 * 512, .default = 512 * 64, .slide = .{ .snap = 64 } }));
-            if (guis.label(vt, gui, win, ly.getArea(), "near clip", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ed.draw_state.cam_near_plane, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } }));
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "draw skybox", .{ .bool_ptr = &ed.draw_state.tog.skybox }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "lighting", .{ .bool_ptr = &ed.renderer.do_lighting }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "copy depth", .{ .bool_ptr = &ed.renderer.copy_depth }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "light debug", .{ .bool_ptr = &ed.renderer.debug_light_coverage }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "do hdr", .{ .bool_ptr = &ed.renderer.do_hdr_buffer }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw outline", .{ .bool_ptr = &ed.draw_state.draw_outlines }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw displacement solid", .{ .bool_ptr = &ed.draw_state.draw_displacment_solid }, null);
+            if (guis.label(vt, ly.getArea(), "far clip", .{})) |ar|
+                _ = St(vt, ar, &ed.draw_state.cam_far_plane, .{ .min = 512 * 64, .max = 512 * 512, .default = 512 * 64, .slide = .{ .snap = 64 } });
+            if (guis.label(vt, ly.getArea(), "near clip", .{})) |ar|
+                _ = St(vt, ar, &ed.draw_state.cam_near_plane, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } });
         }
         if (eql(u8, tab, "main")) {
             var ly = gui.dstate.vLayout(vt.area);
@@ -258,48 +258,45 @@ pub const PauseWindow = struct {
             if (self.editor.has_loaded_map) {
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Unpause", .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle }));
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "save as", .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle }));
+                    _ = Btn(vt, hy.getArea(), "Unpause", .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle });
+                    _ = Btn(vt, hy.getArea(), "save as", .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle });
                 }
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
-                    if (guis.label(vt, gui, win, hy.getArea(), "Import under visgroup: ", .{})) |ar|
-                        vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
+                    if (guis.label(vt, hy.getArea(), "Import under visgroup: ", .{})) |ar|
+                        _ = Wg.Textbox.buildOpts(vt, ar, .{
                             .init_string = self.editor.hacky_extra_vmf.override_vis_group orelse "",
                             .commit_cb = &textbox_cb,
                             .commit_vt = &self.cbhandle,
                             .user_id = @intFromEnum(Textboxes.set_import_visgroup),
-                        }));
-                    vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
+                        });
+                    _ = Btn(vt, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
                 }
             } else {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "New map", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
-                vt.addChildOpt(gui, win, Btn(gui, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
+                _ = Btn(vt, hy.getArea(), "New map", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+                _ = Btn(vt, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
             }
-
-            //vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.area }));
-            //vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Force autosave", .{ .cb_fn = &btnCb, .id = Buttons.id(.force_autosave), .cb_vt = &self.area }));
 
             if (false) {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-                vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw sprite", .{ .bool_ptr = &ds.tog.sprite }, null));
-                vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "draw models", .{ .bool_ptr = &ds.tog.models }, null));
-                vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null));
+                _ = Wg.Checkbox.build(vt, hy.getArea(), "draw sprite", .{ .bool_ptr = &ds.tog.sprite }, null);
+                _ = Wg.Checkbox.build(vt, hy.getArea(), "draw models", .{ .bool_ptr = &ds.tog.models }, null);
+                _ = Wg.Checkbox.build(vt, hy.getArea(), "ignore groups", .{ .bool_ptr = &self.editor.selection.ignore_groups }, null);
             }
 
-            if (guis.label(vt, gui, win, ly.getArea(), "Camera move kind", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &ds.cam3d.fwd_back_kind, .{}));
-            if (guis.label(vt, gui, win, ly.getArea(), "renderer", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.editor.renderer.mode, .{}));
-            if (guis.label(vt, gui, win, ly.getArea(), "New group type", .{})) |ar|
-                vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.editor.edit_state.default_group_entity, .{}));
-            if (guis.label(vt, gui, win, ly.getArea(), "Entity render distance", .{})) |ar|
-                vt.addChildOpt(gui, win, St(gui, ar, &ds.tog.model_render_dist, .{ .min = 64, .max = 1024 * 10, .default = 1024 }));
+            if (guis.label(vt, ly.getArea(), "Camera move kind", .{})) |ar|
+                _ = Wg.Combo.build(vt, ar, &ds.cam3d.fwd_back_kind, .{});
+            if (guis.label(vt, ly.getArea(), "renderer", .{})) |ar|
+                _ = Wg.Combo.build(vt, ar, &self.editor.renderer.mode, .{});
+            if (guis.label(vt, ly.getArea(), "New group type", .{})) |ar|
+                _ = Wg.Combo.build(vt, ar, &self.editor.edit_state.default_group_entity, .{});
+            if (guis.label(vt, ly.getArea(), "Entity render distance", .{})) |ar|
+                _ = St(vt, ar, &ds.tog.model_render_dist, .{ .min = 64, .max = 1024 * 10, .default = 1024 });
             if (false) {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                vt.addChildOpt(gui, win, Wg.Slider.build(gui, hy.getArea(), &ds.cam_near_plane, 1, 512, .{ .nudge = 1 }));
-                vt.addChildOpt(gui, win, Wg.Slider.build(gui, hy.getArea(), &ds.cam_far_plane, 512 * 64, 512 * 512, .{ .nudge = 1 }));
+                _ = Wg.Slider.build(vt, hy.getArea(), &ds.cam_near_plane, 1, 512, .{ .nudge = 1 });
+                _ = Wg.Slider.build(vt, hy.getArea(), &ds.cam_far_plane, 512 * 64, 512 * 512, .{ .nudge = 1 });
             }
 
             //ly.pushHeight(Wg.TextView.heightForN(gui, 4));
@@ -308,18 +305,18 @@ pub const PauseWindow = struct {
             const sp = help_area.split(.vertical, gui.dstate.style.config.text_h * 9);
 
             if (self.selected_text_i < self.texts.items.len) {
-                vt.addChildOpt(gui, win, Wg.TextView.build(gui, sp[1], &.{self.texts.items[self.selected_text_i].text.items}, win, .{
+                _ = Wg.TextView.build(vt, sp[1], &.{self.texts.items[self.selected_text_i].text.items}, win, .{
                     .mode = .split_on_space,
-                }));
+                });
             }
 
-            vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
+            _ = Wg.VScroll.build(vt, sp[0], .{
                 .build_cb = &buildHelpScroll,
                 .build_vt = &self.cbhandle,
                 .win = win,
                 .count = self.texts.items.len,
                 .item_h = ly.item_height,
-            }));
+            });
         }
     }
 
@@ -344,19 +341,19 @@ pub const PauseWindow = struct {
         }
     }
 
-    pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, window: *iWindow) void {
+    pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize) void {
+        const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         var ly = gui.dstate.vLayout(vt.area);
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
-            //vt.addChildOpt(gui, window, Wg.Text.build(gui, ly.getArea(), "{s}", .{text.name.items}));
-            vt.addChildOpt(gui, window, Wg.Button.build(gui, ly.getArea(), text.name.items[3..], .{
+            _ = Wg.Button.build(vt, ly.getArea(), text.name.items[3..], .{
                 .custom_draw = &Wg.Button.customButtonDraw_listitem,
                 .id = i,
                 .cb_fn = &btn_help_cb,
                 .cb_vt = &self.cbhandle,
                 .user_1 = if (self.selected_text_i == i) 1 else 0,
-            }));
+            });
         }
     }
 
@@ -380,21 +377,19 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) v
             const the_bool = !vs.disabled.isSet(vg.id);
 
             var hy = guis.HorizLayout{ .bounds = vl.getArea() orelse return, .count = 2 };
-            vt.addChildOpt(
-                gui_,
-                win,
-                Wg.Checkbox.build(gui_, hy.getArea(), vg.name, .{
-                    .cb_fn = &commit_cb,
-                    .cb_vt = win.area,
-                    .user_id = vg.id,
-                }, the_bool),
+            _ = Wg.Checkbox.build(
+                vt,
+                hy.getArea(),
+                vg.name,
+                .{ .cb_fn = &commit_cb, .cb_vt = win.area, .user_id = vg.id },
+                the_bool,
             );
 
-            vt.addChildOpt(gui_, win, Wg.Button.build(gui_, hy.getArea(), "Select", .{
+            _ = Wg.Button.build(vt, hy.getArea(), "Select", .{
                 .cb_fn = &select_all_vis,
                 .cb_vt = win.area,
                 .id = vg.id,
-            }));
+            });
 
             for (vg.children.items) |id| {
                 recur(

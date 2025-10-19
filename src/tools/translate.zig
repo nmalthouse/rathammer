@@ -454,21 +454,21 @@ pub const Translate = struct {
             \\Otherwise, the solid is moved in the plane you clicked on.
         ;
         var ly = gui.dstate.vLayout(area_vt.area);
-        area_vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "translate tool", null));
+        _ = Wg.Text.buildStatic(area_vt, ly.getArea(), "translate tool", null);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
         const St = Wg.StaticSlider;
-        if (guis.label(area_vt, gui, win, ly.getArea(), "Angle snap", .{})) |ar|
-            area_vt.addChildOpt(gui, win, St.build(gui, ar, &self.angle_snap, .{
+        if (guis.label(area_vt, ly.getArea(), "Angle snap", .{})) |ar|
+            _ = St.build(area_vt, ar, &self.angle_snap, .{
                 .display_bounds_while_editing = false,
                 .min = 0,
                 .max = 360,
                 .default = 15,
                 .unit = "degrees",
                 .slide = .{ .snap = 5 },
-            }));
+            });
 
         const com_o = Wg.StaticSliderOpts{
             .slide = .{ .snap = 1 },
@@ -478,46 +478,46 @@ pub const Translate = struct {
             .unit = "hu",
             .display_bounds_while_editing = false,
         };
-        if (guis.label(area_vt, gui, win, ly.getArea(), "Grid", .{})) |ar| {
+        if (guis.label(area_vt, ly.getArea(), "Grid", .{})) |ar| {
             var hy = guis.HorizLayout{ .bounds = ar, .count = 3 };
-            area_vt.addChildOpt(gui, win, St.build(gui, hy.getArea(), self.ed.grid.s.xMut(), com_o));
-            area_vt.addChildOpt(gui, win, St.build(gui, hy.getArea(), self.ed.grid.s.yMut(), com_o));
-            area_vt.addChildOpt(gui, win, St.build(gui, hy.getArea(), self.ed.grid.s.zMut(), com_o));
+            _ = St.build(area_vt, hy.getArea(), self.ed.grid.s.xMut(), com_o);
+            _ = St.build(area_vt, hy.getArea(), self.ed.grid.s.yMut(), com_o);
+            _ = St.build(area_vt, hy.getArea(), self.ed.grid.s.zMut(), com_o);
         }
-        if (guis.label(area_vt, gui, win, ly.getArea(), "Set grid", .{})) |ar|
-            area_vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ar, .{
+        if (guis.label(area_vt, ly.getArea(), "Set grid", .{})) |ar|
+            _ = Wg.Textbox.buildOpts(area_vt, ar, .{
                 .commit_cb = &@This().textbox_cb,
                 .commit_vt = &self.cbhandle,
                 .clear_on_commit = true,
-            }));
+            });
         const Btn = Wg.Button.build;
-        area_vt.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Reset Grid", .{ .cb_fn = &btnCb, .id = 0, .cb_vt = &self.cbhandle }));
+        _ = Btn(area_vt, ly.getArea(), "Reset Grid", .{ .cb_fn = &btnCb, .id = 0, .cb_vt = &self.cbhandle });
 
         const CB = Wg.Checkbox.build;
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 6 };
 
-            area_vt.addChildOpt(gui, win, Wg.Text.build(gui, hy.getArea(), "Select Mask", .{}));
+            _ = Wg.Text.build(area_vt, hy.getArea(), "Select Mask", .{});
             const sl = &self.ed.selection.options;
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "brush", .{ .bool_ptr = &sl.brushes }, null));
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "prop", .{ .bool_ptr = &sl.props }, null));
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "ent", .{ .bool_ptr = &sl.entity }, null));
+            _ = CB(area_vt, hy.getArea(), "brush", .{ .bool_ptr = &sl.brushes }, null);
+            _ = CB(area_vt, hy.getArea(), "prop", .{ .bool_ptr = &sl.props }, null);
+            _ = CB(area_vt, hy.getArea(), "ent", .{ .bool_ptr = &sl.entity }, null);
 
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "func", .{ .bool_ptr = &sl.func }, null));
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "disp", .{ .bool_ptr = &sl.disp }, null));
+            _ = CB(area_vt, hy.getArea(), "func", .{ .bool_ptr = &sl.func }, null);
+            _ = CB(area_vt, hy.getArea(), "disp", .{ .bool_ptr = &sl.disp }, null);
         }
         {
             const sl = &self.ed.selection.options;
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-            area_vt.addChildOpt(gui, win, CB(gui, hy.getArea(), "Select nearby", .{ .bool_ptr = &sl.select_nearby }, null));
-            if (guis.label(area_vt, gui, win, hy.getArea(), "dist threshold", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.StaticSlider.build(gui, ar, &sl.nearby_distance, .{
+            _ = CB(area_vt, hy.getArea(), "Select nearby", .{ .bool_ptr = &sl.select_nearby }, null);
+            if (guis.label(area_vt, hy.getArea(), "dist threshold", .{})) |ar|
+                _ = Wg.StaticSlider.build(area_vt, ar, &sl.nearby_distance, .{
                     .min = 0,
                     .max = 16,
                     .default = 0,
                     .display_bounds_while_editing = false,
                     .clamp_edits = false,
-                }));
+                });
             //area_vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &sl.nearby_distance, 0, 256, .{}));
         }
     }

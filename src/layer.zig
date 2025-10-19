@@ -352,30 +352,33 @@ pub const GuiWidget = struct {
         {
             var ly = gui.dstate.vLayout(sp[1]);
 
-            vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "New layer", .{
+            _ = Wg.Button.build(vt, ly.getArea(), "New layer", .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = bi("new_group"),
-            }));
-            vt.addChildOpt(gui, win, Wg.Textbox.buildOpts(gui, ly.getArea(), .{
+            });
+            _ = Wg.Textbox.buildOpts(vt, ly.getArea(), .{
                 .commit_vt = &self.cbhandle,
                 .init_string = if (self.ctx.getLayerFromId(self.selected_ptr.*)) |l| l.name else "",
                 .commit_cb = textCb,
                 .user_id = bi("set_name"),
-            }));
+            });
         }
 
-        vt.addChildOpt(gui, win, Wg.VScroll.build(gui, sp[0], .{
+        _ = Wg.VScroll.build(vt, sp[0], .{
             .build_cb = &buildList,
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.ctx.layers.items.len,
             .item_h = item_h,
             .index_ptr = &self.scroll_index,
-        }));
+        });
     }
 
-    fn buildList(cb: *CbHandle, ar: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+    fn buildList(cb: *CbHandle, ar: *iArea, index: usize) void {
+        const gui = ar.win_ptr.gui_ptr;
+        const win = ar.win_ptr;
+
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
         var list = std.ArrayList(LayTemp).init(gui.alloc);
@@ -388,7 +391,7 @@ pub const GuiWidget = struct {
         for (list.items[index..]) |item| {
             const ar_p = ly.getArea() orelse continue;
             const area = ar_p.split(.vertical, @as(f32, @floatFromInt(item.depth)) * item_h)[1];
-            ar.addChildOpt(gui, win, LayerWidget.build(gui, area, .{
+            _ = LayerWidget.build(ar, area, .{
                 .name = item.ptr.name,
                 .win = win,
                 .selected = (self.selected_ptr.* == item.ptr.id),
@@ -397,7 +400,7 @@ pub const GuiWidget = struct {
                 .enabled = item.ptr.enabled,
                 .collapse = item.ptr.collapse,
                 .check_color = if (self.ctx.isDisabled(item.ptr.id)) 0x888888ff else 0xff,
-            }));
+            });
         }
     }
 
@@ -457,37 +460,39 @@ const LayerWidget = struct {
     opts: Opts,
     right_click_id: ?Id = null,
 
-    pub fn build(gui: *Gui, area_o: ?graph.Rect, opts: Opts) ?guis.NewVt {
-        const area = area_o orelse return null;
+    pub fn build(parent: *iArea, area_o: ?graph.Rect, opts: Opts) guis.WgStatus {
+        const gui = parent.win_ptr.gui_ptr;
+
+        const area = area_o orelse return .failed;
         const self = gui.create(@This());
         self.* = .{
-            .vt = .{ .area = area, .deinit_fn = deinit, .draw_fn = draw },
+            .vt = .UNINITILIZED,
             .opts = opts,
         };
+        parent.addChild(&self.vt, .{ .area = area, .deinit_fn = deinit, .draw_fn = draw, .onclick = onclick });
 
         const needs_dropdown = if (opts.parent.ctx.getLayerFromId(opts.id)) |lay| lay.children.items.len > 0 else false;
         const sp = area.split(.vertical, area.h * if (needs_dropdown) @as(f32, 2) else @as(f32, 1));
         const ch = sp[0].split(.vertical, area.h);
 
-        self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[0], "", .{
+        _ = Wg.Checkbox.build(&self.vt, ch[0], "", .{
             .style = .check,
             .cb_fn = check_cb,
             .cb_vt = &self.cbhandle,
             .user_id = @intFromEnum(opts.id),
             .cross_color = opts.check_color,
-        }, opts.enabled));
+        }, opts.enabled);
 
         if (needs_dropdown)
-            self.vt.addChildOpt(gui, opts.win, Wg.Checkbox.build(gui, ch[1], "", .{
+            _ = Wg.Checkbox.build(&self.vt, ch[1], "", .{
                 .style = .dropdown,
                 .cb_fn = collapse_cb,
                 .cb_vt = &self.cbhandle,
                 .user_id = @intFromEnum(opts.id),
                 .cross_color = gui.dstate.nstyle.color.drop_down_arrow,
-            }, !opts.collapse));
-        self.vt.addChildOpt(gui, opts.win, Wg.Text.buildStatic(gui, sp[1], opts.name, 0x0));
-
-        return .{ .vt = &self.vt, .onclick = onclick };
+            }, !opts.collapse);
+        _ = Wg.Text.buildStatic(&self.vt, sp[1], opts.name, 0x0);
+        return .good;
     }
 
     pub fn draw(vt: *iArea, _: *guis.Gui, d: *guis.DrawState) void {

@@ -38,7 +38,7 @@ pub const AssetBrowser = struct {
     pub fn create(gui: *Gui, editor: *Context) !*AssetBrowser {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .ed = editor,
             .alloc = gui.alloc,
             .tex_browse = .{ .alloc = gui.alloc, .ed = editor, .win = &self.vt },
@@ -115,7 +115,7 @@ pub const AssetBrowser = struct {
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         const lay = &win.area;
 
-        lay.addChildOpt(gui, win, Wg.Tabs.build(gui, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index }));
+        _ = Wg.Tabs.build(lay, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
     }
 
     fn buildTabs(user_vt: *CbHandle, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
@@ -165,28 +165,28 @@ const VpkBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
-            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
+            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
-            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
-                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.list.num_result));
+            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+                _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
             }
         }
         _ = ly.getArea(); //break
 
         ly.pushRemaining();
-        if (Wg.VScroll.build(gui, ly.getArea(), .{
+        if (Wg.VScroll.build(lay, ly.getArea(), .{
             .build_cb = buildVpkList,
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.list.count(),
             .item_h = gui.dstate.style.config.default_item_h,
-        })) |scr| {
-            lay.addChildOpt(gui, win, scr);
-            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
+        }) == .good) {
+            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
         }
     }
 
-    fn buildVpkList(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+    fn buildVpkList(cb: *CbHandle, vt: *iArea, index: usize) void {
+        const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
@@ -195,12 +195,12 @@ const VpkBrowser = struct {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
             const dd = vpk.decodeResourceId(item);
             const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
-            vt.addChildOpt(gui, win, Wg.Text.build(
-                gui,
+            _ = Wg.Text.build(
+                vt,
                 ly.getArea(),
                 "{s}/{s}.{s}",
                 .{ tt.path, tt.name, ext },
-            ));
+            );
         }
     }
 
@@ -242,7 +242,7 @@ pub const ModelBrowser = struct {
     pub fn create(gui: *Gui, editor: *Context) !*ModelBrowser {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .ed = editor,
             .list = .{
                 .search_vt = &self.lscb,
@@ -290,31 +290,31 @@ pub const ModelBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
-            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar|
+            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
-            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
-                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.list.num_result));
+            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+                _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
             }
 
             {
                 var buf: [32]u8 = undefined;
                 const spa = hy.getArea() orelse return;
                 const sp = spa.split(.vertical, spa.w / 2);
-                lay.addChildOpt(gui, win, Wg.Text.build(gui, sp[0], "up: {s}", .{
+                _ = Wg.Text.build(lay, sp[0], "up: {s}", .{
                     self.ed.config.keys.up_line.b.nameFull(&buf),
-                }));
-                lay.addChildOpt(gui, win, Wg.Text.build(gui, sp[1], "down: {s}", .{
+                });
+                _ = Wg.Text.build(lay, sp[1], "down: {s}", .{
                     self.ed.config.keys.down_line.b.nameFull(&buf),
-                }));
+                });
             }
-            lay.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 }));
+            _ = Wg.Button.build(lay, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 });
         }
         _ = ly.getArea(); //break
 
         ly.pushRemaining();
         const main_area = ly.getArea() orelse return;
 
-        if (Wg.VScroll.build(gui, main_area, .{
+        if (Wg.VScroll.build(lay, main_area, .{
             .build_cb = buildModList,
             .build_vt = &self.cbhandle,
             .win = win,
@@ -322,13 +322,13 @@ pub const ModelBrowser = struct {
             .item_h = gui.dstate.style.config.default_item_h,
             .index_ptr = &self.scroll_index,
             .current_index = self.selected_index,
-        })) |scr| {
-            lay.addChildOpt(gui, win, scr);
-            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
+        }) == .good) {
+            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
         }
     }
 
-    fn buildModList(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+    fn buildModList(cb: *CbHandle, vt: *iArea, index: usize) void {
+        const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
@@ -336,8 +336,8 @@ pub const ModelBrowser = struct {
         for (list[index..], index..) |item, i| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
 
-            vt.addChildOpt(gui, win, Wg.Button.build(
-                gui,
+            _ = Wg.Button.build(
+                vt,
                 ly.getArea(),
                 self.ed.printScratch("{s}/{s}", .{ tt.path, tt.name }) catch "err",
                 .{
@@ -347,7 +347,7 @@ pub const ModelBrowser = struct {
                     .custom_draw = inspector.customButtonDraw,
                     .user_1 = if (self.selected_index == i) 1 else 0,
                 },
-            ));
+            );
         }
     }
 
@@ -390,7 +390,7 @@ pub const ModelPreview = struct {
     pub fn create(ed: *Context, gui: *Gui, drawctx: *graph.ImmediateDrawingContext) !*iWindow {
         var self = try gui.alloc.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .drawctx = drawctx,
             .ed = ed,
         };
@@ -496,31 +496,30 @@ const TextureBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
-            if (guis.label(lay, gui, win, hy.getArea(), "Search", .{})) |ar| {
-                if (Wg.Textbox.buildOpts(gui, ar, .{
+            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar| {
+                if (Wg.Textbox.buildOpts(lay, ar, .{
                     .user_id = 0,
                     .commit_vt = &self.cbhandle,
                     .commit_cb = cb_commitTextbox,
                     .commit_when = .on_change,
-                })) |tbvt| {
-                    lay.addChildOpt(gui, win, tbvt);
-                    gui.grabFocus(tbvt.vt, win);
+                }) == .good) {
+                    gui.grabFocus(lay.getLastChild() orelse return, win);
                 }
             }
-            if (guis.label(lay, gui, win, hy.getArea(), "Results: ", .{})) |ar| {
-                lay.addChildOpt(gui, win, Wg.NumberDisplay.build(gui, ar, &self.num_result));
+            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+                _ = Wg.NumberDisplay.build(lay, ar, &self.num_result);
             }
-            if (guis.label(lay, gui, win, hy.getArea(), "Columns", .{})) |ar| {
-                lay.addChildOpt(gui, win, Wg.StaticSlider.build(gui, ar, null, .{
+            if (guis.label(lay, hy.getArea(), "Columns", .{})) |ar| {
+                _ = Wg.StaticSlider.build(lay, ar, null, .{
                     .min = MIN_COL,
                     .max = MAX_COL,
                     .default = @floatFromInt(self.num_column),
                     .clamp_edits = true,
                     .commit_cb = slide_commit,
                     .commit_vt = &self.cbhandle,
-                }));
+                });
             }
-            lay.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnCb, .id = 0 }));
+            _ = Wg.Button.build(lay, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnCb, .id = 0 });
         }
         _ = ly.getArea(); //break
 
@@ -530,15 +529,14 @@ const TextureBrowser = struct {
 
         ly.pushRemaining();
         if (ly.getArea()) |tview| {
-            if (Wg.VScroll.build(gui, tview, .{
+            if (Wg.VScroll.build(lay, tview, .{
                 .build_cb = buildTextureView,
                 .build_vt = &self.cbhandle,
                 .win = win,
                 .count = self.getTextureRowCount(),
                 .item_h = self.getTextureRowHeight(tview.w),
-            })) |scr| {
-                lay.addChildOpt(gui, win, scr);
-                self.scr_ptr = @alignCast(@fieldParentPtr("vt", scr.vt));
+            }) == .good) {
+                self.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
             }
         }
 
@@ -596,7 +594,7 @@ const TextureBrowser = struct {
         }
     }
 
-    fn buildTextureView(cb: *CbHandle, vt: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+    fn buildTextureView(cb: *CbHandle, vt: *iArea, index: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const adj_index = index * self.num_column;
         if (adj_index >= self.mat_list_search_a.items.len) return;
@@ -608,14 +606,14 @@ const TextureBrowser = struct {
         for (self.mat_list_search_a.items[adj_index..]) |mat| {
             const tt = self.ed.vpkctx.entries.get(mat) orelse return;
             const tint: u32 = if (mat == self.ed.edit_state.selected_texture_vpk_id) 0xff8888_ff else 0xffff_ffff;
-            vt.addChildOpt(gui, win, ptext.PollingTexture.build(gui, tly.getArea(), self.ed, mat, "{s}/{s}", .{
+            _ = ptext.PollingTexture.build(vt, tly.getArea(), self.ed, mat, "{s}/{s}", .{
                 tt.path, tt.name,
             }, .{
                 .cb_vt = cb,
                 .cb_fn = cb_tex_btn,
                 .id = mat,
                 .tint = tint,
-            }));
+            });
         }
     }
 
@@ -693,15 +691,14 @@ const ListSearch = struct {
     }
 
     pub fn addTextbox(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, area: Rect) void {
-        if (Wg.Textbox.buildOpts(gui, area, .{
+        if (Wg.Textbox.buildOpts(lay, area, .{
             .user_id = 0,
             .commit_vt = &self.cbhandle,
             .commit_cb = ListSearch.cb_commitTextbox,
             .commit_when = .on_change,
             .init_string = self.prev_search.items,
-        })) |tbvt| {
-            lay.addChildOpt(gui, win, tbvt);
-            gui.grabFocus(tbvt.vt, win);
+        }) == .good) {
+            gui.grabFocus(lay.getLastChild() orelse return, win);
         }
     }
 

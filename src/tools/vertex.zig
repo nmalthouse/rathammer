@@ -568,18 +568,18 @@ pub const VertexTranslate = struct {
         ;
         var ly = gui.dstate.vLayout(area_vt.area);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
 
-        if (guis.label(area_vt, gui, win, ly.getArea(), "Selection mode", .{})) |ar|
-            area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.selection_mode, .{}));
-        area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Modify disps", .{ .bool_ptr = &self.do_displacements }, null));
-        area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "snap selected to integer", .{
+        if (guis.label(area_vt, ly.getArea(), "Selection mode", .{})) |ar|
+            _ = Wg.Combo.build(area_vt, ar, &self.selection_mode, .{});
+        _ = Wg.Checkbox.build(area_vt, ly.getArea(), "Modify disps", .{ .bool_ptr = &self.do_displacements }, null);
+        _ = Wg.Button.build(area_vt, ly.getArea(), "snap selected to integer", .{
             .cb_vt = &self.cbhandle,
             .cb_fn = &btn_cb,
             .id = @intFromEnum(Btn.snap_selected),
-        }));
+        });
     }
 
     pub fn btn_cb(vt: *guis.CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {

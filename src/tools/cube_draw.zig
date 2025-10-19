@@ -113,89 +113,89 @@ pub const CubeDraw = struct {
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 7));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
-        }));
+        });
 
         const SSlide = Wg.StaticSlider;
         { //All the damn settings
             ly.pushCount(8);
             var tly = guis.TableLayout{ .columns = 2, .item_height = ly.item_height, .bounds = ly.getArea() orelse return };
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Post draw state", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.post_state, .{}));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Height mode", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.height_setting, .{}));
+            if (guis.label(area_vt, tly.getArea(), "Post draw state", .{})) |ar|
+                _ = Wg.Combo.build(area_vt, ar, &self.post_state, .{});
+            if (guis.label(area_vt, tly.getArea(), "Height mode", .{})) |ar|
+                _ = Wg.Combo.build(area_vt, ar, &self.height_setting, .{});
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Custom height", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.TextboxNumber.build(gui, ar, &self.custom_height, win, .{}));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Primitive", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.primitive, .{}));
+            if (guis.label(area_vt, tly.getArea(), "Custom height", .{})) |ar|
+                _ = Wg.TextboxNumber.build(area_vt, ar, &self.custom_height, .{});
+            if (guis.label(area_vt, tly.getArea(), "Primitive", .{})) |ar|
+                _ = Wg.Combo.build(area_vt, ar, &self.primitive, .{});
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Segment", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.primitive_settings.nsegment, .{
+            if (guis.label(area_vt, tly.getArea(), "Segment", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.primitive_settings.nsegment, .{
                     .min = 4,
                     .max = 48,
                     .default = 16,
                     .display_bounds_while_editing = false,
                     .display_kind = .integer,
-                }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Thick", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.primitive_settings.thickness, .{
+                });
+            if (guis.label(area_vt, tly.getArea(), "Thick", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.primitive_settings.thickness, .{
                     .min = 1,
                     .max = 256,
                     .default = 16,
                     .display_bounds_while_editing = false,
                     .slide = .{ .snap = 4 },
                     .display_kind = .integer,
-                }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Axis", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Combo.build(gui, ar, &self.primitive_settings.axis, .{}));
+                });
+            if (guis.label(area_vt, tly.getArea(), "Axis", .{})) |ar|
+                _ = Wg.Combo.build(area_vt, ar, &self.primitive_settings.axis, .{});
             {
                 var hy = guis.HorizLayout{ .bounds = tly.getArea() orelse return, .count = 2 };
-                area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "Invert", .{ .bool_ptr = &self.primitive_settings.invert }, null));
-                area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, hy.getArea(), "snap ", .{ .bool_ptr = &self.snap_new_verts }, null));
+                _ = Wg.Checkbox.build(area_vt, hy.getArea(), "Invert", .{ .bool_ptr = &self.primitive_settings.invert }, null);
+                _ = Wg.Checkbox.build(area_vt, hy.getArea(), "snap ", .{ .bool_ptr = &self.snap_new_verts }, null);
             }
-            area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, tly.getArea(), "archbox", .{ .bool_ptr = &self.primitive_settings.archbox }, null));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "angle", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.primitive_settings.angle, .{
+            _ = Wg.Checkbox.build(area_vt, tly.getArea(), "archbox", .{ .bool_ptr = &self.primitive_settings.archbox }, null);
+            if (guis.label(area_vt, tly.getArea(), "angle", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.primitive_settings.angle, .{
                     .min = 0,
                     .max = 360,
                     .default = 0,
                     .display_bounds_while_editing = false,
                     .slide = .{ .snap = 15 },
-                }));
+                });
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "stair percf", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &self.stairs_setting.front_perc, -1, 1, .{ .nudge = 0.1 }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "stair percb", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Wg.Slider.build(gui, ar, &self.stairs_setting.back_perc, -1, 1, .{ .nudge = 0.1 }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "theta", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.primitive_settings.theta, .{
+            if (guis.label(area_vt, tly.getArea(), "stair percf", .{})) |ar|
+                _ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.front_perc, -1, 1, .{ .nudge = 0.1 });
+            if (guis.label(area_vt, tly.getArea(), "stair percb", .{})) |ar|
+                _ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.back_perc, -1, 1, .{ .nudge = 0.1 });
+            if (guis.label(area_vt, tly.getArea(), "theta", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.primitive_settings.theta, .{
                     .min = 0,
                     .max = 360,
                     .default = 0,
                     .display_bounds_while_editing = false,
                     .slide = .{ .snap = 15 },
-                }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "rise", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.stairs_setting.rise, .{
+                });
+            if (guis.label(area_vt, tly.getArea(), "rise", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.stairs_setting.rise, .{
                     .min = 1,
                     .max = 16,
                     .default = 8,
                     .display_bounds_while_editing = false,
-                }));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "run", .{})) |ar|
-                area_vt.addChildOpt(gui, win, SSlide.build(gui, ar, &self.stairs_setting.run, .{
+                });
+            if (guis.label(area_vt, tly.getArea(), "run", .{})) |ar|
+                _ = SSlide.build(area_vt, ar, &self.stairs_setting.run, .{
                     .min = 1,
                     .max = 64,
                     .default = 12,
                     .display_bounds_while_editing = false,
-                }));
+                });
         }
         const tex_w = area_vt.area.w / 2;
         ly.pushHeight(tex_w);
         const ar = ly.getArea() orelse return;
-        inspector.selectedTextureWidget(area_vt, gui, win, ar);
+        inspector.selectedTextureWidget(area_vt, ar);
     }
 
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {

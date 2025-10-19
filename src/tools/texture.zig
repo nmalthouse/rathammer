@@ -164,18 +164,18 @@ pub const TextureTool = struct {
         };
         var ly = gui.dstate.vLayout(area_vt.area);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        area_vt.addChildOpt(gui, win, Wg.TextView.build(gui, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space }));
+        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space });
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Reset face world", H.btn(self, .reset_world)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Reset face norm", H.btn(self, .reset_norm)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Apply selection", H.btn(self, .apply_selection)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "Apply face", H.btn(self, .apply_faces)));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "Reset face world", H.btn(self, .reset_world));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "Reset face norm", H.btn(self, .reset_norm));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "Apply selection", H.btn(self, .apply_selection));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "Apply face", H.btn(self, .apply_faces));
         }
         const tex_w = area_vt.area.w / 2;
         ly.pushHeight(tex_w);
         const t_ar = ly.getArea() orelse return;
-        inspector.selectedTextureWidget(area_vt, gui, win, t_ar);
+        inspector.selectedTextureWidget(area_vt, t_ar);
 
         //Begin all selected face stuff
         const sel_face = self.selected_faces.getLastOrNull() orelse return;
@@ -192,7 +192,7 @@ pub const TextureTool = struct {
 
         if (!has_disp) {
             if (side.index.items.len == 4)
-                area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Make displacment", H.btn(self, .make_disp)));
+                _ = Wg.Button.build(area_vt, ly.getArea(), "Make displacment", H.btn(self, .make_disp));
         }
 
         const St = Wg.StaticSlider;
@@ -200,63 +200,63 @@ pub const TextureTool = struct {
             const Tb = Wg.TextboxNumber.build;
             ly.pushCount(6);
             var tly = guis.TableLayout{ .columns = 2, .item_height = ly.item_height, .bounds = ly.getArea() orelse return };
-            area_vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, tly.getArea(), "X", null));
-            area_vt.addChildOpt(gui, win, Wg.Text.buildStatic(gui, tly.getArea(), "Y", null));
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Scale", .{})) |ar|
-                //area_vt.addChildOpt(gui, win, Tb(gui, ar, side.u.scale, win, H.param(self, .uscale)));
-                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .uscale, 0, 0.125 / 2.0, 1, side.u.scale)));
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "X", null);
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "Y", null);
+            if (guis.label(area_vt, tly.getArea(), "Scale", .{})) |ar|
+                //_ = Tb(area_vt, ar, side.u.scale, win, H.param(self, .uscale));
+                _ = St.build(area_vt, ar, null, H.slide(self, .uscale, 0, 0.125 / 2.0, 1, side.u.scale));
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Scale ", .{})) |ar|
-                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .vscale, 0, 0.125 / 2.0, 1, side.v.scale)));
+            if (guis.label(area_vt, tly.getArea(), "Scale ", .{})) |ar|
+                _ = St.build(area_vt, ar, null, H.slide(self, .vscale, 0, 0.125 / 2.0, 1, side.v.scale));
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Trans ", .{})) |ar|
-                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .utrans, 1, 0, 512, side.u.trans)));
-            //area_vt.addChildOpt(gui, win, Tb(gui, ar, side.u.trans, win, H.param(self, .utrans)));
+            if (guis.label(area_vt, tly.getArea(), "Trans ", .{})) |ar|
+                _ = St.build(area_vt, ar, null, H.slide(self, .utrans, 1, 0, 512, side.u.trans));
+            //_ = Tb(area_vt, ar, side.u.trans, win, H.param(self, .utrans));
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Trans ", .{})) |ar|
-                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .vtrans, 1, 0, 512, side.v.trans)));
+            if (guis.label(area_vt, tly.getArea(), "Trans ", .{})) |ar|
+                _ = St.build(area_vt, ar, null, H.slide(self, .vtrans, 1, 0, 512, side.v.trans));
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Axis ", .{})) |ar| {
+            if (guis.label(area_vt, tly.getArea(), "Axis ", .{})) |ar| {
                 var hy = guis.HorizLayout{ .bounds = ar, .count = 3 };
                 const a = side.u.axis;
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.x(), win, H.param(self, .un_x)));
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.y(), win, H.param(self, .un_y)));
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.z(), win, H.param(self, .un_z)));
+                _ = Tb(area_vt, hy.getArea(), a.x(), H.param(self, .un_x));
+                _ = Tb(area_vt, hy.getArea(), a.y(), H.param(self, .un_y));
+                _ = Tb(area_vt, hy.getArea(), a.z(), H.param(self, .un_z));
             }
-            if (guis.label(area_vt, gui, win, tly.getArea(), "Axis ", .{})) |ar| {
+            if (guis.label(area_vt, tly.getArea(), "Axis ", .{})) |ar| {
                 var hy = guis.HorizLayout{ .bounds = ar, .count = 3 };
                 const a = side.v.axis;
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.x(), win, H.param(self, .vn_x)));
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.y(), win, H.param(self, .vn_y)));
-                area_vt.addChildOpt(gui, win, Tb(gui, hy.getArea(), a.z(), win, H.param(self, .vn_z)));
+                _ = Tb(area_vt, hy.getArea(), a.x(), H.param(self, .vn_x));
+                _ = Tb(area_vt, hy.getArea(), a.y(), H.param(self, .vn_y));
+                _ = Tb(area_vt, hy.getArea(), a.z(), H.param(self, .vn_z));
             }
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, tly.getArea(), "flip", H.btn(self, .u_flip)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, tly.getArea(), "flip", H.btn(self, .v_flip)));
+            _ = Wg.Button.build(area_vt, tly.getArea(), "flip", H.btn(self, .u_flip));
+            _ = Wg.Button.build(area_vt, tly.getArea(), "flip", H.btn(self, .v_flip));
 
-            if (guis.label(area_vt, gui, win, tly.getArea(), "lux scale (hu / luxel): ", .{})) |ar|
-                area_vt.addChildOpt(gui, win, Tb(gui, ar, side.lightmapscale, win, H.param(self, .lightmap)));
+            if (guis.label(area_vt, tly.getArea(), "lux scale (hu / luxel): ", .{})) |ar|
+                _ = Tb(area_vt, ar, side.lightmapscale, H.param(self, .lightmap));
         }
-        if (guis.label(area_vt, gui, win, ly.getArea(), "Justify: ", .{})) |ar| {
+        if (guis.label(area_vt, ly.getArea(), "Justify: ", .{})) |ar| {
             var hy = guis.HorizLayout{ .bounds = ar, .count = 6 };
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "left", H.btn(self, .j_left)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "right", H.btn(self, .j_right)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "fit", H.btn(self, .j_fit)));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "left", H.btn(self, .j_left));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "right", H.btn(self, .j_right));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "fit", H.btn(self, .j_fit));
 
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "top", H.btn(self, .j_top)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "bot", H.btn(self, .j_bottom)));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "cent", H.btn(self, .j_center)));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "top", H.btn(self, .j_top));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "bot", H.btn(self, .j_bottom));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "cent", H.btn(self, .j_center));
         }
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, hy.getArea(), "swap axis", H.btn(self, .swap)));
-            if (guis.label(area_vt, gui, win, hy.getArea(), "smooth", .{})) |ar| {
-                area_vt.addChildOpt(gui, win, St.build(gui, ar, null, H.slide(self, .smooth, 1, 0, 32, @floatFromInt(side.smoothing_groups))));
+            _ = Wg.Button.build(area_vt, hy.getArea(), "swap axis", H.btn(self, .swap));
+            if (guis.label(area_vt, hy.getArea(), "smooth", .{})) |ar| {
+                _ = St.build(area_vt, ar, null, H.slide(self, .smooth, 1, 0, 32, @floatFromInt(side.smoothing_groups)));
             }
         }
 
         if (has_disp) {
-            area_vt.addChildOpt(gui, win, Wg.Checkbox.build(gui, ly.getArea(), "Draw normals", .{ .bool_ptr = &self.show_disp_normal }, null));
-            area_vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Subdivide", H.btn(self, .subdivide)));
+            _ = Wg.Checkbox.build(area_vt, ly.getArea(), "Draw normals", .{ .bool_ptr = &self.show_disp_normal }, null);
+            _ = Wg.Button.build(area_vt, ly.getArea(), "Subdivide", H.btn(self, .subdivide));
         }
     }
 

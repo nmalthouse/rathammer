@@ -50,7 +50,7 @@ pub const LaunchWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) !*LaunchWindow {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .editor = editor,
             .recents = std.ArrayList(Recent).init(editor.alloc),
         };
@@ -91,23 +91,25 @@ pub const LaunchWindow = struct {
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
         var ly = gui.dstate.vLayout(inset);
         const Btn = Wg.Button.build;
-        win.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome ", null));
-        win.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
-        win.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
+        const ar = &win.area;
+        _ = Wg.Text.buildStatic(ar, ly.getArea(), "Welcome ", null);
+        _ = Btn(ar, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+        _ = Btn(ar, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
 
         ly.pushRemaining();
         const SZ = 5;
-        win.area.addChildOpt(gui, win, Wg.VScroll.build(gui, ly.getArea(), .{
+        _ = Wg.VScroll.build(ar, ly.getArea(), .{
             .count = self.recents.items.len,
             .item_h = gui.dstate.style.config.default_item_h * SZ,
             .build_cb = buildScroll,
             .build_vt = &self.cbhandle,
             .win = win,
-        }));
+        });
     }
 
-    pub fn buildScroll(cb: *CbHandle, area: *iArea, index: usize, gui: *Gui, win: *iWindow) void {
+    pub fn buildScroll(cb: *CbHandle, area: *iArea, index: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const gui = area.win_ptr.gui_ptr;
         var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.style.config.default_item_h * 5, .bounds = area.area };
         if (index >= self.recents.items.len) return;
         const text_bound = gui.dstate.font.textBounds("_Load_", gui.dstate.style.config.text_h);
@@ -116,13 +118,13 @@ pub const LaunchWindow = struct {
             const sp = ar.split(.vertical, ar.h);
 
             var ly = gui.dstate.vLayout(sp[1]);
-            area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), rec.name, null));
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, null);
             if (rec.tex) |tex|
-                area.addChildOpt(gui, win, Wg.GLTexture.build(gui, sp[0], tex, tex.rect(), .{}));
+                _ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
             const ld_btn = ly.getArea() orelse return;
             const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
 
-            area.addChildOpt(gui, win, Wg.Button.build(gui, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle }));
+            _ = Wg.Button.build(area, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
         }
     }
 

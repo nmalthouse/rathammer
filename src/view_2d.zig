@@ -29,7 +29,7 @@ pub const Ctx2dView = struct {
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext, axis: Axis) !*G.iWindow {
         var self = try gui.alloc.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .drawctx = drawctx,
             .axis = axis,
             .ed = ed,
