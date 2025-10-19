@@ -40,7 +40,6 @@ pub const LaunchWindow = struct {
     };
 
     vt: iWindow,
-    area: iArea,
     cbhandle: CbHandle = .{},
 
     editor: *Context,
@@ -51,8 +50,7 @@ pub const LaunchWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) !*LaunchWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .editor = editor,
             .recents = std.ArrayList(Recent).init(editor.alloc),
         };
@@ -81,9 +79,9 @@ pub const LaunchWindow = struct {
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
-        self.area.area = area;
-        self.area.clearChildren(gui, win);
-        self.area.dirty(gui);
+        win.area.area = area;
+        win.area.clearChildren(gui, win);
+        win.area.dirty(gui);
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
@@ -93,13 +91,13 @@ pub const LaunchWindow = struct {
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
         var ly = gui.dstate.vLayout(inset);
         const Btn = Wg.Button.build;
-        self.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome ", null));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
-        self.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
+        win.area.addChildOpt(gui, win, Wg.Text.buildStatic(gui, ly.getArea(), "Welcome ", null));
+        win.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle }));
+        win.area.addChildOpt(gui, win, Btn(gui, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle }));
 
         ly.pushRemaining();
         const SZ = 5;
-        self.area.addChildOpt(gui, win, Wg.VScroll.build(gui, ly.getArea(), .{
+        win.area.addChildOpt(gui, win, Wg.VScroll.build(gui, ly.getArea(), .{
             .count = self.recents.items.len,
             .item_h = gui.dstate.style.config.default_item_h * SZ,
             .build_cb = buildScroll,

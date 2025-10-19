@@ -25,7 +25,6 @@ pub const Console = struct {
     const Self = @This();
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
-    area: iArea,
 
     line_arena: std.heap.ArenaAllocator,
     lines: std.ArrayList([]const u8),
@@ -38,8 +37,7 @@ pub const Console = struct {
         const self = gui.create(@This());
 
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .deinit_fn = area_deinit },
-            .vt = iWindow.init(&build, gui, &deinit, &self.area),
+            .vt = iWindow.init(&build, gui, &deinit, .{}),
             .lines = std.ArrayList([]const u8).init(gui.alloc),
             .line_arena = std.heap.ArenaAllocator.init(gui.alloc),
             .scratch = std.ArrayList(u8).init(gui.alloc),
@@ -59,8 +57,8 @@ pub const Console = struct {
     }
 
     fn getTextView(self: *@This()) ?*Wg.TextView {
-        if (self.area.children.items.len != 2) return null;
-        const tv: *Wg.TextView = @alignCast(@fieldParentPtr("vt", self.area.children.items[1]));
+        if (self.vt.area.children.items.len != 2) return null;
+        const tv: *Wg.TextView = @alignCast(@fieldParentPtr("vt", self.vt.area.children.items[1]));
         return tv;
     }
 
@@ -68,16 +66,16 @@ pub const Console = struct {
 
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.area.area = area;
-        self.area.clearChildren(gui, vt);
-        self.area.dirty(gui);
+        vt.area.area = area;
+        vt.area.clearChildren(gui, vt);
+        vt.area.dirty(gui);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
         const item_height = gui.dstate.style.config.default_item_h;
         const sp = inset.split(.horizontal, inset.h - item_height);
         const text_area = sp[0];
         const command = sp[1];
 
-        self.area.addChildOpt(gui, vt, Wg.Textbox.buildOpts(gui, command, .{
+        vt.area.addChildOpt(gui, vt, Wg.Textbox.buildOpts(gui, command, .{
             .init_string = "",
             .commit_cb = &textbox_cb,
             .commit_vt = &self.cbhandle,
@@ -86,19 +84,19 @@ pub const Console = struct {
             .restricted_charset = "`",
             .invert_restriction = true,
         }));
-        if (self.area.children.items.len > 0) {
-            gui.grabFocus(self.area.children.items[0], vt);
+        if (vt.area.children.items.len > 0) {
+            gui.grabFocus(vt.area.children.items[0], vt);
         }
 
-        self.area.addChildOpt(gui, vt, Wg.TextView.build(gui, text_area, self.lines.items, vt, .{
+        vt.area.addChildOpt(gui, vt, Wg.TextView.build(gui, text_area, self.lines.items, vt, .{
             .mode = .split_on_space,
             .force_scroll = true,
         }));
     }
 
     pub fn focus(self: *@This(), gui: *Gui) void {
-        if (self.area.children.items.len > 0) {
-            gui.grabFocus(self.area.children.items[0], &self.vt);
+        if (self.vt.area.children.items.len > 0) {
+            gui.grabFocus(self.vt.area.children.items[0], &self.vt);
         }
     }
 
@@ -110,7 +108,7 @@ pub const Console = struct {
         var tv = self.getTextView() orelse return;
         tv.addOwnedText(duped, gui) catch return;
         tv.gotoBottom();
-        tv.rebuildScroll(gui, gui.getWindow(&self.area) orelse return);
+        tv.rebuildScroll(gui, gui.getWindow(&self.vt.area) orelse return);
     }
 
     pub fn textbox_cb(cb: *guis.CbHandle, gui: *Gui, string: []const u8, _: usize) void {

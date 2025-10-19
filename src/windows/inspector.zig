@@ -33,7 +33,6 @@ pub const InspectorWindow = struct {
 
     vt: iWindow,
     cbhandle: CbHandle = .{},
-    area: iArea,
 
     editor: *Context,
     selected_kv_index: usize = 0,
@@ -62,8 +61,7 @@ pub const InspectorWindow = struct {
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
@@ -134,9 +132,9 @@ pub const InspectorWindow = struct {
 
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.area.area = area;
-        self.area.clearChildren(gui, vt);
-        self.area.dirty(gui);
+        vt.area.area = area;
+        vt.area.clearChildren(gui, vt);
+        vt.area.dirty(gui);
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
@@ -149,13 +147,13 @@ pub const InspectorWindow = struct {
         ly.padding.left = 10;
         ly.padding.right = 10;
         ly.padding.top = 10;
-        const a = &self.area;
+        const a = &vt.area;
         ly.pushRemaining();
-        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &tabs, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+        a.addChildOpt(gui, vt, Wg.Tabs.build(gui, ly.getArea(), &tabs, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index }));
     }
 
-    fn buildTabs(user_vt: *iArea, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", user_vt));
+    fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "layer")) {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
@@ -211,7 +209,7 @@ pub const InspectorWindow = struct {
                 .column_positions = &self.io_columns_width,
                 .column_names = &names,
                 .build_cb = &buildIo,
-                .build_vt = win.area,
+                .build_vt = &self.cbhandle,
             }));
 
             vt.addChildOpt(gui, win, Wg.Button.build(gui, ly.getArea(), "Add new", .{
@@ -310,8 +308,8 @@ pub const InspectorWindow = struct {
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
                 const aa = ly.getArea() orelse return;
                 const Lam = struct {
-                    fn commit(vtt: *iArea, id: usize, _: void) void {
-                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+                    fn commit(cb: *CbHandle, id: usize, _: void) void {
+                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
                         const fields = lself.editor.fgd_ctx.ents.items;
                         lself.vt.needs_rebuild = true;
                         if (id >= fields.len) return;
@@ -323,8 +321,8 @@ pub const InspectorWindow = struct {
                         }
                     }
 
-                    fn name(vtt: *iArea, id: usize, _: *Gui, _: void) []const u8 {
-                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+                    fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                         const fields = lself.editor.fgd_ctx.ents.items;
                         if (id >= fields.len) return "BROKEN";
                         return fields[id].name;
@@ -333,7 +331,7 @@ pub const InspectorWindow = struct {
                 self.selected_class_id = ed.fgd_ctx.getId(ent.class);
                 if (guis.label(lay, gui, win, aa, "Ent Class", .{})) |ar|
                     lay.addChildOpt(gui, win, Wg.ComboUser(void).build(gui, ar, .{
-                        .user_vt = &self.area,
+                        .user_vt = &self.cbhandle,
                         .commit_cb = &Lam.commit,
                         .name_cb = &Lam.name,
                         .current = self.selected_class_id orelse 0,
@@ -544,7 +542,7 @@ pub const InspectorWindow = struct {
                             const color = graph.ptypes.intColorFromVec3(graph.za.Vec3.new(floats[0], floats[1], floats[2]), 1);
                             a.addChildOpt(gui, win, Wg.Colorpicker.build(gui, sp[0], color, .{
                                 .user_id = cb_id,
-                                .commit_vt = win.area,
+                                .commit_vt = &self.cbhandle,
                                 .commit_cb = &cb_commitColor,
                             }));
 
@@ -628,8 +626,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn cb_commitColor(this_w: *iArea, _: *Gui, val: u32, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", this_w));
+    pub fn cb_commitColor(this_w: *CbHandle, _: *Gui, val: u32, id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", this_w));
         const charc = graph.ptypes.intToColor(val);
         if (self.getNameFromId(id)) |field_name| {
             const ent_id = self.getSelId() orelse return;
@@ -700,8 +698,8 @@ pub const InspectorWindow = struct {
             fgd_class_index: usize,
             fgd_field_index: usize,
 
-            fn commit(vtt: *iArea, id: usize, lam: @This()) void {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn commit(vtt: *CbHandle, id: usize, lam: @This()) void {
+                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
                 const fields = lself.editor.fgd_ctx.ents.items;
                 const f = fields[lam.fgd_class_index];
@@ -710,8 +708,8 @@ pub const InspectorWindow = struct {
                 lself.setKvStr(lam.fgd_field_index, fie.type.choices.items[id][0]);
             }
 
-            fn name(vtt: *iArea, id: usize, _: *Gui, lam: @This()) []const u8 {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) []const u8 {
+                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const class = lself.editor.fgd_ctx.ents.items[lam.fgd_class_index];
                 const field = class.field_data.items[lam.fgd_field_index];
                 if (field.type == .choices) {
@@ -725,7 +723,7 @@ pub const InspectorWindow = struct {
             gui,
             aa,
             .{
-                .user_vt = &self.area,
+                .user_vt = &self.cbhandle,
                 .commit_cb = &Lam.commit,
                 .name_cb = &Lam.name,
                 .current = info.current,
@@ -735,8 +733,8 @@ pub const InspectorWindow = struct {
         ));
     }
 
-    fn buildIo(user_vt: *iArea, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", user_vt));
+    fn buildIo(user_vt: *CbHandle, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", user_vt));
         const cons = self.getConsPtr() orelse return;
         area_vt.addChildOpt(gui, win, Wg.VScroll.build(gui, area_vt.area, .{
             .build_cb = &buildIoScrollCb,
@@ -837,8 +835,8 @@ pub const InspectorWindow = struct {
         if (self.selected_io_index >= cons.list.items.len) return;
 
         const Lam = struct {
-            fn commit(vtt: *iArea, id: usize, _: void) void {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn commit(vtt: *CbHandle, id: usize, _: void) void {
+                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const lcons = lself.getConsPtr() orelse return;
                 if (lself.selected_io_index >= lcons.list.items.len) return;
 
@@ -849,8 +847,8 @@ pub const InspectorWindow = struct {
                 lcons.list.items[lself.selected_io_index].listen_event = lname;
             }
 
-            fn name(vtt: *iArea, id: usize, _: *Gui, _: void) []const u8 {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const class = lself.getEntDef() orelse return "broken";
                 if (id >= class.outputs.items.len) return "BROKEN";
                 const ind = class.outputs.items[id];
@@ -870,7 +868,7 @@ pub const InspectorWindow = struct {
         }
 
         lay.addChildOpt(gui, win, Wg.ComboUser(void).build(gui, aa, .{
-            .user_vt = &self.area,
+            .user_vt = &self.cbhandle,
             .commit_cb = &Lam.commit,
             .name_cb = &Lam.name,
             .current = index,
@@ -881,8 +879,8 @@ pub const InspectorWindow = struct {
 
     pub fn buildInputCombo(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, aa: graph.Rect) void {
         const Lam = struct {
-            fn commit(vtt: *iArea, id: usize, _: void) void {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn commit(vtt: *CbHandle, id: usize, _: void) void {
+                const lself = vtt.cast(InspectorWindow, "cbhandle");
                 const lcons = lself.getConsPtr() orelse return;
                 if (lself.selected_io_index >= lcons.list.items.len) return;
 
@@ -891,8 +889,8 @@ pub const InspectorWindow = struct {
                 lcons.list.items[lself.selected_io_index].input = list[id].name;
             }
 
-            fn name(vtt: *iArea, id: usize, _: *Gui, _: void) []const u8 {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("area", vtt));
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+                const lself = vtt.cast(InspectorWindow, "cbhandle");
                 const list = lself.editor.fgd_ctx.all_inputs.items;
                 if (id >= list.len) return "BROKEN";
                 return list[id].name;
@@ -905,7 +903,7 @@ pub const InspectorWindow = struct {
 
         const index = if (self.editor.fgd_ctx.all_input_map.get(current_item)) |io| io else 0;
         lay.addChildOpt(gui, win, Wg.ComboUser(void).build(gui, aa, .{
-            .user_vt = &self.area,
+            .user_vt = &self.cbhandle,
             .commit_cb = &Lam.commit,
             .name_cb = &Lam.name,
             .current = index,

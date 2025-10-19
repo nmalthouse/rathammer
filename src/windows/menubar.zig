@@ -42,15 +42,13 @@ const menus = [_][]const u8{
 pub const MenuBar = struct {
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
-    area: iArea,
 
     ed: *Context,
 
     pub fn create(gui: *Gui, editor: *Context) !*iWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = .{}, .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .ed = editor,
         };
 
@@ -71,17 +69,17 @@ pub const MenuBar = struct {
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
-        self.area.area = area;
-        self.area.clearChildren(gui, win);
-        self.area.dirty(gui);
+        win.area.area = area;
+        win.area.clearChildren(gui, win);
+        win.area.dirty(gui);
 
-        var ar = self.area.area;
-        if (self.area.children.items.len != 0) @panic("fucked up"); // code assumes
+        var ar = win.area.area;
+        if (win.area.children.items.len != 0) @panic("fucked up"); // code assumes
         const pad = gui.dstate.minWidgetWidth("  ");
         for (menus, 0..) |menu, i| {
             const b = gui.dstate.minWidgetWidth(menu);
 
-            self.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b + pad, null), menu, .{
+            win.area.addChildOpt(gui, win, Wg.Button.build(gui, ar.replace(null, null, b + pad, null), menu, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),
@@ -93,22 +91,22 @@ pub const MenuBar = struct {
             const name = "ignore groups";
             const b = Wg.Checkbox.getWidth(gui, name, .{});
 
-            self.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + pad, null), name, .{
+            win.area.addChildOpt(gui, win, Wg.Checkbox.build(gui, ar.replace(null, null, b + pad, null), name, .{
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null));
             ar.x += b + pad;
 
-            self.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{}));
+            win.area.addChildOpt(gui, win, Wg.Combo.build(gui, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{}));
             ar.x += b + pad;
         }
     }
 
     fn btnCb(cb: *guis.CbHandle, uid: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        const child = self.area.children.items[uid];
+        const child = self.vt.area.children.items[uid];
         const r_win = Wg.BtnContextWindow.create(
             dat.gui,
-            child.area.pos().add(.{ .x = 0, .y = self.area.area.h }),
+            child.area.pos().add(.{ .x = 0, .y = self.vt.area.area.h }),
             .{
                 .buttons = self.getMenu(menus[uid]) catch return,
                 .btn_cb = rightClickMenuBtn,

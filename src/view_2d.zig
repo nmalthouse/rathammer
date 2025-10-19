@@ -16,7 +16,6 @@ const DrawState = G.DrawState;
 pub const Ctx2dView = struct {
     pub const Axis = enum { x, y, z };
     vt: iWindow,
-    area: iArea,
 
     cam: graph.Camera2D = .{
         .cam_area = graph.Rec(0, 0, 1000, 1000),
@@ -30,8 +29,7 @@ pub const Ctx2dView = struct {
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext, axis: Axis) !*G.iWindow {
         var self = try gui.alloc.create(@This());
         self.* = .{
-            .area = .{ .area = graph.Rec(0, 0, 0, 0), .deinit_fn = area_deinit, .draw_fn = drawfn },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .drawctx = drawctx,
             .axis = axis,
             .ed = ed,
@@ -47,7 +45,7 @@ pub const Ctx2dView = struct {
     }
 
     pub fn updateErr(self: *@This(), gui: *Gui) !void {
-        const screen_area = self.area.area;
+        const screen_area = self.vt.area.area;
         const draw = self.drawctx;
         const ed = self.ed;
         self.cam.screen_area = screen_area;
@@ -163,7 +161,7 @@ pub const Ctx2dView = struct {
     pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         _ = gui;
-        self.area.area = area;
+        self.vt.area.area = area;
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}

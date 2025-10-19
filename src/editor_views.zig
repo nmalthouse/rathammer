@@ -26,7 +26,6 @@ pub const Main3DView = struct {
     const DrawState = G.DrawState;
 
     vt: G.iWindow,
-    area: G.iArea,
 
     ed: *Context,
     drawctx: *graph.ImmediateDrawingContext,
@@ -66,7 +65,7 @@ pub const Main3DView = struct {
         const win = gui.sdl_win;
         gui.setGrabOverride(vt, should_grab or (can_grab and win.mouse.left != .low), .{ .hide_pointer = should_grab });
         if (ungrab_rising and can_grab) {
-            const center = self.area.area.center();
+            const center = self.vt.area.area.center();
             graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, center.x, center.y);
         }
 
@@ -89,8 +88,7 @@ pub const Main3DView = struct {
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {
         var self = try gui.alloc.create(@This());
         self.* = .{
-            .area = .{ .area = graph.Rec(0, 0, 0, 0), .deinit_fn = area_deinit, .draw_fn = draw },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .drawctx = drawctx,
             .ed = ed,
         };
@@ -102,7 +100,7 @@ pub const Main3DView = struct {
     pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         _ = gui;
-        self.area.area = area;
+        self.vt.area.area = area;
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}

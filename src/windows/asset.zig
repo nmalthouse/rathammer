@@ -26,7 +26,6 @@ pub const AssetBrowser = struct {
 
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
-    area: iArea,
 
     tex_browse: TextureBrowser,
     vpk_browse: VpkBrowser,
@@ -39,8 +38,7 @@ pub const AssetBrowser = struct {
     pub fn create(gui: *Gui, editor: *Context) !*AssetBrowser {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .ed = editor,
             .alloc = gui.alloc,
             .tex_browse = .{ .alloc = gui.alloc, .ed = editor, .win = &self.vt },
@@ -109,19 +107,19 @@ pub const AssetBrowser = struct {
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
-        self.area.area = area;
-        self.area.clearChildren(gui, win);
-        self.area.dirty(gui);
+        win.area.area = area;
+        win.area.clearChildren(gui, win);
+        win.area.dirty(gui);
         self.tex_browse.reset();
         self.vpk_browse.reset();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
-        const lay = &self.area;
+        const lay = &win.area;
 
-        lay.addChildOpt(gui, win, Wg.Tabs.build(gui, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+        lay.addChildOpt(gui, win, Wg.Tabs.build(gui, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index }));
     }
 
-    fn buildTabs(user_vt: *iArea, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", user_vt));
+    fn buildTabs(user_vt: *CbHandle, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
+        const self = user_vt.cast(@This(), "cbhandle");
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "texture")) {
             self.tex_browse.build(vt, win, gui, vt.area);
@@ -218,7 +216,6 @@ pub const ModelBrowser = struct {
     const Self = @This();
 
     vt: iWindow,
-    area: iArea,
 
     cbhandle: guis.CbHandle = .{},
     selected_index: usize = 0,
@@ -245,8 +242,7 @@ pub const ModelBrowser = struct {
     pub fn create(gui: *Gui, editor: *Context) !*ModelBrowser {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .ed = editor,
             .list = .{
                 .search_vt = &self.lscb,
@@ -283,10 +279,10 @@ pub const ModelBrowser = struct {
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
-        self.area.area = area;
-        self.area.clearChildren(gui, win);
-        self.area.dirty(gui);
-        const lay = &self.area;
+        win.area.area = area;
+        win.area.clearChildren(gui, win);
+        win.area.dirty(gui);
+        const lay = &win.area;
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         self.list.reset();
 
@@ -386,7 +382,6 @@ pub const ModelBrowser = struct {
 pub const ModelPreview = struct {
     const Vec3 = graph.za.Vec3;
     vt: iWindow,
-    area: iArea,
 
     drawctx: *graph.ImmediateDrawingContext,
     ed: *Context,
@@ -395,8 +390,7 @@ pub const ModelPreview = struct {
     pub fn create(ed: *Context, gui: *Gui, drawctx: *graph.ImmediateDrawingContext) !*iWindow {
         var self = try gui.alloc.create(@This());
         self.* = .{
-            .area = .{ .area = graph.Rec(0, 0, 0, 0), .deinit_fn = area_deinit, .draw_fn = drawfn },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .drawctx = drawctx,
             .ed = ed,
         };
@@ -413,12 +407,12 @@ pub const ModelPreview = struct {
         self.ed.stack_owns_input = grabit;
         defer self.ed.stack_owns_input = false;
         const selected_mod = self.ed.edit_state.selected_model_vpk_id orelse return;
-        const sp = self.area.area;
+        const sp = vt.area.area;
 
         gui.setGrabOverride(vt, grabit, .{ .hide_pointer = grabit });
         self.model_cam.updateDebugMove(self.ed.getCam3DMove(grabit));
 
-        const screen_area = self.area.area;
+        const screen_area = vt.area.area;
         const x: i32 = @intFromFloat(screen_area.x);
         const y: i32 = @intFromFloat(screen_area.y);
         const w: i32 = @intFromFloat(screen_area.w);
@@ -445,9 +439,8 @@ pub const ModelPreview = struct {
     }
 
     pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         _ = gui;
-        self.area.area = area;
+        vt.area.area = area;
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}

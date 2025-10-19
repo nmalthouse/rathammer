@@ -42,7 +42,6 @@ pub const PauseWindow = struct {
 
     cbhandle: CbHandle = .{},
     vt: iWindow,
-    area: iArea,
 
     editor: *Context,
     should_exit: bool = false,
@@ -58,8 +57,7 @@ pub const PauseWindow = struct {
     pub fn create(gui: *Gui, editor: *Context, app_cwd: std.fs.Dir) !*PauseWindow {
         const self = gui.create(@This());
         self.* = .{
-            .area = .{ .area = Rec(0, 0, 0, 0), .draw_fn = draw, .deinit_fn = area_deinit },
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, &self.area),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .texts = std.ArrayList(HelpText).init(gui.alloc),
@@ -144,22 +142,22 @@ pub const PauseWindow = struct {
 
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.area.area = area;
-        self.area.clearChildren(gui, vt);
-        self.area.dirty(gui);
+        vt.area.area = area;
+        vt.area.clearChildren(gui, vt);
+        vt.area.dirty(gui);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
-        _ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
+        _ = vt.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
 
-        self.area.addChildOpt(gui, vt, Wg.Tabs.build(gui, inset, &.{
+        vt.area.addChildOpt(gui, vt, Wg.Tabs.build(gui, inset, &.{
             "main",
             "keybinds",
             "graphics",
             "mapprops",
-        }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.area, .index_ptr = &self.tab_index }));
+        }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index }));
     }
 
-    fn buildTabs(win_vt: *iArea, vt: *iArea, tab: []const u8, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("area", win_vt));
+    fn buildTabs(win_vt: *CbHandle, vt: *iArea, tab: []const u8, gui: *Gui, win: *iWindow) void {
+        const self = win_vt.cast(@This(), "cbhandle");
         const eql = std.mem.eql;
         const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "keybinds")) {
@@ -233,7 +231,7 @@ pub const PauseWindow = struct {
                 }));
             if (guis.label(vt, gui, win, ly.getArea(), "Gui Tint", .{})) |ar|
                 vt.addChildOpt(gui, win, Wg.Colorpicker.build(gui, ar, gui.dstate.tint, .{
-                    .commit_vt = &self.area,
+                    .commit_vt = &self.cbhandle,
                     .commit_cb = &commitColor,
                 }));
 
@@ -362,7 +360,7 @@ pub const PauseWindow = struct {
         }
     }
 
-    pub fn commitColor(window_area: *iArea, gui: *Gui, color: u32, _: usize) void {
+    pub fn commitColor(window_area: *CbHandle, gui: *Gui, color: u32, _: usize) void {
         _ = window_area;
         gui.dstate.tint = color;
     }
