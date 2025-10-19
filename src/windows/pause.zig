@@ -144,7 +144,7 @@ pub const PauseWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
-        vt.area.dirty(gui);
+        vt.area.dirty();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
         _ = vt.area.addEmpty(graph.Rec(0, 0, 0, 0));
 
@@ -162,7 +162,7 @@ pub const PauseWindow = struct {
         const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "keybinds")) {
             const info = @typeInfo(@TypeOf(self.editor.config.keys));
-            var ly = gui.dstate.vLayout(vt.area);
+            var ly = gui.dstate.vlayout(vt.area);
             var buf: [64]u8 = undefined;
             inline for (info.@"struct".fields) |field| {
                 const key = @field(self.editor.config.keys, field.name);
@@ -175,7 +175,7 @@ pub const PauseWindow = struct {
             }
         }
         if (eql(u8, tab, "mapprops")) {
-            var ly = gui.dstate.vLayout(vt.area);
+            var ly = gui.dstate.vlayout(vt.area);
             if (guis.label(vt, ly.getArea(), "Set skybox: ", .{})) |ar|
                 _ = Wg.Textbox.buildOpts(vt, ar, .{
                     .init_string = "",
@@ -185,7 +185,7 @@ pub const PauseWindow = struct {
                 });
         }
         if (eql(u8, tab, "graphics")) {
-            var ly = gui.dstate.vLayout(vt.area);
+            var ly = gui.dstate.vlayout(vt.area);
             const ps = &self.editor.draw_state.planes;
             const ed = self.editor;
             const max = 512 * 64;
@@ -248,7 +248,7 @@ pub const PauseWindow = struct {
                 _ = St(vt, ar, &ed.draw_state.cam_near_plane, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } });
         }
         if (eql(u8, tab, "main")) {
-            var ly = gui.dstate.vLayout(vt.area);
+            var ly = gui.dstate.vlayout(vt.area);
             ly.padding.left = 10;
             ly.padding.right = 10;
             ly.padding.top = 10;
@@ -344,7 +344,7 @@ pub const PauseWindow = struct {
     pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize) void {
         const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        var ly = gui.dstate.vLayout(vt.area);
+        var ly = gui.dstate.vlayout(vt.area);
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
             _ = Wg.Button.build(vt, ly.getArea(), text.name.items[3..], .{
@@ -423,7 +423,7 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) v
             }
         }
     };
-    var ly = gui.dstate.vLayout(ar);
+    var ly = gui.dstate.vlayout(ar);
 
     if (self.editor.visgroups.getRoot()) |vg| {
         Helper.recur(&self.editor.visgroups, vg, 0, gui, &ly, area, &self.vt);

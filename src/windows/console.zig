@@ -68,7 +68,7 @@ pub const Console = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
-        vt.area.dirty(gui);
+        vt.area.dirty();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
         const item_height = gui.dstate.style.config.default_item_h;
         const sp = inset.split(.horizontal, inset.h - item_height);

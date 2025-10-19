@@ -566,7 +566,7 @@ pub const VertexTranslate = struct {
             \\Select a solid with 'E'
             \\Mouse over the verticies and left click to add the vertex
         ;
-        var ly = gui.dstate.vLayout(area_vt.area);
+        var ly = gui.dstate.vlayout(area_vt.area);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,

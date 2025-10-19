@@ -81,7 +81,7 @@ pub const LaunchWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
         win.area.area = area;
         win.area.clearChildren(gui, win);
-        win.area.dirty(gui);
+        win.area.dirty();
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
@@ -89,7 +89,7 @@ pub const LaunchWindow = struct {
         //const w = @min(max_w, inset.w);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
-        var ly = gui.dstate.vLayout(inset);
+        var ly = gui.dstate.vlayout(inset);
         const Btn = Wg.Button.build;
         const ar = &win.area;
         _ = Wg.Text.buildStatic(ar, ly.getArea(), "Welcome ", null);
@@ -117,7 +117,7 @@ pub const LaunchWindow = struct {
             const ar = scrly.getArea() orelse return;
             const sp = ar.split(.vertical, ar.h);
 
-            var ly = gui.dstate.vLayout(sp[1]);
+            var ly = gui.dstate.vlayout(sp[1]);
             _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, null);
             if (rec.tex) |tex|
                 _ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});

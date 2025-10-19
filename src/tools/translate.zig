@@ -453,7 +453,7 @@ pub const Translate = struct {
             \\If the mouse raycast is > 30 degrees from the horizon, the solid is moved in the xy plane.
             \\Otherwise, the solid is moved in the plane you clicked on.
         ;
-        var ly = gui.dstate.vLayout(area_vt.area);
+        var ly = gui.dstate.vlayout(area_vt.area);
         _ = Wg.Text.buildStatic(area_vt, ly.getArea(), "translate tool", null);
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{

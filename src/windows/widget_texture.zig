@@ -36,7 +36,7 @@ pub const PollingTexture = struct {
         str.writer().print(fmt, args) catch return .failed;
 
         const missing = edit.missingTexture();
-        const tex = self.ed.getTexture(self.vpk_id) catch null;
+        const tex = ed.getTexture(vpk_id) catch null;
         self.* = .{
             .vt = .UNINITILIZED,
             .text = str.toOwnedSlice() catch return .failed,
@@ -55,13 +55,13 @@ pub const PollingTexture = struct {
         return .good;
     }
 
-    pub fn pollForTexture(vt: *iArea, gui: *Gui, win: *iWindow) void {
+    pub fn pollForTexture(vt: *iArea, _: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         const missing = edit.missingTexture();
         const tex = self.ed.getTexture(self.vpk_id) catch return;
         if (tex.id != missing.id) {
             win.unregisterPoll(vt);
-            vt.dirty(gui);
+            vt.dirty();
         }
     }
 
@@ -88,7 +88,7 @@ pub const PollingTexture = struct {
     pub fn onclick(vt: *iArea, cb: g.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
 
-        vt.dirty(cb.gui);
+        vt.dirty();
         if (self.opts.cb_fn) |cbfn|
             cbfn(self.opts.cb_vt orelse return, self.opts.id, cb, win);
     }

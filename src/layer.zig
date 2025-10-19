@@ -350,7 +350,7 @@ pub const GuiWidget = struct {
         const bot_h = item_h * bot_count;
         const sp = area.split(.horizontal, area.h - bot_h);
         {
-            var ly = gui.dstate.vLayout(sp[1]);
+            var ly = gui.dstate.vlayout(sp[1]);
 
             _ = Wg.Button.build(vt, ly.getArea(), "New layer", .{
                 .cb_vt = &self.cbhandle,
@@ -387,7 +387,7 @@ pub const GuiWidget = struct {
         countNodes(self.ctx.root, &list, 1) catch return;
         if (index >= list.items.len) return;
         const item_h = gui.dstate.style.config.default_item_h;
-        var ly = gui.dstate.vLayout(ar.area);
+        var ly = gui.dstate.vlayout(ar.area);
         for (list.items[index..]) |item| {
             const ar_p = ly.getArea() orelse continue;
             const area = ar_p.split(.vertical, @as(f32, @floatFromInt(item.depth)) * item_h)[1];
@@ -567,8 +567,9 @@ const LayerWidget = struct {
     }
 
     fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {
+        _ = dat;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.vt.dirty(dat.gui);
+        self.vt.dirty();
         const ed = self.opts.parent.editor;
         const sel_id = self.right_click_id orelse return;
         const bi = guis.Widget.BtnContextWindow.buttonId;

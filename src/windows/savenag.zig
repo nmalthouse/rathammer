@@ -65,7 +65,7 @@ pub const NagWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
         win.area.area = area;
         win.area.clearChildren(gui, win);
-        win.area.dirty(gui);
+        win.area.dirty();
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
@@ -73,7 +73,7 @@ pub const NagWindow = struct {
         //const w = @min(max_w, inset.w);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
-        var ly = gui.dstate.vLayout(inset);
+        var ly = gui.dstate.vlayout(inset);
         const Btn = Wg.Button.build;
         const ar = &win.area;
         _ = Wg.Text.buildStatic(ar, ly.getArea(), "Unsaved changes! ", null);

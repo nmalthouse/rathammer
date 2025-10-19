@@ -109,7 +109,7 @@ pub const AssetBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
         win.area.area = area;
         win.area.clearChildren(gui, win);
-        win.area.dirty(gui);
+        win.area.dirty();
         self.tex_browse.reset();
         self.vpk_browse.reset();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
@@ -161,10 +161,10 @@ const VpkBrowser = struct {
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
         const sp = area.split(.vertical, area.w / 2);
-        var ly = gui.dstate.vLayout(sp[0]);
+        var ly = gui.dstate.vlayout(sp[0]);
         if (ly.getArea()) |header| {
             const header_col = 4;
-            var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
+            var hy = gui.dstate.hlayout(header, header_col);
             if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
             if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
@@ -190,7 +190,7 @@ const VpkBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
-        var ly = gui.dstate.vLayout(vt.area);
+        var ly = gui.dstate.vlayout(vt.area);
         for (list[index..]) |item| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
             const dd = vpk.decodeResourceId(item);
@@ -281,15 +281,15 @@ pub const ModelBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
         win.area.area = area;
         win.area.clearChildren(gui, win);
-        win.area.dirty(gui);
+        win.area.dirty();
         const lay = &win.area;
         const inset = GuiHelp.insetAreaForWindowFrame(gui, win.area.area);
         self.list.reset();
 
-        var ly = gui.dstate.vLayout(inset);
+        var ly = gui.dstate.vlayout(inset);
         if (ly.getArea()) |header| {
             const header_col = 4;
-            var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
+            var hy = gui.dstate.hlayout(header, header_col);
             if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
             if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
@@ -332,7 +332,7 @@ pub const ModelBrowser = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const list = self.list.getSlice();
         if (index >= list.len) return;
-        var ly = gui.dstate.vLayout(vt.area);
+        var ly = gui.dstate.vlayout(vt.area);
         for (list[index..], index..) |item, i| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
 
@@ -492,10 +492,10 @@ const TextureBrowser = struct {
     }
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
-        var ly = gui.dstate.vLayout(area);
+        var ly = gui.dstate.vlayout(area);
         if (ly.getArea()) |header| {
             const header_col = 4;
-            var hy = guis.HorizLayout{ .bounds = header, .count = header_col };
+            var hy = gui.dstate.hlayout(header, header_col);
             if (guis.label(lay, hy.getArea(), "Search", .{})) |ar| {
                 if (Wg.Textbox.buildOpts(lay, ar, .{
                     .user_id = 0,

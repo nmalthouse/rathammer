@@ -14,25 +14,31 @@ const async_util = @import("../async.zig");
 const label = guis.label;
 const action = @import("../actions.zig");
 const version = @import("../version.zig");
+const colors = @import("../colors.zig").colors;
 
-const btn_id = Wg.BtnContextWindow.buttonId;
+const MenuBtn = enum(guis.Uid) {
+    save,
+    saveas,
+    save_selection,
+    import_map,
+    quit,
+    undo,
+    redo,
+    open_help_url,
+    open_project_url,
+    draw_sprite,
+    draw_mod,
+    todo,
+    _,
+};
+pub fn btn_id(id: MenuBtn) guis.Uid {
+    return @intFromEnum(id);
+}
+const btn_strid = Wg.BtnContextWindow.buttonId;
+
 const BtnMap = Wg.BtnContextWindow.ButtonMapping;
 const TodoBtns = [_]BtnMap{
-    .{ btn_id("TODO"), "TODO. This menu is a placeholder!", .btn },
-};
-const FileBtns = [_]BtnMap{
-    .{ btn_id("copy"), "All of this is placeholder!", .btn },
-    .{ btn_id("copy"), "It does not work yet.", .btn },
-    .{ btn_id("copy"), "new", .btn },
-    .{ btn_id("copy"), "save", .btn },
-    .{ btn_id("copy"), "save as", .{ .checkbox = false } },
-    .{ btn_id("copy"), "other stuff", .btn },
-    .{ btn_id("paste"), "Quit", .btn },
-};
-
-const Menu = struct {
-    []const u8,
-    Wg.BtnContextWindow.ButtonList,
+    .{ btn_id(.todo), "TODO. This menu is a placeholder!", .btn },
 };
 
 const menus = [_][]const u8{
@@ -71,7 +77,7 @@ pub const MenuBar = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
         win.area.area = area;
         win.area.clearChildren(gui, win);
-        win.area.dirty(gui);
+        win.area.dirty();
 
         var ar = win.area.area;
         if (win.area.children.items.len != 0) @panic("fucked up"); // code assumes
@@ -119,28 +125,28 @@ pub const MenuBar = struct {
 
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        switch (id) {
-            btn_id("save") => action.trySave(self.ed) catch {},
-            btn_id("save-as") => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
-            btn_id("quit") => self.ed.win.should_exit = true,
-            btn_id("undo") => action.undo(self.ed),
-            btn_id("redo") => action.redo(self.ed),
-            btn_id("open_help_url") => {
+        switch (@as(MenuBtn, @enumFromInt(id))) {
+            .save => action.trySave(self.ed) catch {},
+            .saveas => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
+            .quit => self.ed.win.should_exit = true,
+            .undo => action.undo(self.ed),
+            .redo => action.redo(self.ed),
+            .open_help_url => {
                 _ = graph.c.SDL_OpenURL(version.help_url);
             },
-            btn_id("open_project_url") => {
+            .open_project_url => {
                 _ = graph.c.SDL_OpenURL(version.project_url);
             },
 
-            else => {},
+            else => self.ed.notify("TODO. item not implemented", .{}, colors.bad) catch {},
         }
     }
 
     pub fn checkbox_cb(cb: *guis.CbHandle, _: *Gui, val: bool, id: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (id) {
-            btn_id("draw_sprite") => self.ed.draw_state.tog.sprite = val,
-            btn_id("draw_mod") => self.ed.draw_state.tog.models = val,
+            btn_id(.draw_sprite) => self.ed.draw_state.tog.sprite = val,
+            btn_id(.draw_mod) => self.ed.draw_state.tog.models = val,
             else => {},
         }
     }
@@ -148,30 +154,32 @@ pub const MenuBar = struct {
     fn getMenu(self: *MenuBar, menu: []const u8) !Wg.BtnContextWindow.ButtonList {
         const aa = self.ed.frame_arena.allocator();
         switch (Wg.BtnContextWindow.buttonIdRuntime(menu)) {
-            btn_id("view") => {
+            btn_strid("view") => {
                 const tog = self.ed.draw_state.tog;
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id("draw_sprite"), "Draw Sprites", .{ .checkbox = tog.sprite } },
-                    .{ btn_id("draw_mod"), "Draw Models", .{ .checkbox = tog.models } },
+                    .{ btn_id(.draw_sprite), "Draw Sprites", .{ .checkbox = tog.sprite } },
+                    .{ btn_id(.draw_mod), "Draw Models", .{ .checkbox = tog.models } },
                 });
             },
-            btn_id("file") => {
+            btn_strid("file") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id("save"), "save", .btn },
-                    .{ btn_id("save-as"), "save-as", .btn },
-                    .{ btn_id("quit"), "quit", .btn },
+                    .{ btn_id(.save), "save", .btn },
+                    .{ btn_id(.saveas), "save-as", .btn },
+                    .{ btn_id(.save_selection), "save-selection-as", .btn },
+                    .{ btn_id(.import_map), "import-map", .btn },
+                    .{ btn_id(.quit), "quit", .btn },
                 });
             },
-            btn_id("edit") => {
+            btn_strid("edit") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id("undo"), "undo", .btn },
-                    .{ btn_id("redo"), "redo", .btn },
+                    .{ btn_id(.undo), "undo", .btn },
+                    .{ btn_id(.redo), "redo", .btn },
                 });
             },
-            btn_id("help") => {
+            btn_strid("help") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id("open_project_url"), "Open Github", .btn },
-                    .{ btn_id("open_help_url"), "Open Help", .btn },
+                    .{ btn_id(.open_project_url), "Open Github", .btn },
+                    .{ btn_id(.open_help_url), "Open Help", .btn },
                 });
             },
             else => return &TodoBtns,

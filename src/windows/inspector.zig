@@ -134,7 +134,7 @@ pub const InspectorWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
-        vt.area.dirty(gui);
+        vt.area.dirty();
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
@@ -143,7 +143,7 @@ pub const InspectorWindow = struct {
         //const sp1 = vt.area.area.split(.horizontal, vt.area.area.h * 0.5);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, sp1);
         const w = inset.w;
-        var ly = gui.dstate.vLayout(Rec(inset.x, inset.y, w, inset.h));
+        var ly = gui.dstate.vlayout(Rec(inset.x, inset.y, w, inset.h));
         ly.padding.left = 10;
         ly.padding.right = 10;
         ly.padding.top = 10;
@@ -159,7 +159,7 @@ pub const InspectorWindow = struct {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
             self.layer_widget.build(gui, win, vt, sp2[0]) catch {};
 
-            var ly = gui.dstate.vLayout(sp2[1]);
+            var ly = gui.dstate.vlayout(sp2[1]);
 
             for (self.editor.autovis.filters.items, 0..) |filter, i| {
                 _ = Wg.Checkbox.build(vt, ly.getArea(), filter.name, .{
@@ -174,7 +174,7 @@ pub const InspectorWindow = struct {
         if (eql(u8, tab_name, "props")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
             {
-                var ly = gui.dstate.vLayout(sp[0]);
+                var ly = gui.dstate.vlayout(sp[0]);
                 ly.padding.left = 10;
                 ly.padding.right = 10;
                 ly.padding.top = 10;
@@ -193,7 +193,7 @@ pub const InspectorWindow = struct {
         }
         if (eql(u8, tab_name, "io")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
-            var ly = gui.dstate.vLayout(sp[1]);
+            var ly = gui.dstate.vlayout(sp[1]);
             ly.padding.left = 10;
             ly.padding.right = 10;
             ly.padding.top = 10;
@@ -366,7 +366,7 @@ pub const InspectorWindow = struct {
 
     // If a kv is selected, this edits it
     fn buildValueEditorErr(self: *@This(), lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) !void {
-        var ly = gui.dstate.vLayout(lay.area);
+        var ly = gui.dstate.vlayout(lay.area);
         ly.padding.left = 10;
         ly.padding.right = 10;
         ly.padding.top = 0;
