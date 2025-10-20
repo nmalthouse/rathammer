@@ -54,7 +54,9 @@ pub const MenuBar = struct {
     pub fn create(gui: *Gui, editor: *Context) !*iWindow {
         const self = gui.create(@This());
         self.* = .{
-            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
+            .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{
+                .bg = .{ .color = gui.dstate.nstyle.color.bg },
+            }, &self.vt),
             .ed = editor,
         };
 

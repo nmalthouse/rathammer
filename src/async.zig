@@ -269,10 +269,9 @@ pub const CompressAndSave = struct {
     pub fn workFunc(self: *@This()) void {
         defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
 
-        var fbs = std.io.FixedBufferStream([]const u8){ .buffer = self.json_buf.items, .pos = 0 };
         var compressed = std.ArrayList(u8).init(self.alloc);
         defer compressed.deinit();
-        if (std.compress.gzip.compress(fbs.reader(), compressed.writer(), .{})) |_| {} else |err| {
+        if (graph.miniz.compressGzip(self.alloc, self.json_buf.items, compressed.writer())) |_| {} else |err| {
             log.err("compress failed {!}", .{err});
             self.status = .failed;
             return;

@@ -274,6 +274,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     });
     defer win.destroyWindow();
 
+    _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
+
     const Preset = struct {
         dpi: f32 = 1,
         fh: f32 = 25,
