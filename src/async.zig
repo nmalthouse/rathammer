@@ -379,29 +379,27 @@ pub const CheckVersionHttp = struct {
             const default_uri = "http://nmalthouse.net:80/api/version";
             const uri = compile_conf.http_version_check_url orelse default_uri;
 
-            var req = try client.open(.GET, try std.Uri.parse(uri), .{ .server_header_buffer = &header_buf, .headers = .{
+            var req = try client.request(.GET, try std.Uri.parse(uri), .{ .headers = .{
                 .user_agent = .{
                     .override = "zig " ++ version.version_string,
                 },
             } });
             defer req.deinit();
 
-            try req.send();
-            try req.wait();
+            try req.sendBodiless();
 
             var buf: [16]u8 = undefined;
-            const len = try req.readAll(&buf);
-            const answer = buf[0..len];
-            log.info("Version check {s}", .{answer});
-            if (answer.len > 0) {
+            var resp = try req.receiveHead(&header_buf);
+            var resp_read = resp.reader(&buf);
+
+            if (try resp_read.takeDelimiter(0)) |answer| {
+                log.info("Version check {s}", .{answer});
                 const server_version = try version.parseSemver(answer);
                 const client_version = try version.parseSemver(version.version);
                 if (version.gtSemver(server_version, client_version)) {
                     self.new_version = try self.alloc.dupe(u8, answer);
                 }
             }
-
-            try req.finish();
         }
 
         self.pool_ptr.insertCompletedJob(&self.job) catch {};

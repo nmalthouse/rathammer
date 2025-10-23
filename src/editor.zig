@@ -419,7 +419,7 @@ pub const Context = struct {
 
         if (comptime compile_conf.http_version_check) {
             if (self.config.enable_version_check and args.no_version_check == null) {
-                try async_util.CheckVersionHttp_INCOMPLETE.spawn(self.alloc, &self.async_asset_load);
+                try async_util.CheckVersionHttp.spawn(self.alloc, &self.async_asset_load);
             }
         }
     }

@@ -151,8 +151,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         return error.gameConfigNotFound;
     };
 
-    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    var stdout_buf: [128]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
     const stdout = &stdout_writer.interface;
+    defer stdout.flush() catch {};
 
     const default_game = args.game orelse config.default_game;
     if (args.games != null or args.checkhealth != null) {
@@ -579,9 +581,11 @@ pub fn main() !void {
     const alloc = gpa.allocator();
     var arg_it = try std.process.argsWithAllocator(alloc);
     defer arg_it.deinit();
+    var stdout_buf: [128]u8 = undefined;
 
-    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
     const out = &stdout_writer.interface;
+    defer out.flush() catch {};
     const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
     if (args.version != null) {
         try out.print("{s}\n", .{version.version});
