@@ -102,7 +102,7 @@ pub const UndoContext = struct {
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .stack_pointer = 0,
-            .stack = std.ArrayList(UndoGroup).init(alloc),
+            .stack = .{},
             .alloc = alloc,
         };
     }
@@ -132,21 +132,21 @@ pub const UndoContext = struct {
     }
 
     pub fn pushNewFmtOpts(self: *Self, comptime fmt: []const u8, args: anytype, opts: PushOpts) !GroupBuilder {
-        var desc = std.ArrayList(u8).init(self.alloc);
-        try desc.writer().print(fmt, args);
+        var desc: std.ArrayList(u8) = .{};
+        try desc.print(self.alloc, fmt, args);
         if (self.stack_pointer > self.stack.items.len)
             self.stack_pointer = self.stack.items.len; // Sanity
 
         for (self.stack.items[self.stack_pointer..]) |*item| {
             item.deinit(self.alloc);
         }
-        try self.stack.resize(self.stack_pointer); //Discard any
+        try self.stack.resize(self.alloc, self.stack_pointer); //Discard any
         self.stack_pointer += 1;
         const new_group = UndoGroup{
             .items = .{},
-            .description = try desc.toOwnedSlice(),
+            .description = try desc.toOwnedSlice(self.alloc),
         };
-        try self.stack.append(new_group);
+        try self.stack.append(self.alloc, new_group);
         if (!opts.soft_change)
             self.markDelta();
         return .{ .items = &self.stack.items[self.stack.items.len - 1].items, .ctx = self, .alloc = self.alloc };
@@ -179,7 +179,7 @@ pub const UndoContext = struct {
         for (self.stack.items) |*item| {
             item.deinit(self.alloc);
         }
-        self.stack.deinit();
+        self.stack.deinit(self.alloc);
     }
 
     pub fn writeToJson(self: *Self, writer: anytype) !void {
@@ -569,10 +569,10 @@ pub const UndoSetKeyValue = struct {
     }
 
     pub fn createFloats(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, comptime count: usize, floats: [count]f32) !*@This() {
-        var printer = std.ArrayList(u8).init(alloc);
-        defer printer.deinit();
+        var printer = std.ArrayList(u8){};
+        defer printer.deinit(alloc);
         for (floats, 0..) |f, i| {
-            printer.writer().print("{s}{d}", .{ if (i == 0) "" else " ", f }) catch {};
+            printer.print(alloc, "{s}{d}", .{ if (i == 0) "" else " ", f }) catch {};
         }
         return create(alloc, id, key, old_value, printer.items);
     }
@@ -784,7 +784,7 @@ fn genUnion(comptime list: []const struct { [:0]const u8, type }) type {
         ufields[i] = .{
             .name = lf[0],
             .type = *lf[1],
-            .alignment = 0,
+            .alignment = @alignOf(*lf[1]),
         };
 
         efields[i] = .{ .name = lf[0], .value = i };

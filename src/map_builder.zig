@@ -11,9 +11,9 @@ pub fn splitPath(path: []const u8) struct { []const u8, []const u8 } {
 }
 
 pub fn printString(alloc: std.mem.Allocator, comptime fmt: []const u8, args: anytype) ![]const u8 {
-    var vec = std.ArrayList(u8).init(alloc);
+    var vec = std.ArrayList(u8){};
 
-    try vec.writer().print(fmt, args);
+    try vec.print(alloc, fmt, args);
     return vec.items;
 }
 
@@ -85,13 +85,13 @@ pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
     const game_cwd = args.cwd;
 
     const gamedir = game_cwd.realpathAlloc(alloc, args.gamedir_pre) catch |err| {
-        log.err("realpath failed of {s} {!}", .{ args.gamedir_pre, err });
+        log.err("realpath failed of {s} {t}", .{ args.gamedir_pre, err });
         return err;
     };
     std.debug.print("found gamedir: {s}\n", .{gamedir});
 
     const exedir = game_cwd.realpathAlloc(alloc, args.exedir_pre) catch |err| {
-        log.err("realpath failed of {s} {!}", .{ args.exedir_pre, err });
+        log.err("realpath failed of {s} {t}", .{ args.exedir_pre, err });
         return err;
     };
 
@@ -103,21 +103,21 @@ pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
     const stripped = splitPath(mapname);
     const map_no_extension = stripExtension(stripped[1]);
     const working = game_cwd.makeOpenPath(working_dir, .{}) catch |err| {
-        log.err("working dir failed {s} {!}", .{ working_dir, err });
+        log.err("working dir failed {s} {t}", .{ working_dir, err });
         return err;
     };
     const working_abs = game_cwd.realpathAlloc(alloc, working_dir) catch |err| {
-        log.err("unable to realpath workingdir {s} {!}", .{ working_dir, err });
+        log.err("unable to realpath workingdir {s} {t}", .{ working_dir, err });
         return err;
     };
 
     std.fs.cwd().copyFile(mapname, working, stripped[1], .{}) catch |err| {
-        log.err("failed to copy vmf {s} {!}", .{ mapname, err });
+        log.err("failed to copy vmf {s} {t}", .{ mapname, err });
         return err;
     };
 
     const output_dir = game_cwd.openDir(outputdir, .{}) catch |err| {
-        log.err("failed to open output dir {s}, with {!}", .{ outputdir, err });
+        log.err("failed to open output dir {s}, with {t}", .{ outputdir, err });
         return err;
     };
 
@@ -150,21 +150,22 @@ fn runCommand(alloc: std.mem.Allocator, argv: []const []const u8, working_dir: [
         std.debug.assert(child.stdout_behavior == .Pipe);
         std.debug.assert(child.stderr_behavior == .Pipe);
 
-        var poller = std.io.poll(alloc, enum { stdout, stderr }, .{
-            .stdout = child.stdout.?,
-            .stderr = child.stderr.?,
-        });
-        defer poller.deinit();
+        //FUCK IT, fix this later
+        //var poller = std.io.poll(alloc, enum { stdout, stderr }, .{
+        //    .stdout = child.stdout.?,
+        //    .stderr = child.stderr.?,
+        //});
+        //defer poller.deinit();
 
-        var stdout_buf: [128]u8 = undefined;
+        //var stdout_buf: [128]u8 = undefined;
 
-        while (try poller.poll()) {
-            std.Thread.sleep(std.time.ns_per_ms * 16);
-            var count = poller.fifo(.stdout).read(&stdout_buf);
-            std.debug.print("{s}", .{stdout_buf[0..count]});
-            count = poller.fifo(.stderr).read(&stdout_buf);
-            std.debug.print("{s}", .{stdout_buf[0..count]});
-        }
+        //while (try poller.poll()) {
+        //    std.Thread.sleep(std.time.ns_per_ms * 16);
+        //    var count = poller.fifo(.stdout).read(&stdout_buf);
+        //    std.debug.print("{s}", .{stdout_buf[0..count]});
+        //    count = poller.fifo(.stderr).read(&stdout_buf);
+        //    std.debug.print("{s}", .{stdout_buf[0..count]});
+        //}
     }
     //try getAllTheStuff(child.stderr);
 

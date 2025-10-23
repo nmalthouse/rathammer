@@ -11,6 +11,7 @@ const iArea = guis.iArea;
 const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
+const util = @import("../util.zig");
 const async_util = @import("../async.zig");
 const Config = @import("../config.zig");
 const Layer = @import("../layer.zig");
@@ -36,8 +37,8 @@ pub const PauseWindow = struct {
     };
 
     const HelpText = struct {
-        text: std.ArrayList(u8),
-        name: std.ArrayList(u8),
+        text: []const u8,
+        name: []const u8,
     };
 
     cbhandle: CbHandle = .{},
@@ -60,7 +61,7 @@ pub const PauseWindow = struct {
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
-            .texts = std.ArrayList(HelpText).init(gui.alloc),
+            .texts = .{},
         };
 
         if (app_cwd.openDir("doc/en", .{ .iterate = true })) |doc_dir| {
@@ -73,14 +74,12 @@ pub const PauseWindow = struct {
                 switch (entry.kind) {
                     .file => {
                         if (std.mem.endsWith(u8, entry.basename, ".txt")) {
-                            var vec = std.ArrayList(u8).init(gui.alloc);
-                            try vec.appendSlice(entry.basename[0 .. entry.basename.len - 4]);
-                            var text = std.ArrayList(u8).init(gui.alloc);
-                            const in = try entry.dir.openFile(entry.basename, .{});
-                            in.reader().readAllArrayList(&text, std.math.maxInt(usize)) catch {};
-                            in.close();
+                            var vec = std.ArrayList(u8){};
+                            try vec.appendSlice(gui.alloc, entry.basename[0 .. entry.basename.len - 4]);
 
-                            try self.texts.append(.{ .text = text, .name = vec });
+                            const text = try util.readFile(gui.alloc, entry.dir, entry.basename);
+
+                            try self.texts.append(gui.alloc, .{ .text = text, .name = try vec.toOwnedSlice(gui.alloc) });
                         }
                     },
                     else => {},
@@ -96,11 +95,11 @@ pub const PauseWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         //self.layout.deinit(gui, vt);
         vt.deinit(gui);
-        for (self.texts.items) |text| {
-            text.text.deinit();
-            text.name.deinit();
+        for (self.texts.items) |*text| {
+            gui.alloc.free(text.text);
+            gui.alloc.free(text.name);
         }
-        self.texts.deinit();
+        self.texts.deinit(gui.alloc);
         gui.alloc.destroy(self); //second
     }
 
@@ -305,7 +304,7 @@ pub const PauseWindow = struct {
             const sp = help_area.split(.vertical, gui.dstate.style.config.text_h * 9);
 
             if (self.selected_text_i < self.texts.items.len) {
-                _ = Wg.TextView.build(vt, sp[1], &.{self.texts.items[self.selected_text_i].text.items}, win, .{
+                _ = Wg.TextView.build(vt, sp[1], &.{self.texts.items[self.selected_text_i].text}, win, .{
                     .mode = .split_on_space,
                 });
             }
@@ -347,7 +346,7 @@ pub const PauseWindow = struct {
         var ly = gui.dstate.vlayout(vt.area);
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
-            _ = Wg.Button.build(vt, ly.getArea(), text.name.items[3..], .{
+            _ = Wg.Button.build(vt, ly.getArea(), text.name[3..], .{
                 .custom_draw = &Wg.Button.customButtonDraw_listitem,
                 .id = i,
                 .cb_fn = &btn_help_cb,
@@ -432,10 +431,10 @@ fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) v
 
 pub const SortHelpText = struct {
     pub fn lessThan(_: void, a: PauseWindow.HelpText, b: PauseWindow.HelpText) bool {
-        if (a.name.items.len < 3 or b.name.items.len < 3) return false;
+        if (a.name.len < 3 or b.name.len < 3) return false;
 
-        const an = std.fmt.parseInt(u32, a.name.items[0..3], 10) catch return false;
-        const bn = std.fmt.parseInt(u32, b.name.items[0..3], 10) catch return true;
+        const an = std.fmt.parseInt(u32, a.name[0..3], 10) catch return false;
+        const bn = std.fmt.parseInt(u32, b.name[0..3], 10) catch return true;
         return an < bn;
     }
 };

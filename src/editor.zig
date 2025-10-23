@@ -101,7 +101,7 @@ pub const Context = struct {
     /// Manages mounting of vpks and assigning a unique id to all resource string paths.
     vpkctx: vpk.Context,
 
-    scratch_buf: std.ArrayList(u8),
+    scratch_buf: std.ArrayList(u8) = .{},
     alloc: std.mem.Allocator,
     _selection_scratch: std.ArrayListUnmanaged(EcsT.Id) = .{},
 
@@ -274,7 +274,7 @@ pub const Context = struct {
         const aa = self.frame_arena.allocator();
         const name = std.fs.path.join(aa, &.{ lp, self.printScratch("{s}.ratmap", .{lm}) catch return null }) catch return null;
         const full_path = self.dirs.app_cwd.dir.realpathAlloc(aa, name) catch |err| {
-            std.debug.print("Realpath failed with {!} on {s}\n", .{ err, name });
+            std.debug.print("Realpath failed with {t} on {s}\n", .{ err, name });
             return null;
         };
         return full_path;
@@ -327,7 +327,6 @@ pub const Context = struct {
             .layers = try Layer.Context.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
-            .scratch_buf = std.ArrayList(u8).init(alloc),
             .models = std.AutoHashMap(vpk.VpkResId, Model).init(alloc),
             .async_asset_load = try thread_pool.Context.init(alloc, num_threads),
             .textures = std.AutoHashMap(vpk.VpkResId, graph.Texture).init(alloc),
@@ -436,7 +435,7 @@ pub const Context = struct {
         self.selection.deinit();
         self.string_storage.deinit();
         self.rayctx.deinit();
-        self.scratch_buf.deinit();
+        self.scratch_buf.deinit(self.alloc);
         self.asset_browser.deinit();
         self.csgctx.deinit();
         self.clipctx.deinit();
@@ -606,11 +605,12 @@ pub const Context = struct {
                 .model => get_model = true,
             }
         }
+        const aa = self.frame_arena.allocator();
 
-        var mod_name = std.ArrayList(u8).init(self.frame_arena.allocator());
-        defer mod_name.deinit();
-        var tex_name = std.ArrayList(u8).init(self.frame_arena.allocator());
-        defer tex_name.deinit();
+        var mod_name = std.ArrayList(u8){};
+        defer mod_name.deinit(aa);
+        var tex_name = std.ArrayList(u8){};
+        defer tex_name.deinit(aa);
 
         var groups_hidden = std.AutoHashMap(ecs.Groups.GroupId, void).init(self.frame_arena.allocator());
 
@@ -648,7 +648,7 @@ pub const Context = struct {
                 //just use the first side
                 const side = sol.sides.items[0];
                 if (side.tex_id == 0) {
-                    try tex_name.appendSlice(side.material);
+                    try tex_name.appendSlice(aa, side.material);
                     break :mblk tex_name.items;
                 }
 
@@ -735,8 +735,11 @@ pub const Context = struct {
         return self.win.mouse;
     }
 
-    pub fn writeToJson(self: *Self, writer: anytype) !void {
-        var jwr = std.json.writeStream(writer, .{ .whitespace = .indent_1 });
+    pub fn writeToJson(self: *Self, writer: *std.Io.Writer) !void {
+        var jwr = std.json.Stringify{
+            .writer = writer,
+            .options = .{ .whitespace = .indent_1 },
+        };
         try jwr.beginObject();
         {
             if (self.edit_state.map_uuid == 0) {
@@ -1049,28 +1052,20 @@ pub const Context = struct {
     fn loadRatmap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
         const in_file = try path.openFile(filename, .{});
         defer in_file.close();
-        const slice = try in_file.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
-        defer self.alloc.free(slice);
-        var fname_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        var lname_buffer: [std.fs.max_path_bytes]u8 = undefined;
-        var fbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
-        var tar_it = std.tar.iterator(fbs.reader(), .{
-            .file_name_buffer = &fname_buffer,
-            .link_name_buffer = &lname_buffer,
-        });
-        while (tar_it.next() catch null) |file| {
-            if (std.mem.eql(u8, file.name, "map.json.gz")) {
-                var unzipped = std.ArrayList(u8).init(self.alloc);
-                defer unzipped.deinit();
-                try std.compress.gzip.decompress(file.reader(), unzipped.writer());
 
-                try self.loadJson(unzipped.items, loadctx, filename);
+        const compressed = try util.getFileFromTar(self.alloc, in_file, "map.json.gz");
+        defer self.alloc.free(compressed);
+        var aw: std.Io.Writer.Allocating = .init(self.alloc);
+        defer aw.deinit();
 
-                return;
-            }
-        }
-        log.err("map.json.gz was not found in ratmap {s}", .{filename});
-        return error.invalidTarRatmap;
+        var in: std.Io.Reader = .fixed(compressed);
+        var decompress: std.compress.flate.Decompress = .init(&in, .gzip, &.{});
+        _ = try decompress.reader.streamRemaining(&aw.writer);
+
+        try self.loadJson(aw.written(), loadctx, filename);
+
+        //log.err("map.json.gz was not found in ratmap {s}", .{filename});
+        //return error.invalidTarRatmap;
     }
 
     pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
@@ -1094,20 +1089,17 @@ pub const Context = struct {
     }
 
     pub fn addRecentMap(self: *Self, full_path: []const u8) !void {
-        var recent = std.ArrayList([]const u8).init(self.alloc);
-        defer recent.deinit();
+        var recent = std.ArrayList([]const u8){};
+        defer recent.deinit(self.alloc);
         const aa = self.frame_arena.allocator();
-        if (self.dirs.config.dir.openFile("recent_maps.txt", .{})) |recent_list| { //Keep track of recent maps
-            defer recent_list.close();
-
-            const slice = try recent_list.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
+        if (util.readFile(self.alloc, self.dirs.config.dir, "recent_maps.txt")) |slice| { //Keep track of recent maps
             defer self.alloc.free(slice);
             var it = std.mem.tokenizeScalar(u8, slice, '\n');
             while (it.next()) |filen| {
                 if (std.fs.cwd().openFile(filen, .{})) |recent_map| {
                     //const qoi_data = json_map.getFileFromTar(recent_map,"thumbnail.qoi") catch continue;
                     recent_map.close();
-                    try recent.append(try aa.dupe(u8, filen));
+                    try recent.append(self.alloc, try aa.dupe(u8, filen));
                 } else |_| {}
             }
         } else |_| {}
@@ -1119,21 +1111,20 @@ pub const Context = struct {
             }
         }
 
-        try recent.insert(0, full_path);
+        try recent.insert(self.alloc, 0, full_path);
         if (self.dirs.config.dir.createFile("recent_maps.txt", .{})) |recent_out| {
             defer recent_out.close();
+            var buf: [256]u8 = undefined;
+            var writer = recent_out.writer(&buf);
             for (recent.items) |rec| {
-                try recent_out.writer().print("{s}\n", .{rec});
+                try writer.interface.print("{s}\n", .{rec});
             }
+            try writer.interface.flush();
         } else |_| {}
     }
 
     fn loadJsonFile(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
-        const infile = try path.openFile(filename, .{});
-        defer infile.close();
-
-        const slice = try infile.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
-        defer self.alloc.free(slice);
+        const slice = try util.readFile(self.alloc, path, filename);
 
         try self.loadJson(slice, loadctx, filename);
     }
@@ -1192,11 +1183,11 @@ pub const Context = struct {
             return error.multiMapLoadNotSupported;
         }
         var timer = try std.time.Timer.start();
-        const infile = util.openFileFatal(path, filename, .{}, "");
-        defer infile.close();
+
         defer log.info("Loaded vmf in {d}ms", .{timer.read() / std.time.ns_per_ms});
 
-        const slice = try infile.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
+        const slice = util.readFile(self.alloc, path, filename) catch |e| util.fatalPrintFilePath(path, filename, e, "");
+
         defer self.alloc.free(slice);
         var aa = std.heap.ArenaAllocator.init(self.alloc);
         var obj = try vdf.parse(self.alloc, slice, null, .{});
@@ -1379,13 +1370,13 @@ pub const Context = struct {
 
     pub fn printScratch(self: *Self, comptime str: []const u8, args: anytype) ![]const u8 {
         self.scratch_buf.clearRetainingCapacity();
-        try self.scratch_buf.writer().print(str, args);
+        try self.scratch_buf.print(self.alloc, str, args);
         return self.scratch_buf.items;
     }
 
     pub fn printScratchZ(self: *Self, comptime str: []const u8, args: anytype) ![]const u8 {
         _ = try self.printScratch(str, args);
-        try self.scratch_buf.append(0);
+        try self.scratch_buf.append(self.alloc, 0);
         return self.scratch_buf.items;
     }
 
@@ -1396,17 +1387,17 @@ pub const Context = struct {
         const name = try std.fs.path.join(self.frame_arena.allocator(), &.{ path, try self.printScratch("{s}.ratmap", .{basename}) });
         try self.notify("saving: {s}", .{name}, colors.tentative);
 
-        var jwriter = std.ArrayList(u8).init(self.alloc);
+        var jwriter = std.Io.Writer.Allocating.init(self.alloc);
 
         if (true) { //TODO REMOVE
 
             var out = try std.fs.cwd().createFile("undo_dump.json", .{});
             defer out.close();
 
-            try self.undoctx.writeToJson(out.writer());
+            //try self.undoctx.writeToJson(out.writer());
         }
 
-        if (self.writeToJson(jwriter.writer())) {
+        if (self.writeToJson(&jwriter.writer)) {
             try self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
@@ -1444,7 +1435,7 @@ pub const Context = struct {
                 self.alloc,
                 &self.async_asset_load,
                 .{
-                    .json_buffer = jwriter,
+                    .json_buffer = try jwriter.toOwnedSlice(),
                     .dir = try std.fs.cwd().openDir(".", .{}),
                     .name = name,
                     .thumbnail = bmp,
@@ -1480,12 +1471,13 @@ pub const Context = struct {
             self.autosaver.resetTimer();
             if (self.autosaver.getSaveFileAndPrune(self.dirs.autosave, basename, ".json")) |out_file| {
                 defer out_file.close();
-                var bwr = std.io.bufferedWriter(out_file.writer());
-                defer bwr.flush() catch {};
-                self.writeToJson(bwr.writer()) catch |err| {
+                var write_buf: [4096]u8 = undefined;
+                var wr = out_file.writer(&write_buf);
+                self.writeToJson(&wr.interface) catch |err| {
                     log.err("writeToJson failed ! {}", .{err});
                     try self.notify("Autosave failed!: {}", .{err}, colors.bad);
                 };
+                try wr.interface.flush();
             } else |err| {
                 log.err("Autosave failed with error {}", .{err});
                 try self.notify("Autosave failed!: {}", .{err}, colors.bad);
@@ -1527,15 +1519,16 @@ pub const Context = struct {
                             .tmpdir = self.game_conf.mapbuilder.tmp_dir,
                         });
                     } else |err| {
-                        try self.notify("Failed exporting map to vmf {!}", .{err}, colors.bad);
+                        try self.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
                     }
                 } else |err| {
-                    try self.notify("Failed saving map: {!}", .{err}, colors.bad);
+                    try self.notify("Failed saving map: {t}", .{err}, colors.bad);
                 }
             }
         }
 
         _ = self.frame_arena.reset(.retain_capacity);
+        const aa = self.frame_arena.allocator();
         //self.edit_state.last_frame_tool_index = self.edit_state.tool_index;
         const MAX_UPDATE_TIME = std.time.ns_per_ms * 16;
         var timer = try std.time.Timer.start();
@@ -1565,7 +1558,7 @@ pub const Context = struct {
             for (0..num_rm_tex) |_|
                 _ = self.async_asset_load.completed.orderedRemove(0);
 
-            var completed_ids = std.ArrayList(vpk.VpkResId).init(self.frame_arena.allocator());
+            var completed_ids = std.ArrayList(vpk.VpkResId){};
             var num_removed: usize = 0;
             for (self.async_asset_load.completed_models.items) |*completed| {
                 var model = completed.mesh;
@@ -1578,8 +1571,8 @@ pub const Context = struct {
                     const t = try self.getTexture(mesh.tex_res_id);
                     mesh.texture_id = t.id;
                 }
-                try completed_ids.append(completed.res_id);
-                completed.texture_ids.deinit();
+                try completed_ids.append(aa, completed.res_id);
+                completed.texture_ids.deinit(self.alloc);
                 num_removed += 1;
 
                 const elapsed = timer.read();

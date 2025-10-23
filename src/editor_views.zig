@@ -201,7 +201,7 @@ pub fn draw3Dview(
             const quad = kvs.getFloats("_quadratic_attn", 1) orelse 0;
 
             self.draw_state.active_lights += 1;
-            try self.renderer.point_light_batch.inst.append(.{
+            try self.renderer.point_light_batch.inst.append(self.renderer.alloc, .{
                 .light_pos = graph.Vec3f.new(ent.origin.x(), ent.origin.y(), ent.origin.z()),
                 .quadratic = quad,
                 .constant = constant + self.draw_state.const_add,
@@ -229,7 +229,7 @@ pub fn draw3Dview(
             const norm = Vec3.new(1, 0, 0).cross(rotated);
             const quat = graph.za.Quat.fromAxis(angle, norm);
 
-            try self.renderer.spot_light_batch.inst.append(.{
+            try self.renderer.spot_light_batch.inst.append(self.renderer.spot_light_batch.alloc, .{
                 .pos = graph.Vec3f.new(ent.origin.x(), ent.origin.y(), ent.origin.z()),
                 .quadratic = quad,
                 .constant = constant + self.draw_state.const_add,
@@ -246,13 +246,13 @@ pub fn draw3Dview(
             if (self.draw_state.cam3d.pos.distance(ent.origin) > self.renderer.light_render_dist) continue;
             //const kvs = try self.ecs.getOptPtr(item, .key_values) orelse continue;
             //
-            try self.renderer.decal_batch.inst.append(.{
+            try self.renderer.decal_batch.inst.append(self.renderer.decal_batch.alloc, .{
                 .pos = graph.Vec3f.new(ent.origin.x(), ent.origin.y(), ent.origin.z()),
                 .ext = graph.Vec3f.new(16, 32, 24),
             });
         }
     }
-    try self.renderer.decal_batch.inst.append(.{
+    try self.renderer.decal_batch.inst.append(self.renderer.decal_batch.alloc, .{
         .pos = graph.Vec3f.new(0, 0, 0),
         .ext = graph.Vec3f.new(100, 100, 100),
     });

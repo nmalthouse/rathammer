@@ -237,9 +237,10 @@ pub const Mesh = struct {
 //12 * 4 + 8 * 4
 
 pub const ModelInfo = struct {
-    vert_offsets: std.ArrayList(u16),
-    texture_paths: std.ArrayList([]const u8),
-    texture_names: std.ArrayList([]const u8),
+    alloc: std.mem.Allocator,
+    vert_offsets: std.ArrayList(u16) = .{},
+    texture_paths: std.ArrayList([]const u8) = .{},
+    texture_names: std.ArrayList([]const u8) = .{},
     hull_min: Vec3,
     hull_max: Vec3,
 };
@@ -268,20 +269,18 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     print("{}\n", .{h3});
 
     var info = ModelInfo{
-        .vert_offsets = std.ArrayList(u16).init(alloc),
-        .texture_paths = std.ArrayList([]const u8).init(alloc),
-        .texture_names = std.ArrayList([]const u8).init(alloc),
+        .alloc = alloc,
         .hull_min = h2.hull_min.toZa(),
         .hull_max = h2.hull_max.toZa(),
     };
     errdefer {
-        info.vert_offsets.deinit();
+        info.vert_offsets.deinit(info.alloc);
         for (info.texture_paths.items) |item|
             alloc.free(item);
         for (info.texture_names.items) |item|
             alloc.free(item);
-        info.texture_paths.deinit();
-        info.texture_names.deinit();
+        info.texture_paths.deinit(info.alloc);
+        info.texture_names.deinit(info.alloc);
     }
 
     try setFbs(&fbs, h3.texture_offset);
@@ -295,7 +294,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
         const duped_name = try alloc.dupe(u8, name_fixed);
         vpk.sanatizeVpkString(duped_name);
 
-        try info.texture_names.append(duped_name);
+        try info.texture_names.append(info.alloc, duped_name);
         print("{s} {}\n", .{ name, tex });
     }
 
@@ -306,7 +305,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
         const name_fixed = util.ensurePathRelative(std.mem.span(name), true);
         const duped_name = try alloc.dupe(u8, name_fixed);
         vpk.sanatizeVpkString(duped_name);
-        try info.texture_paths.append(duped_name);
+        try info.texture_paths.append(info.alloc, duped_name);
         print("NAME {s}\n", .{name});
     }
 
@@ -367,7 +366,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
                     std.debug.print("holy hell thats a lot of verticies {d}\n", .{mesh.num_vert});
                     return error.TooManyVerts;
                 }
-                try info.vert_offsets.append(@intCast(mesh.num_vert));
+                try info.vert_offsets.append(info.alloc, @intCast(mesh.num_vert));
                 print("{}\n", .{mesh});
             }
         }

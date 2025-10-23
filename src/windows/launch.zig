@@ -46,13 +46,15 @@ pub const LaunchWindow = struct {
     should_exit: bool = false,
 
     recents: std.ArrayList(Recent),
+    alloc: std.mem.Allocator,
 
     pub fn create(gui: *Gui, editor: *Context) !*LaunchWindow {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .editor = editor,
-            .recents = std.ArrayList(Recent).init(editor.alloc),
+            .alloc = editor.alloc,
+            .recents = .{},
         };
 
         return self;
@@ -61,11 +63,11 @@ pub const LaunchWindow = struct {
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         for (self.recents.items) |*rec| {
-            self.recents.allocator.free(rec.name);
+            self.alloc.free(rec.name);
             if (rec.tex) |*t|
                 t.deinit();
         }
-        self.recents.deinit();
+        self.recents.deinit(self.alloc);
         //self.layout.deinit(gui, vt);
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
@@ -135,7 +137,7 @@ pub const LaunchWindow = struct {
         const mname = self.recents.items[id].name;
         const name = self.editor.printScratch("{s}.ratmap", .{mname}) catch return;
         self.editor.loadMap(self.editor.dirs.app_cwd.dir, name, self.editor.loadctx) catch |err| {
-            std.debug.print("Can't load map {s} with {!}\n", .{ name, err });
+            std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
             return;
         };
         self.editor.paused = false;

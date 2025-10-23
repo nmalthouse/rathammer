@@ -36,7 +36,8 @@ pub const Renderer = struct {
     hdrbuffer: HdrBuffer,
     csm: Csm,
 
-    draw_calls: std.ArrayList(DrawCall),
+    alloc: std.mem.Allocator,
+    draw_calls: std.ArrayList(DrawCall) = .{},
     last_frame_view_mat: Mat4 = undefined,
     sun_batch: SunQuadBatch,
     point_light_batch: PointLightInstanceBatch,
@@ -93,7 +94,7 @@ pub const Renderer = struct {
         const hdr_shad = try graph.Shader.loadFromFilesystem(alloc, shader_dir, &.{ .{ .path = "hdr.vert", .t = .vert }, .{ .path = "hdr.frag", .t = .frag } });
         var sun_batch = SunQuadBatch.init(alloc);
         try sun_batch.clear();
-        try sun_batch.vertices.appendSlice(&.{
+        sun_batch.appendVerts(&.{
             .{ .pos = graph.Vec3f.new(-1, 1, 0), .uv = graph.Vec2f.new(0, 1) },
             .{ .pos = graph.Vec3f.new(-1, -1, 0), .uv = graph.Vec2f.new(0, 0) },
             .{ .pos = graph.Vec3f.new(1, 1, 0), .uv = graph.Vec2f.new(1, 1) },
@@ -115,7 +116,7 @@ pub const Renderer = struct {
             .spot_light_batch = try SpotLightInstanceBatch.init(alloc, shader_dir, "cone.obj"),
             .decal_batch = try DecalBatch.init(alloc, shader_dir, "cube.obj"),
             .sun_batch = sun_batch,
-            .draw_calls = std.ArrayList(DrawCall).init(alloc),
+            .alloc = alloc,
             .csm = Csm.createCsm(2048, Csm.CSM_COUNT, def_sun_shad),
             .gbuffer = GBuffer.create(100, 100),
             .hdrbuffer = HdrBuffer.create(100, 100),
@@ -133,7 +134,7 @@ pub const Renderer = struct {
     }
 
     pub fn submitDrawCall(self: *Self, d: DrawCall) !void {
-        try self.draw_calls.append(d);
+        try self.draw_calls.append(self.alloc, d);
     }
 
     pub fn draw(
@@ -374,7 +375,7 @@ pub const Renderer = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.draw_calls.deinit();
+        self.draw_calls.deinit(self.alloc);
         self.sun_batch.deinit();
         self.point_light_batch.deinit();
         self.spot_light_batch.deinit();
@@ -645,15 +646,14 @@ pub fn LightBatchGeneric(comptime vertT: type) type {
         ebo: c_uint = 0,
         ivbo: c_uint = 0,
 
-        vertices: std.ArrayList(Vertex),
-        indicies: std.ArrayList(u32),
-        inst: std.ArrayList(vertT),
+        alloc: std.mem.Allocator,
+        vertices: std.ArrayList(Vertex) = .{},
+        indicies: std.ArrayList(u32) = .{},
+        inst: std.ArrayList(vertT) = .{},
 
         pub fn init(alloc: std.mem.Allocator, asset_dir: std.fs.Dir, obj_name: []const u8) !@This() {
             var ret = @This(){
-                .vertices = std.ArrayList(Vertex).init(alloc),
-                .indicies = std.ArrayList(u32).init(alloc),
-                .inst = std.ArrayList(vertT).init(alloc),
+                .alloc = alloc,
             };
 
             c.glGenVertexArrays(1, &ret.vao);
@@ -674,18 +674,18 @@ pub fn LightBatchGeneric(comptime vertT: type) type {
             defer obj.deinit();
             if (obj.meshes.items.len == 0) return error.invalidIcoSphere;
             for (obj.meshes.items[0].vertices.items) |v| {
-                try ret.vertices.append(.{ .pos = graph.Vec3f.new(v.x, v.y, v.z) });
+                try ret.vertices.append(ret.alloc, .{ .pos = graph.Vec3f.new(v.x, v.y, v.z) });
             }
-            try ret.indicies.appendSlice(obj.meshes.items[0].indicies.items);
+            try ret.indicies.appendSlice(ret.alloc, obj.meshes.items[0].indicies.items);
             ret.pushVertexData();
 
             return ret;
         }
 
         pub fn deinit(self: *@This()) void {
-            self.vertices.deinit();
-            self.indicies.deinit();
-            self.inst.deinit();
+            self.vertices.deinit(self.alloc);
+            self.indicies.deinit(self.alloc);
+            self.inst.deinit(self.alloc);
         }
 
         pub fn pushVertexData(self: *@This()) void {

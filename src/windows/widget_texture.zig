@@ -31,15 +31,19 @@ pub const PollingTexture = struct {
         const gui = parent.win_ptr.gui_ptr;
 
         const area = area_o orelse return .failed;
-        const self = gui.create(@This());
-        var str = std.ArrayList(u8).init(gui.alloc);
-        str.writer().print(fmt, args) catch return .failed;
+        var str = std.ArrayList(u8){};
+        str.print(gui.alloc, fmt, args) catch {
+            str.deinit(gui.alloc);
+            return .failed;
+        };
 
         const missing = edit.missingTexture();
         const tex = ed.getTexture(vpk_id) catch null;
+
+        const self = gui.create(@This());
         self.* = .{
             .vt = .UNINITILIZED,
-            .text = str.toOwnedSlice() catch return .failed,
+            .text = str.toOwnedSlice(gui.alloc) catch return .failed,
             .vpk_id = vpk_id,
             .opts = opts,
             .ed = ed,

@@ -45,16 +45,16 @@ pub const Autosaver = struct {
 
     pub fn prune(self: *Self, dir: std.fs.Dir, base_name: []const u8, extension: []const u8) !void {
         const d = try dir.openDir(".", .{ .iterate = true });
-        var oldest = std.ArrayList(i64).init(self.alloc);
-        var strbuf = std.ArrayList(u8).init(self.alloc);
-        defer oldest.deinit();
-        defer strbuf.deinit();
+        var oldest = std.ArrayList(i64){};
+        var strbuf = std.ArrayList(u8){};
+        defer oldest.deinit(self.alloc);
+        defer strbuf.deinit(self.alloc);
 
         var it = d.iterate();
         while (try it.next()) |entry| {
             const index = getSaveTimestamp(entry.name, base_name, extension) orelse continue;
 
-            try oldest.append(index);
+            try oldest.append(self.alloc, index);
         }
         const Ctx = struct {
             pub fn lessThan(_: void, a: i64, b: i64) bool {
@@ -64,7 +64,7 @@ pub const Autosaver = struct {
         if (oldest.items.len > self.max_count) {
             std.sort.insertion(i64, oldest.items, {}, Ctx.lessThan);
             for (oldest.items[0 .. oldest.items.len - self.max_count]) |ts| {
-                const fname = try getSaveName(base_name, extension, ts, &strbuf);
+                const fname = try getSaveName(base_name, extension, ts, &strbuf, self.alloc);
                 log.info("Pruning {s}", .{fname});
                 //log.err("dummy deleting {s}", .{fname});
                 d.deleteFile(fname) catch |err| {
@@ -75,16 +75,16 @@ pub const Autosaver = struct {
     }
 
     pub fn getSaveFileAndPrune(self: *Self, dir: std.fs.Dir, base_name: []const u8, extension: []const u8) !std.fs.File {
-        var namebuf = std.ArrayList(u8).init(self.alloc);
-        defer namebuf.deinit();
-        var bname = try encodeBasename(base_name, &namebuf);
+        var namebuf = std.ArrayList(u8){};
+        defer namebuf.deinit(self.alloc);
+        var bname = try encodeBasename(base_name, &namebuf, self.alloc);
         if (bname.len > 200) //rough, but should stop windows from exploding
             bname = bname[bname.len - 200 ..];
 
         try self.prune(dir, bname, extension);
-        var strbuf = std.ArrayList(u8).init(self.alloc);
-        defer strbuf.deinit();
-        const name = try getSaveName(bname, extension, std.time.timestamp(), &strbuf);
+        var strbuf = std.ArrayList(u8){};
+        defer strbuf.deinit(self.alloc);
+        const name = try getSaveName(bname, extension, std.time.timestamp(), &strbuf, self.alloc);
         const sf = try dir.createFile(name, .{});
         return sf;
     }
@@ -105,9 +105,9 @@ fn getSaveTimestamp(entry_name: []const u8, basename: []const u8, extension: []c
     return null;
 }
 
-fn encodeBasename(name: []const u8, buf: *std.ArrayList(u8)) ![]const u8 {
+fn encodeBasename(name: []const u8, buf: *std.ArrayList(u8), alloc: std.mem.Allocator) ![]const u8 {
     buf.clearRetainingCapacity();
-    try buf.appendSlice(name);
+    try buf.appendSlice(alloc, name);
     for (buf.items) |*char| {
         char.* = switch (char.*) {
             '\\' => '_',
@@ -118,9 +118,9 @@ fn encodeBasename(name: []const u8, buf: *std.ArrayList(u8)) ![]const u8 {
     return buf.items;
 }
 
-fn getSaveName(basename: []const u8, extension: []const u8, timestamp: i64, out: *std.ArrayList(u8)) ![]const u8 {
+fn getSaveName(basename: []const u8, extension: []const u8, timestamp: i64, out: *std.ArrayList(u8), alloc: std.mem.Allocator) ![]const u8 {
     out.clearRetainingCapacity();
-    try out.writer().print("{s}{s}{d}{s}", .{ basename, AUTOSAVE_STRING, timestamp, extension });
+    try out.print(alloc, "{s}{s}{d}{s}", .{ basename, AUTOSAVE_STRING, timestamp, extension });
     return out.items;
 }
 

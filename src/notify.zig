@@ -10,16 +10,14 @@ pub const NotifyCtx = struct {
         time_left_ms: f32,
     };
 
-    strbuf: std.ArrayList(u8),
+    strbuf: std.ArrayList(u8) = .{},
     alloc: std.mem.Allocator,
 
-    items: std.ArrayList(Item),
+    items: std.ArrayList(Item) = .{},
     time: f32,
 
     pub fn init(alloc: std.mem.Allocator, time_ms: f32) Self {
         return .{
-            .strbuf = std.ArrayList(u8).init(alloc),
-            .items = std.ArrayList(Item).init(alloc),
             .alloc = alloc,
             .time = time_ms,
         };
@@ -29,16 +27,16 @@ pub const NotifyCtx = struct {
         for (self.items.items) |*item| {
             self.alloc.free(item.msg);
         }
-        self.items.deinit();
-        self.strbuf.deinit();
+        self.items.deinit(self.alloc);
+        self.strbuf.deinit(self.alloc);
     }
 
     pub fn submitNotify(self: *Self, comptime msg: []const u8, args: anytype, color: u32) !void {
         self.strbuf.clearRetainingCapacity();
-        try self.strbuf.writer().print(msg, args);
+        try self.strbuf.print(self.alloc, msg, args);
         const str = try self.alloc.dupe(u8, self.strbuf.items);
 
-        try self.items.append(.{
+        try self.items.append(self.alloc, .{
             .msg = str,
             .color = color,
             .time_left_ms = self.time,
@@ -57,7 +55,7 @@ pub const NotifyCtx = struct {
                 }
             }
             if (remove_index) |mi| {
-                try self.items.replaceRange(0, mi + 1, &.{});
+                try self.items.replaceRange(self.alloc, 0, mi + 1, &.{});
             }
         }
         return self.items.items;

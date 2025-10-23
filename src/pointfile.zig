@@ -4,20 +4,18 @@ const Vec3 = graph.za.Vec3;
 const vmf = @import("vmf.zig");
 
 pub const PointFile = struct {
-    verts: std.ArrayList(Vec3),
+    verts: std.array_list.Managed(Vec3),
 };
 
 pub const PortalFile = struct {
     // taken 4 at a time these are portals
-    verts: std.ArrayList(Vec3),
+    verts: std.array_list.Managed(Vec3),
 };
 
 pub fn loadPointfile(alloc: std.mem.Allocator, dir: std.fs.Dir, name: []const u8) !PointFile {
-    var pf = PointFile{ .verts = std.ArrayList(Vec3).init(alloc) };
+    var pf = PointFile{ .verts = .init(alloc) };
 
-    const in = try dir.openFile(name, .{});
-    defer in.close();
-    const slice = try in.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+    const slice = try graph.readFile(alloc, dir, name);
     defer alloc.free(slice);
     var it = std.mem.tokenizeAny(u8, slice, "\n\r");
 
@@ -36,11 +34,9 @@ pub fn loadPointfile(alloc: std.mem.Allocator, dir: std.fs.Dir, name: []const u8
 
 const log = std.log.scoped(.pointfile);
 pub fn loadPortalfile(alloc: std.mem.Allocator, dir: std.fs.Dir, name: []const u8) !PortalFile {
-    var pf = PortalFile{ .verts = std.ArrayList(Vec3).init(alloc) };
+    var pf = PortalFile{ .verts = .init(alloc) };
 
-    const in = try dir.openFile(name, .{});
-    defer in.close();
-    const slice = try in.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+    const slice = try graph.readFile(alloc, dir, name);
     defer alloc.free(slice);
     var it = std.mem.tokenizeAny(u8, slice, "\n\r");
     const head = it.next() orelse return error.invalidPortalFile;

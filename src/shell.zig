@@ -60,14 +60,14 @@ pub const CommandCtx = struct {
         alloc.destroy(self);
     }
 
-    pub fn exec_command_cb(vt: *Console.ConsoleCb, command: []const u8, output: *std.ArrayList(u8)) void {
+    pub fn exec_command_cb(vt: *Console.ConsoleCb, command: []const u8, output: *std.array_list.Managed(u8)) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
         self.execErr(command, output) catch |err| {
-            output.writer().print("Fatal: command exec failed with {!}", .{err}) catch return;
+            output.print("Fatal: command exec failed with {t}", .{err}) catch return;
         };
     }
 
-    pub fn resolveArg(self: *@This(), token: []const u8, output: *std.ArrayList(u8)) !void {
+    pub fn resolveArg(self: *@This(), token: []const u8, output: *std.array_list.Managed(u8)) !void {
         if (token.len == 0) return;
         switch (token[0]) {
             '$' => try output.appendSlice(self.env.get(token[1..]) orelse return error.notAVar),
@@ -76,9 +76,8 @@ pub const CommandCtx = struct {
         }
     }
 
-    pub fn execErr(self: *@This(), command: []const u8, output: *std.ArrayList(u8)) anyerror!void {
-        const wr = output.writer();
-        var scratch = std.ArrayList(u8).init(self.ed.alloc);
+    pub fn execErr(self: *@This(), command: []const u8, wr: *std.array_list.Managed(u8)) anyerror!void {
+        var scratch = std.array_list.Managed(u8).init(self.ed.alloc);
         defer scratch.deinit();
         {
             var args = std.mem.tokenizeAny(u8, command, " \n");
@@ -135,7 +134,7 @@ pub const CommandCtx = struct {
                     while (it.next()) |ent| {
                         if (std.mem.eql(u8, class, ent.class)) {
                             _ = self.ed.selection.put(it.i, self.ed) catch |err| {
-                                try wr.print("Selection failed {!}\n", .{err});
+                                try wr.print("Selection failed {t}\n", .{err});
                             };
                         }
                     }
@@ -175,7 +174,7 @@ pub const CommandCtx = struct {
                                 try wr.print("\tNot an entity: {d}\n", .{id});
                             } else {
                                 _ = self.ed.selection.put(id, self.ed) catch |err| {
-                                    try wr.print("Selection failed {!}\n", .{err});
+                                    try wr.print("Selection failed {t}\n", .{err});
                                 };
                             }
                         } else |_| {

@@ -61,19 +61,19 @@ pub const RcastItem = struct {
 
 pub const Ctx = struct {
     const Self = @This();
-    pot: std.ArrayList(RcastItem),
-    pot_fine: std.ArrayList(RcastItem),
+    pot: std.ArrayList(RcastItem) = .{},
+    pot_fine: std.ArrayList(RcastItem) = .{},
+    alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) @This() {
         return .{
-            .pot = std.ArrayList(RcastItem).init(alloc),
-            .pot_fine = std.ArrayList(RcastItem).init(alloc),
+            .alloc = alloc,
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.pot.deinit();
-        self.pot_fine.deinit();
+        self.pot.deinit(self.alloc);
+        self.pot_fine.deinit(self.alloc);
     }
 
     pub fn findNearestSolid(self: *Self, ecs_p: *edit.EcsT, ray_o: Vec3, ray_d: Vec3, csgctx: *csg.Context, bb_only: bool) ![]const RcastItem {
@@ -87,7 +87,7 @@ pub const Ctx = struct {
                 continue;
             if (util3d.doesRayIntersectBBZ(ray_o, ray_d, bb.a, bb.b)) |inter| {
                 const len = inter.distance(ray_o);
-                try self.pot.append(.{ .id = bbit.i, .dist = len, .side_id = null });
+                try self.pot.append(self.alloc, .{ .id = bbit.i, .dist = len, .side_id = null });
             }
         }
         if (!bb_only) {
@@ -96,10 +96,10 @@ pub const Ctx = struct {
                 if (try ecs_p.getOptPtr(bp_rc.id, .solid)) |solid| {
                     for (try doesRayIntersectSolid(ray_o, ray_d, solid, csgctx)) |in| {
                         const len = in.point.distance(ray_o);
-                        try self.pot_fine.append(.{ .id = bp_rc.id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
+                        try self.pot_fine.append(self.alloc, .{ .id = bp_rc.id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
                     }
                 } else {
-                    try self.pot_fine.append(bp_rc);
+                    try self.pot_fine.append(self.alloc, bp_rc);
                 }
             }
 
@@ -118,7 +118,7 @@ pub const Ctx = struct {
         if (try ecs_p.getOptPtr(pot_id, .solid)) |solid| {
             for (try doesRayIntersectSolid(ray_o, ray_d, solid, csgctx)) |in| {
                 const len = in.point.distance(ray_o);
-                try self.pot_fine.append(.{ .id = pot_id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
+                try self.pot_fine.append(self.alloc, .{ .id = pot_id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
             }
         }
     }

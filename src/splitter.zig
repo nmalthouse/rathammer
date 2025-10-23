@@ -111,7 +111,6 @@ pub const Splits = struct {
     };
 
     arena: std.heap.ArenaAllocator,
-    workspaces: std.ArrayList(*Area),
     active_ws: usize = 0,
 
     //index into tab_handles
@@ -119,16 +118,16 @@ pub const Splits = struct {
 
     area: R = .{ .x = 0, .y = 0, .w = 0, .h = 0 },
 
-    tab_outputs: std.ArrayList(Output),
-
-    tab_handles: std.ArrayList(ResizeHandle),
+    tab_outputs: std.array_list.Managed(Output),
+    workspaces: std.array_list.Managed(*Area),
+    tab_handles: std.array_list.Managed(ResizeHandle),
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
             .arena = std.heap.ArenaAllocator.init(alloc),
-            .workspaces = std.ArrayList(*Area).init(alloc),
-            .tab_handles = std.ArrayList(ResizeHandle).init(alloc),
-            .tab_outputs = std.ArrayList(Output).init(alloc),
+            .workspaces = .init(alloc),
+            .tab_handles = .init(alloc),
+            .tab_outputs = .init(alloc),
         };
     }
 
@@ -193,8 +192,8 @@ pub const Splits = struct {
 pub fn flattenTree(
     root_area: R,
     tree: *Area,
-    output_list: *std.ArrayList(struct { R, G.WindowId }),
-    output_handles: *std.ArrayList(ResizeHandle),
+    output_list: *std.array_list.Managed(struct { R, G.WindowId }),
+    output_handles: *std.array_list.Managed(ResizeHandle),
 ) !void {
     switch (tree.*) {
         .sub => |t| {

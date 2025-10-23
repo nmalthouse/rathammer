@@ -17,10 +17,18 @@ pub fn openFileFatal(
     };
 }
 
+pub fn fatalPrintFilePath(dir: std.fs.Dir, path: []const u8, err: anyerror, message: []const u8) noreturn {
+    const rp = dir.realpath(".", &real_path_buffer) catch "error.realpathFailed";
+
+    std.debug.print("Failed to open file {s} in directory: {s}  with error: {}\n", .{ path, rp, err });
+    std.debug.print("{s}\n", .{message});
+    std.process.exit(1);
+}
+
 pub fn openDirFatal(
     dir: std.fs.Dir,
     sub_path: []const u8,
-    flags: std.fs.Dir.OpenDirOptions,
+    flags: std.fs.Dir.OpenOptions,
     message: []const u8,
 ) std.fs.Dir {
     return dir.openDir(sub_path, flags) catch |err| {
@@ -61,13 +69,19 @@ pub fn getFileFromTar(alloc: std.mem.Allocator, fileo: std.fs.File, filename: []
     var fname_buffer: [std.fs.max_path_bytes]u8 = undefined;
     var lname_buffer: [std.fs.max_path_bytes]u8 = undefined;
 
-    var tar_it = std.tar.iterator(fileo.reader(), .{
+    var read_buf: [4096]u8 = undefined;
+    var read = fileo.reader(&read_buf);
+    var tar_it = std.tar.Iterator{
+        .reader = &read.interface,
         .file_name_buffer = &fname_buffer,
         .link_name_buffer = &lname_buffer,
-    });
+    };
     while (tar_it.next() catch null) |file| {
         if (std.mem.eql(u8, file.name, filename)) {
-            return try file.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+            var aw: std.io.Writer.Allocating = .init(alloc);
+            const wr = &aw.writer;
+            try tar_it.streamRemaining(file, wr);
+            return try aw.toOwnedSlice();
         }
     }
     return error.notFound;
@@ -123,4 +137,15 @@ test "map path" {
     try ex(.{ "", "p" }, try pathToMapName("p"));
     try ex(.{ "", ".json" }, try pathToMapName(".json"));
     try ex(.{ "hello/world", "0.0.0" }, try pathToMapName("hello/world/0.0.0.ratmap"));
+}
+
+pub fn readFile(alloc: std.mem.Allocator, dir: std.fs.Dir, filename: []const u8) ![]const u8 {
+    var buffer: [4096]u8 = undefined;
+
+    var in = try dir.openFile(filename, .{});
+    defer in.close();
+
+    var reader = in.reader(&buffer);
+
+    return try reader.interface.allocRemaining(alloc, .unlimited);
 }

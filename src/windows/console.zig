@@ -14,7 +14,7 @@ const Context = @import("../editor.zig").Context;
 pub const exec_command_cb = *const fn (
     *ConsoleCb,
     command_string: []const u8,
-    output: *std.ArrayList(u8),
+    output: *std.array_list.Managed(u8),
 ) void;
 
 pub const ConsoleCb = struct {
@@ -26,9 +26,10 @@ pub const Console = struct {
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
 
+    alloc: std.mem.Allocator,
     line_arena: std.heap.ArenaAllocator,
     lines: std.ArrayList([]const u8),
-    scratch: std.ArrayList(u8),
+    scratch: std.array_list.Managed(u8),
 
     exec_vt: *ConsoleCb,
 
@@ -38,10 +39,11 @@ pub const Console = struct {
 
         self.* = .{
             .vt = iWindow.init(&build, gui, &deinit, .{}, &self.vt),
-            .lines = std.ArrayList([]const u8).init(gui.alloc),
+            .lines = .{},
             .line_arena = std.heap.ArenaAllocator.init(gui.alloc),
-            .scratch = std.ArrayList(u8).init(gui.alloc),
+            .scratch = .init(gui.alloc),
             .exec_vt = exec_vt,
+            .alloc = gui.alloc,
         };
 
         return self;
@@ -50,7 +52,7 @@ pub const Console = struct {
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.deinit(gui);
-        self.lines.deinit();
+        self.lines.deinit(self.alloc);
         self.line_arena.deinit();
         self.scratch.deinit();
         gui.alloc.destroy(self);
@@ -104,7 +106,7 @@ pub const Console = struct {
         self.scratch.clearRetainingCapacity();
         self.exec_vt.exec(self.exec_vt, command, &self.scratch);
         const duped = self.line_arena.allocator().dupe(u8, self.scratch.items) catch return;
-        self.lines.append(duped) catch return;
+        self.lines.append(self.alloc, duped) catch return;
         var tv = self.getTextView() orelse return;
         tv.addOwnedText(duped, gui) catch return;
         tv.gotoBottom();

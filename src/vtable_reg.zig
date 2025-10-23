@@ -15,7 +15,7 @@ pub fn VtableReg(vt_type: type) type {
         pub fn init(alloc: std.mem.Allocator) Self {
             return .{
                 .alloc = alloc,
-                .vtables = std.ArrayList(*vt_type).init(alloc),
+                .vtables = .{},
                 .name_map = std.StringHashMap(usize).init(alloc),
             };
         }
@@ -35,7 +35,7 @@ pub fn VtableReg(vt_type: type) type {
                 return error.toolAlreadyRegistered;
 
             const id = self.vtables.items.len;
-            try self.vtables.append(try T.create(self.alloc));
+            try self.vtables.append(self.alloc, try T.create(self.alloc));
             T.tool_id = id;
             try self.name_map.put(alloc_name, id);
         }
@@ -48,7 +48,7 @@ pub fn VtableReg(vt_type: type) type {
                 return error.toolAlreadyRegistered;
 
             const id = self.vtables.items.len;
-            try self.vtables.append(vt);
+            try self.vtables.append(self.alloc, vt);
             T.tool_id = id;
             try self.name_map.put(alloc_name, id);
         }
@@ -72,7 +72,7 @@ pub fn VtableReg(vt_type: type) type {
             self.name_map.deinit();
             for (self.vtables.items) |item|
                 item.deinit_fn(item, self.alloc);
-            self.vtables.deinit();
+            self.vtables.deinit(self.alloc);
         }
     };
 }

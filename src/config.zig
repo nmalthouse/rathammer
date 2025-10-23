@@ -164,7 +164,9 @@ pub const ConfigCtx = struct {
                     if (std.mem.endsWith(u8, item.basename, ".vdf")) {
                         const in = try item.dir.openFile(item.basename, .{});
                         defer in.close();
-                        const slice = try in.reader().readAllAlloc(self.alloc, std.math.maxInt(usize));
+                        var buf: [256]u8 = undefined;
+                        var reader = in.reader(&buf);
+                        const slice = try reader.interface.allocRemaining(self.alloc, .unlimited);
                         defer self.alloc.free(slice);
                         var val = try vdf.parse(self.alloc, slice, null, .{});
                         defer val.deinit();
@@ -279,18 +281,22 @@ fn backupKeymod(name: []const u8) graph.SDL.keycodes.Keymod {
 }
 
 pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !*ConfigCtx { //Load config
+    //
+    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    const out = &stdout_writer.interface;
 
     var realpath_buf: [256]u8 = undefined;
     if (dir.realpath(path, &realpath_buf)) |rp| {
-        const out = std.io.getStdOut();
-        try out.writer().print("Loading config file: {s}\n", .{rp});
+        try out.print("Loading config file: {s}\n", .{rp});
     } else |_| {
         std.debug.print("Realpath failed when loading config\n", .{});
     }
 
     const in = try dir.openFile(path, .{});
     defer in.close();
-    const slice = try in.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+    var buf: [1024]u8 = undefined;
+    var reader = in.reader(&buf);
+    const slice = try reader.interface.allocRemaining(alloc, .unlimited);
     defer alloc.free(slice);
     return try loadConfig(alloc, slice);
 }

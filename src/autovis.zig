@@ -53,20 +53,19 @@ pub const VisContext = struct {
     const MaskSet = std.bit_set.IntegerBitSet(MAX_VIS);
     const Self = @This();
 
-    filters: std.ArrayList(Filter),
-    enabled: std.ArrayList(bool),
+    alloc: std.mem.Allocator,
+    filters: std.ArrayList(Filter) = .{},
+    enabled: std.ArrayList(bool) = .{},
 
     vpk_id_cache: std.AutoHashMap(VpkResId, MaskSet),
     //TODO convert entity.class to numeric and this to something better
     class_id_cache: std.StringHashMap(MaskSet),
 
-    _disabled_buf: std.ArrayList(Filter),
+    _disabled_buf: std.ArrayList(Filter) = .{},
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .filters = std.ArrayList(Filter).init(alloc),
-            .enabled = std.ArrayList(bool).init(alloc),
-            ._disabled_buf = std.ArrayList(Filter).init(alloc),
+            .alloc = alloc,
             .vpk_id_cache = std.AutoHashMap(VpkResId, MaskSet).init(alloc),
             .class_id_cache = std.StringHashMap(MaskSet).init(alloc),
         };
@@ -118,7 +117,7 @@ pub const VisContext = struct {
         for (self.enabled.items, 0..) |en, i| {
             if (!en) {
                 mask.set(i);
-                try self._disabled_buf.append(self.filters.items[i]);
+                try self._disabled_buf.append(self.alloc, self.filters.items[i]);
             }
         }
         return .{ self._disabled_buf.items, mask };
@@ -133,26 +132,26 @@ pub const VisContext = struct {
     }
 
     pub fn add(self: *Self, f: Filter) !void {
-        const alloc = self.filters.allocator;
+        const alloc = self.alloc;
         var newf = f;
         newf._id = @intCast(self.enabled.items.len);
         if (newf._id >= MAX_VIS) return error.tooManyAutoVis;
         newf.name = try alloc.dupe(u8, f.name);
         newf.filter = try alloc.dupe(u8, f.filter);
-        try self.filters.append(newf);
-        try self.enabled.append(true);
+        try self.filters.append(self.alloc, newf);
+        try self.enabled.append(self.alloc, true);
     }
 
     pub fn deinit(self: *Self) void {
         for (self.filters.items) |f| {
-            self.filters.allocator.free(f.filter);
-            self.filters.allocator.free(f.name);
+            self.alloc.free(f.filter);
+            self.alloc.free(f.name);
         }
         self.vpk_id_cache.deinit();
         self.class_id_cache.deinit();
-        self._disabled_buf.deinit();
-        self.filters.deinit();
-        self.enabled.deinit();
+        self._disabled_buf.deinit(self.alloc);
+        self.filters.deinit(self.alloc);
+        self.enabled.deinit(self.alloc);
     }
 };
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const vdf = @import("vdf.zig");
+const graph = @import("graph");
 const VpkCtx = @import("vpk.zig").Context;
 const Dir = std.fs.Dir;
 const log = std.log.scoped(.gameinfo);
@@ -9,15 +10,8 @@ const log = std.log.scoped(.gameinfo);
 //half life 2 does not tell you if it is omitting a path or why.
 //If I delete all paths from hl2_complete/gameinfo.txt, the game still launches
 
-fn readFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, filename: []const u8) ![]const u8 {
-    const inf = try dir.openFile(filename, .{});
-    defer inf.close();
-    const slice = try inf.reader().readAllAlloc(alloc, std.math.maxInt(usize));
-    return slice;
-}
-
 pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkctx: *VpkCtx, loadctx: anytype, filename: []const u8) !void {
-    const sl = readFromFile(alloc, game_dir, filename) catch |err| {
+    const sl = graph.readFile(alloc, game_dir, filename) catch |err| {
         var out_path_buf: [512]u8 = undefined;
         const rp = game_dir.realpath(".", &out_path_buf) catch return err;
         log.err("Failed to find gameinfo \"{s}\" in {s}", .{ filename, rp });
@@ -81,7 +75,7 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
             }
             log.info("Mounting loose dir: {s}", .{path});
             vpkctx.addLooseDir(dir, path) catch |err| {
-                log.err("Failed to mount loose dir: {s} {!}", .{ path, err });
+                log.err("Failed to mount loose dir: {s} {t}", .{ path, err });
             };
         }
     }

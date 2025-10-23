@@ -41,11 +41,11 @@ const version = @import("version.zig");
 fn event_cb(ev: graph.c.SDL_UserEvent) void {
     const rpc = @import("rpc.zig");
     const ha = std.hash.Wyhash.hash;
-    const ed: *Editor = @alignCast(@ptrCast(ev.data1 orelse return));
+    const ed: *Editor = @ptrCast(@alignCast(ev.data1 orelse return));
     const this_id = ed.rpcserv.event_id;
     if (ev.type == this_id) {
         if (ev.data2) |us1| {
-            const event: *rpc.Event = @alignCast(@ptrCast(us1));
+            const event: *rpc.Event = @ptrCast(@alignCast(us1));
             defer event.deinit(ed.rpcserv.alloc);
             for (event.msg) |msg| {
                 var wr = event.stream.writer();
@@ -158,7 +158,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const load_timer = try std.time.Timer.start();
     var loaded_config = Conf.loadConfigFromFile(alloc, config_dir.dir, config_name) catch |err| {
-        log.err("User config failed to load with error {!}", .{err});
+        log.err("User config failed to load with error {t}", .{err});
         return error.failedConfig;
     };
     defer loaded_config.deinit();
@@ -180,29 +180,30 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         return error.gameConfigNotFound;
     };
 
+    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    const stdout = &stdout_writer.interface;
+
     const default_game = args.game orelse config.default_game;
     if (args.games != null or args.checkhealth != null) {
-        const out = std.io.getStdOut();
-        const wr = out.writer();
         const sep = "------\n";
 
         const default_string = "default -> ";
         const default_pad = " " ** default_string.len;
 
         {
-            try wr.print("Available game configs: \n", .{});
+            try stdout.print("Available game configs: \n", .{});
             var it = config.games.map.iterator();
             while (it.next()) |item| {
-                try wr.print("{s}{s}\n", .{
+                try stdout.print("{s}{s}\n", .{
                     if (std.mem.eql(u8, item.key_ptr.*, default_game)) default_string else default_pad,
                     item.key_ptr.*,
                 });
             }
         }
-        if (!config.games.map.contains(default_game)) try wr.print("{s} is not a defined game", .{default_game});
-        try wr.writeAll(sep);
-        try wr.print("App dir    : {s}\n", .{app_cwd.path});
-        try wr.print("Config dir : {s}\n", .{config_dir.path});
+        if (!config.games.map.contains(default_game)) try stdout.print("{s} is not a defined game", .{default_game});
+        try stdout.writeAll(sep);
+        try stdout.print("App dir    : {s}\n", .{app_cwd.path});
+        try stdout.print("Config dir : {s}\n", .{config_dir.path});
     }
 
     var dirs = try fs.Dirs.open(alloc, cwd, .{
@@ -216,20 +217,17 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer dirs.deinit(alloc);
 
     if (args.games != null or args.checkhealth != null) {
-        const out = std.io.getStdOut();
-        const wr = out.writer();
-
         var it = config.games.map.iterator();
         while (it.next()) |item| {
             if (!std.mem.eql(u8, item.key_ptr.*, default_game) and args.checkhealth == null) continue;
             const en = item.value_ptr;
-            try wr.print("{s}:\n", .{item.key_ptr.*});
+            try stdout.print("{s}:\n", .{item.key_ptr.*});
             var failed = false;
             dirs.games_dir.doesFileExistInDir(en.fgd_dir, en.fgd) catch |err| {
                 failed = true;
-                try wr.print("    fgd: {!}\n", .{err});
-                try wr.print("        fgd_dir: {s}\n", .{en.fgd_dir});
-                try wr.print("        fgd    : {s}\n", .{en.fgd});
+                try stdout.print("    fgd: {t}\n", .{err});
+                try stdout.print("        fgd_dir: {s}\n", .{en.fgd_dir});
+                try stdout.print("        fgd    : {s}\n", .{en.fgd});
             };
             for (en.gameinfo.items, 0..) |ginfo, i| {
                 const name = if (ginfo.gameinfo_name.len > 0) ginfo.gameinfo_name else "gameinfo.txt";
@@ -237,9 +235,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                 dirs.games_dir.doesFileExistInDir(ginfo.game_dir, name) catch |err| {
                     failed = true;
 
-                    try wr.print("    gameinfo {d}: {!}\n", .{ i, err });
-                    try wr.print("        game_dir: {s}\n", .{ginfo.game_dir});
-                    try wr.print("        gameinfo: {s}\n", .{name});
+                    try stdout.print("    gameinfo {d}: {t}\n", .{ i, err });
+                    try stdout.print("        game_dir: {s}\n", .{ginfo.game_dir});
+                    try stdout.print("        gameinfo: {s}\n", .{name});
                 };
             }
             { //map builder
@@ -247,18 +245,18 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                 const gdir = dirs.games_dir.doesDirExist(en.mapbuilder.game_dir);
                 const edir = dirs.games_dir.doesDirExist(en.mapbuilder.exe_dir);
                 if (!gdir or !edir) {
-                    try wr.print("    mapbuilder: \n", .{});
+                    try stdout.print("    mapbuilder: \n", .{});
                     if (!gdir)
-                        try wr.print("        game_dir: error.fileNotFound\n", .{});
+                        try stdout.print("        game_dir: error.fileNotFound\n", .{});
                     if (!edir)
-                        try wr.print("        exe_dir : error.fileNotFound\n", .{});
+                        try stdout.print("        exe_dir : error.fileNotFound\n", .{});
                 }
             }
 
             if (!failed)
-                try wr.print("    good\n", .{});
+                try stdout.print("    good\n", .{});
 
-            try wr.print("\n", .{});
+            try stdout.print("\n", .{});
         }
 
         return;
@@ -365,9 +363,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const launch_win = try LaunchWindow.create(&gui, editor);
     if (args.map == null) { //Only build the recents list if we don't have a map
         var timer = try std.time.Timer.start();
-        if (config_dir.dir.openFile("recent_maps.txt", .{})) |recent| {
-            defer recent.close();
-            const slice = try recent.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+        if (util.readFile(alloc, config_dir.dir, "recent_maps.txt")) |slice| {
             defer alloc.free(slice);
             var it = std.mem.tokenizeScalar(u8, slice, '\n');
             while (it.next()) |filename| {
@@ -385,7 +381,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                         qoi.deinit();
 
                         recent_map.close();
-                        try launch_win.recents.append(rec);
+                        try launch_win.recents.append(launch_win.alloc, rec);
                     } else |_| {}
                 }
             }
@@ -484,12 +480,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         },
     }));
     try ws.workspaces.append(main_2d_tab);
-
-    var tab_outputs = std.ArrayList(struct { graph.Rect, ?usize }).init(alloc);
-    defer tab_outputs.deinit();
-
-    var tab_handles = std.ArrayList(Split.ResizeHandle).init(alloc);
-    defer tab_handles.deinit();
 
     var last_frame_group_owner: ?edit.EcsT.Id = null;
 
@@ -598,25 +588,23 @@ pub fn main() !void {
     var arg_it = try std.process.argsWithAllocator(alloc);
     defer arg_it.deinit();
 
+    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    const out = &stdout_writer.interface;
     const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
     if (args.version != null) {
-        const out = std.io.getStdOut();
-        try out.writer().print("{s}\n", .{version.version});
+        try out.print("{s}\n", .{version.version});
         return;
     }
 
     if (args.build != null) {
-        const out = std.io.getStdOut();
-        var jout = std.json.writeStream(out.writer(), .{ .whitespace = .indent_2 });
-        defer out.writer().print("\n", .{}) catch {}; //Json doesn't emit final \n
-        defer jout.deinit();
-        try jout.write(.{
+        try std.json.Stringify.value(.{
             .version = version.version,
             .os = builtin.target.os.tag,
             .arch = builtin.target.cpu.arch,
             .mode = builtin.mode,
             .commit = build_config.commit_hash,
-        });
+        }, .{ .whitespace = .indent_2 }, out);
+        out.print("\n", .{}) catch {}; //Json doesn't emit final \n
         return;
     }
 

@@ -1,5 +1,6 @@
 const std = @import("std");
 const profile = @import("profile.zig");
+const util = @import("util.zig");
 const VPK_FILE_SIG: u32 = 0x55aa1234;
 const StringStorage = @import("string.zig").StringStorage;
 
@@ -10,6 +11,10 @@ const config = @import("config");
 const vpk_dump_file_t = if (config.dump_vpk) std.fs.File else void;
 
 pub const VpkResId = u64;
+pub const ManagedBuf = struct {
+    alloc: std.mem.Allocator,
+    list: *std.ArrayList(u8),
+};
 
 pub const IdOrName = union(enum) {
     id: VpkResId,
@@ -166,18 +171,18 @@ pub const Context = struct {
     /// This maps a encodeResourceId id to a vpk entry
     entries: std.AutoArrayHashMapUnmanaged(VpkResId, Entry) = .{},
 
-    loose_dirs: std.ArrayList(std.fs.Dir),
-    dirs: std.ArrayList(Dir),
+    loose_dirs: std.ArrayList(std.fs.Dir) = .{},
+    dirs: std.ArrayList(Dir) = .{},
     /// Stores all long lived strings used by vpkctx. Mostly keys into IdMap
     string_storage: StringStorage,
 
     alloc: std.mem.Allocator,
 
     /// Scratch buffers
-    strbuf: std.ArrayList(u8),
-    name_buf: std.ArrayList(u8),
-    split_buf: std.ArrayList(u8),
-    filebuf: std.ArrayList(u8),
+    strbuf: std.ArrayList(u8) = .{},
+    name_buf: std.ArrayList(u8) = .{},
+    split_buf: std.ArrayList(u8) = .{},
+    filebuf: std.ArrayList(u8) = .{},
 
     /// File object to optionally dump contents of all mounted vpk's
     vpk_dump_file: vpk_dump_file_t,
@@ -189,13 +194,6 @@ pub const Context = struct {
             .extension_map = IdMap.init(alloc),
             .path_map = IdMap.init(alloc),
             .res_map = IdMap.init(alloc),
-            .loose_dirs = std.ArrayList(std.fs.Dir).init(alloc),
-            .name_buf = std.ArrayList(u8).init(alloc),
-
-            .strbuf = std.ArrayList(u8).init(alloc),
-            .split_buf = std.ArrayList(u8).init(alloc),
-            .dirs = std.ArrayList(Dir).init(alloc),
-            .filebuf = std.ArrayList(u8).init(alloc),
             .string_storage = try StringStorage.init(alloc),
             .alloc = alloc,
             .vpk_dump_file = if (config.dump_vpk) try std.fs.cwd().createFile("vpkdump.txt", .{}) else {},
@@ -209,15 +207,15 @@ pub const Context = struct {
         for (self.dirs.items) |*dir| {
             dir.deinit();
         }
-        self.dirs.deinit();
-        self.strbuf.deinit();
-        self.filebuf.deinit();
-        self.split_buf.deinit();
+        self.dirs.deinit(self.alloc);
+        self.strbuf.deinit(self.alloc);
+        self.filebuf.deinit(self.alloc);
+        self.split_buf.deinit(self.alloc);
         for (self.loose_dirs.items) |*dir|
             dir.close();
-        self.loose_dirs.deinit();
+        self.loose_dirs.deinit(self.alloc);
 
-        self.name_buf.deinit();
+        self.name_buf.deinit(self.alloc);
         self.extension_map.deinit();
         self.path_map.deinit();
         self.res_map.deinit();
@@ -244,7 +242,7 @@ pub const Context = struct {
     pub fn getResource(self: *Self, id: VpkResId) ?[]const u8 {
         if (self.namesFromId(id)) |names| {
             self.name_buf.clearRetainingCapacity();
-            self.name_buf.writer().print("{s}/{s}.{s}", .{
+            self.name_buf.print(self.alloc, "{s}/{s}.{s}", .{
                 names.path,
                 names.name,
                 names.ext,
@@ -260,7 +258,7 @@ pub const Context = struct {
         switch (id) {
             .id => |idd| {
                 const names = self.namesFromId(idd) orelse return null;
-                try self.name_buf.writer().print("{s}/{s}.{s}", .{ names.path, names.name, names.ext });
+                try self.name_buf.print(self.alloc, "{s}/{s}.{s}", .{ names.path, names.name, names.ext });
                 return .{
                     .id = idd,
                     .name = self.name_buf.items,
@@ -269,7 +267,7 @@ pub const Context = struct {
             .name => |name| {
                 const idd = try self.getResourceIdString(name, sanitize) orelse return null;
 
-                try self.name_buf.appendSlice(name);
+                try self.name_buf.appendSlice(self.alloc, name);
                 return .{
                     .id = idd,
                     .name = self.name_buf.items,
@@ -288,18 +286,18 @@ pub const Context = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        try self.loose_dirs.append(try root.openDir(path, .{}));
+        try self.loose_dirs.append(self.alloc, try root.openDir(path, .{}));
     }
 
     pub fn slowIndexOfLooseDirSubPath(self: *Self, subpath: []const u8) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        var strbuf = std.ArrayList(u8).init(self.alloc);
-        defer strbuf.deinit();
-        try strbuf.appendSlice(subpath);
+        var strbuf = std.ArrayList(u8){};
+        defer strbuf.deinit(self.alloc);
+        try strbuf.appendSlice(self.alloc, subpath);
         //TODO Check for the damn backslash too
         if (!std.mem.endsWith(u8, subpath, "/")) {
-            try strbuf.append('/');
+            try strbuf.append(self.alloc, '/');
         }
         const prefix_len = strbuf.items.len;
         for (self.loose_dirs.items, 0..) |loose_dir, dir_index| {
@@ -309,8 +307,8 @@ pub const Context = struct {
                 while (try walker.next()) |file| {
                     switch (file.kind) {
                         .file => {
-                            try strbuf.resize(prefix_len);
-                            try strbuf.appendSlice(file.path);
+                            try strbuf.resize(self.alloc, prefix_len);
+                            try strbuf.appendSlice(self.alloc, file.path);
                             //sanatizeVpkString(strbuf.items);
                             const split = splitPath(strbuf.items);
 
@@ -356,9 +354,9 @@ pub const Context = struct {
         var new_dir = Dir.init(self.alloc, try self.string_storage.store(prefix), root);
         const dir_index = self.dirs.items.len;
 
-        var strbuf = std.ArrayList(u8).init(self.alloc);
-        defer strbuf.deinit();
-        try strbuf.writer().print("{s}_dir.vpk", .{prefix});
+        var strbuf = std.ArrayList(u8){};
+        defer strbuf.deinit(self.alloc);
+        try strbuf.print(self.alloc, "{s}_dir.vpk", .{prefix});
         self.writeDump("VPK NAME: {s}\n", .{prefix});
 
         const file_name = try self.string_storage.store(strbuf.items);
@@ -373,15 +371,18 @@ pub const Context = struct {
         };
         // 0x7fff is the marker for files stored inside the dir.vpk
         try new_dir.fds.put(0x7fff, infile);
-        try self.dirs.append(new_dir);
+        try self.dirs.append(self.alloc, new_dir);
 
         // We read into fbs because File.Reader is slow!
+        // With 0.15.1, we can probable remove the FastFbs thing
         self.filebuf.clearRetainingCapacity();
-        try infile.reader().readAllArrayList(&self.filebuf, std.math.maxInt(usize));
-        var fbs = std.io.FixedBufferStream([]const u8){ .buffer = self.filebuf.items, .pos = 0 };
+        var buf: [4096]u8 = undefined;
+        var re = infile.reader(&buf);
+        const slice = try re.interface.allocRemaining(self.alloc, .unlimited);
+        defer self.alloc.free(slice);
 
         var r = FastFbs{
-            .slice = self.filebuf.items,
+            .slice = slice,
             .pos = 0,
         };
         //const r = fbs.reader();
@@ -398,7 +399,7 @@ pub const Context = struct {
             1 => {
                 const tree_size = try r.readInt(u32, .little);
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, &fbs, &r, tree_size, header_size, dir_index, true);
+                try parseVpkDirCommon(self, loadctx, &r, tree_size, header_size, dir_index, true);
             },
             2 => {
                 const tree_size = try r.readInt(u32, .little);
@@ -413,7 +414,7 @@ pub const Context = struct {
                 if (other_md5_sec_size != 48) return error.invalidMd5Size;
 
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, &fbs, &r, tree_size, header_size, dir_index, false);
+                try parseVpkDirCommon(self, loadctx, &r, tree_size, header_size, dir_index, false);
             },
             else => {
                 log.err("Unsupported vpk version {d}, file: {s}", .{ version, file_name });
@@ -425,12 +426,12 @@ pub const Context = struct {
     /// Only call this from the main thread.
     pub fn getFileTempFmt(self: *Self, extension: []const u8, comptime fmt: []const u8, args: anytype, sanitize: bool) !?[]const u8 {
         //Also , race condition
-        return self.getFileTempFmtBuf(extension, fmt, args, &self.filebuf, sanitize);
+        return self.getFileTempFmtBuf(extension, fmt, args, .{ .list = &self.filebuf, .alloc = self.alloc }, sanitize);
     }
 
-    pub fn getFileTempFmtBuf(self: *Self, extension: []const u8, comptime fmt: []const u8, args: anytype, buf: *std.ArrayList(u8), sanitize: bool) !?[]const u8 {
+    pub fn getFileTempFmtBuf(self: *Self, extension: []const u8, comptime fmt: []const u8, args: anytype, buf: ManagedBuf, sanitize: bool) !?[]const u8 {
         const res_id = try self.getResourceIdFmt(extension, fmt, args, sanitize) orelse return null;
-        buf.clearRetainingCapacity();
+        buf.list.clearRetainingCapacity();
         return try self.getFileFromRes(res_id, buf);
     }
 
@@ -441,7 +442,7 @@ pub const Context = struct {
         self.filebuf.clearRetainingCapacity();
         //the pointer is passed before mutex is locked, if another thread is resizing filebuf the ptr is invalid
         //In practice this shouldn't be a problem because only the main thread should ever call getFileTemp.
-        return self.getFileFromRes(res_id, &self.filebuf);
+        return self.getFileFromRes(res_id, .{ .list = &self.filebuf, .alloc = self.alloc });
     }
 
     // Thread safe
@@ -461,7 +462,7 @@ pub const Context = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.split_buf.clearRetainingCapacity();
-        try self.split_buf.writer().print(fmt, args);
+        try self.split_buf.print(self.alloc, fmt, args);
         if (sanitize)
             sanatizeVpkString(self.split_buf.items);
         //_ = std.ascii.lowerString(self.split_buf.items, self.split_buf.items);
@@ -475,7 +476,7 @@ pub const Context = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
         self.split_buf.clearRetainingCapacity();
-        _ = try self.split_buf.writer().write(name);
+        _ = try self.split_buf.print(self.alloc, "{s}", .{name});
         if (sanitize)
             sanatizeVpkString(self.split_buf.items);
         //_ = std.ascii.lowerString(self.split_buf.items, self.split_buf.items);
@@ -491,20 +492,22 @@ pub const Context = struct {
     }
 
     /// Thread safe
-    pub fn getFileFromRes(self: *Self, res_id: VpkResId, buf: *std.ArrayList(u8)) !?[]const u8 {
+    pub fn getFileFromRes(self: *Self, res_id: VpkResId, buf: ManagedBuf) !?[]const u8 {
+        var read_buffer: [1024]u8 = undefined;
         self.mutex.lock();
         defer self.mutex.unlock();
         const entry = self.entries.get(res_id) orelse {
             const names = self.namesFromId_(res_id) orelse return null;
             self.strbuf.clearRetainingCapacity();
-            try self.strbuf.writer().print("{s}/{s}.{s}", .{ names.path, names.name, names.ext });
+            try self.strbuf.print(self.alloc, "{s}/{s}.{s}", .{ names.path, names.name, names.ext });
             //std.debug.print("Searching loose dir for {s} \n", .{self.strbuf.items});
             for (self.loose_dirs.items) |ldir| {
                 const infile = ldir.openFile(self.strbuf.items, .{}) catch continue;
                 defer infile.close();
-                buf.clearRetainingCapacity();
-                try infile.reader().readAllArrayList(buf, std.math.maxInt(usize));
-                return buf.items;
+                buf.list.clearRetainingCapacity();
+                var re = infile.reader(&read_buffer);
+                try re.interface.appendRemaining(buf.alloc, buf.list, .unlimited);
+                return buf.list.items;
             }
             return null;
         };
@@ -512,16 +515,17 @@ pub const Context = struct {
             .loose => |lo| {
                 const names = self.namesFromId_(res_id) orelse return null;
                 self.strbuf.clearRetainingCapacity();
-                try self.strbuf.writer().print("{s}/{s}.{s}", .{ names.path, names.name, names.ext });
+                try self.strbuf.print(self.alloc, "{s}/{s}.{s}", .{ names.path, names.name, names.ext });
                 //std.debug.print("Searching loose dir for {s} \n", .{self.strbuf.items});
                 if (lo.dir_index >= self.loose_dirs.items.len) return null;
                 const ldir = self.loose_dirs.items[lo.dir_index];
 
                 const infile = ldir.openFile(self.strbuf.items, .{}) catch return null;
                 defer infile.close();
-                buf.clearRetainingCapacity();
-                try infile.reader().readAllArrayList(buf, std.math.maxInt(usize));
-                return buf.items;
+                buf.list.clearRetainingCapacity();
+                var re = infile.reader(&read_buffer);
+                try re.interface.appendRemaining(buf.alloc, buf.list, .unlimited);
+                return buf.list.items;
             },
             .vpk => |v| {
                 const dir = self.getDir(v.dir_index) orelse return null;
@@ -529,7 +533,7 @@ pub const Context = struct {
                 if (!res.found_existing) {
                     errdefer _ = dir.fds.remove(v.archive_index); //Prevent closing an unopened file messing with stack trace
                     self.strbuf.clearRetainingCapacity();
-                    try self.strbuf.writer().print("{s}_{d:0>3}.vpk", .{ dir.prefix, v.archive_index });
+                    try self.strbuf.print(self.alloc, "{s}_{d:0>3}.vpk", .{ dir.prefix, v.archive_index });
 
                     res.value_ptr.* = dir.root.openFile(self.strbuf.items, .{}) catch |err| switch (err) {
                         error.FileNotFound => {
@@ -540,10 +544,12 @@ pub const Context = struct {
                     };
                 }
 
-                try buf.resize(v.length);
+                try buf.list.resize(buf.alloc, v.length);
                 try res.value_ptr.seekTo(v.offset);
-                try res.value_ptr.reader().readNoEof(buf.items);
-                return buf.items;
+                var read = res.value_ptr.reader(&read_buffer);
+                try read.seekTo(v.offset);
+                try read.interface.readSliceAll(buf.list.items);
+                return buf.list.items;
             },
         }
     }
@@ -557,16 +563,16 @@ pub const Context = struct {
     }
 };
 
-fn parseVpkDirCommon(self: *Context, loadctx: anytype, fbs: *std.io.FixedBufferStream([]const u8), r: anytype, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool) !void {
-    var pathbuf = std.ArrayList(u8).init(self.alloc);
-    defer pathbuf.deinit();
-    var extbuf = std.ArrayList(u8).init(self.alloc);
-    defer extbuf.deinit();
-    var namebuf = std.ArrayList(u8).init(self.alloc);
-    defer namebuf.deinit();
+fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *FastFbs, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool) !void {
+    var pathbuf: std.ArrayList(u8) = .{};
+    defer pathbuf.deinit(self.alloc);
+    var extbuf: std.ArrayList(u8) = .{};
+    defer extbuf.deinit(self.alloc);
+    var namebuf: std.ArrayList(u8) = .{};
+    defer namebuf.deinit(self.alloc);
     while (true) {
-        loadctx.printCb("Dir mounted {d:.2}%", .{@as(f32, @floatFromInt(fbs.pos)) / @as(f32, @floatFromInt(self.filebuf.items.len + 1)) * 100});
-        const ext = try readString(r, &extbuf);
+        loadctx.printCb("Dir mounted {d:.2}%", .{@as(f32, @floatFromInt(r.pos)) / @as(f32, @floatFromInt(r.slice.len + 1)) * 100});
+        const ext = try readString(r, &extbuf, self.alloc);
         if (ext.len == 0)
             break;
         sanatizeVpkString(ext);
@@ -574,7 +580,7 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, fbs: *std.io.FixedBufferS
         const ext_stored = try self.string_storage.store(ext);
         const ext_id = try self.extension_map.getPut(ext_stored);
         while (true) {
-            const path = try readString(r, &pathbuf);
+            const path = try readString(r, &pathbuf, self.alloc);
             self.writeDump("    {s}\n", .{path});
             if (path.len == 0)
                 break;
@@ -583,7 +589,7 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, fbs: *std.io.FixedBufferS
             const path_id = try self.path_map.getPut(path_stored);
 
             while (true) {
-                const fname = try readString(r, &namebuf);
+                const fname = try readString(r, &namebuf, self.alloc);
                 self.writeDump("        {s}\n", .{fname});
                 if (fname.len == 0)
                     break;
@@ -602,7 +608,7 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, fbs: *std.io.FixedBufferS
                 }
 
                 if (entry_len == 0) { //Hack to support preload
-                    offset = @intCast(fbs.pos);
+                    offset = @intCast(r.pos);
                     arch_index = 0x7fff;
                     entry_len = preload_count;
                 }
@@ -650,13 +656,13 @@ fn splitPath(sl: []const u8) struct { ext: []const u8, path: []const u8, name: [
 
 ///Read next string in vpk dir file
 ///Clears str
-fn readString(r: anytype, str: *std.ArrayList(u8)) ![]u8 {
+fn readString(r: anytype, str: *std.ArrayList(u8), alloc: std.mem.Allocator) ![]u8 {
     str.clearRetainingCapacity();
     while (true) {
         const char = try r.readByte();
         if (char == 0)
             return str.items;
-        try str.append(char);
+        try str.append(alloc, char);
     }
 }
 

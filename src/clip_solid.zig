@@ -141,11 +141,11 @@ pub const ClipCtx = struct {
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
-            .verts = std.ArrayList(VertKind).init(alloc),
+            .verts = .{},
             .alloc = alloc,
             .mappers = .{ Mapper.init(alloc), Mapper.init(alloc) },
             .vert_map = csg.VecMap.MapT.initContext(alloc, .{}),
-            .ret_verts = std.ArrayList(Vec3).init(alloc),
+            .ret_verts = .{},
             .sides = .{ Side.init(alloc), Side.init(alloc) },
             .split_side = Side.init(alloc),
         };
@@ -161,11 +161,11 @@ pub const ClipCtx = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.verts.deinit();
+        self.verts.deinit(self.alloc);
         for (&self.mappers) |*m|
             m.map.deinit();
         self.vert_map.deinit();
-        self.ret_verts.deinit();
+        self.ret_verts.deinit(self.alloc);
         self.split_side.deinit();
     }
 
@@ -183,8 +183,8 @@ pub const ClipCtx = struct {
         self.reset();
         const w = VertKind.getW(plane_p0, plane_norm);
         for (solid.verts.items) |v| {
-            try self.verts.append(VertKind.classify(plane_norm, w, v));
-            try self.ret_verts.append(v);
+            try self.verts.append(self.alloc, VertKind.classify(plane_norm, w, v));
+            try self.ret_verts.append(self.alloc, v);
         }
 
         var ret: [2]Solid = .{ Solid.init(self.alloc), Solid.init(self.alloc) };
@@ -216,7 +216,7 @@ pub const ClipCtx = struct {
                             if (!self.vert_map.contains(int)) {
                                 const index: u32 = @intCast(self.ret_verts.items.len);
                                 try self.vert_map.put(int, index);
-                                try self.ret_verts.append(int);
+                                try self.ret_verts.append(self.alloc, int);
                                 // ! only put the vertex into new side once
                                 try self.split_side.index.append(self.split_side._alloc, index);
                             }

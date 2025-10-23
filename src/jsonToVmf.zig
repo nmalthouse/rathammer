@@ -59,11 +59,11 @@ pub fn jsontovmf(
 ) !void {
     const outfile = try std.fs.cwd().createFile(filename orelse "dump.vmf", .{});
     defer outfile.close();
-    const wr = outfile.writer();
-    var bwr = std.io.bufferedWriter(wr);
-    defer bwr.flush() catch {};
-    const bb = bwr.writer();
-    var vr = vdf_serial.WriteVdf(@TypeOf(bb)).init(alloc, bb);
+    var buffer: [4096]u8 = undefined;
+    var wr = outfile.writer(&buffer);
+    const bb = &wr.interface;
+
+    var vr = vdf_serial.VdfWriter.init(alloc, bb);
 
     var csgctx = try csg.Context.init(alloc);
 
@@ -115,9 +115,9 @@ pub fn jsontovmf(
                 if (g.id != 0 and groups.getOwner(g.id) != null) {
                     const res = try group_ent_map.getOrPut(g.id);
                     if (!res.found_existing) {
-                        res.value_ptr.* = std.ArrayList(ecs.EcsT.Id).init(alloc);
+                        res.value_ptr.* = std.ArrayList(ecs.EcsT.Id){};
                     }
-                    try res.value_ptr.append(solids.i);
+                    try res.value_ptr.append(alloc, solids.i);
                     continue;
                 }
             }
@@ -197,6 +197,7 @@ pub fn jsontovmf(
             try vr.endObject();
         }
     }
+    try bb.flush();
 }
 
 pub fn main() !void {
@@ -216,20 +217,26 @@ pub fn main() !void {
 
     if (args.map) |mapname| {
         const infile = std.fs.cwd().openFile(mapname, .{}) catch |err| {
-            std.debug.print("Unable to open file: {s}, {!}\n", .{ mapname, err });
+            std.debug.print("Unable to open file: {s}, {t}\n", .{ mapname, err });
             std.process.exit(1);
         };
         defer infile.close();
 
-        const slice = blk: {
+        const slice: []const u8 = blk: {
             if (std.mem.endsWith(u8, mapname, ".json")) {
-                break :blk try infile.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+                var buf: [4096]u8 = undefined;
+                var re = infile.reader(&buf);
+                break :blk try re.interface.allocRemaining(alloc, .unlimited);
             } else if (std.mem.endsWith(u8, mapname, ".ratmap")) {
                 const compressed = try util.getFileFromTar(alloc, infile, "map.json.gz");
-                var fbs = std.io.FixedBufferStream([]const u8){ .buffer = compressed, .pos = 0 };
-                var unzipped = std.ArrayList(u8).init(alloc);
-                try std.compress.gzip.decompress(fbs.reader(), unzipped.writer());
-                break :blk unzipped.items;
+                var in: std.Io.Reader = .fixed(compressed);
+                var aw: std.Io.Writer.Allocating = .init(alloc);
+                defer aw.deinit();
+
+                var decompress: std.compress.flate.Decompress = .init(&in, .gzip, &.{});
+                _ = try decompress.reader.streamRemaining(&aw.writer);
+
+                break :blk try aw.toOwnedSlice();
             } else {
                 std.debug.print("Unknown map extension {s}\n", .{mapname});
                 std.debug.print("Valid extensions are .json, .ratmap\n", .{});
@@ -286,7 +293,7 @@ fn writeSolid(
     try solid.optimizeMesh();
 
     solid.validateVmfSolid(csgctx) catch |err| {
-        std.debug.print("potentially invalid solid: {d} {!}\n", .{ ent_id, err });
+        std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });
 
         if (opts.check_solid)
             return;

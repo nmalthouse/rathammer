@@ -8,14 +8,15 @@ const edit = @import("editor.zig");
 const graph = @import("graph");
 
 pub const ThreadState = struct {
-    vtf_file_buffer: std.ArrayList(u8),
+    alloc: std.mem.Allocator,
+    vtf_file_buffer: std.ArrayList(u8) = .{},
 
     pub fn init(alloc: std.mem.Allocator) @This() {
-        return .{ .vtf_file_buffer = std.ArrayList(u8).init(alloc) };
+        return .{ .alloc = alloc };
     }
 
     pub fn deinit(self: *@This()) void {
-        self.vtf_file_buffer.deinit();
+        self.vtf_file_buffer.deinit(self.alloc);
     }
 };
 
@@ -51,9 +52,9 @@ pub const Context = struct {
     map_mutex: Mutex = .{},
 
     //TODO these names are misleading, completed is textures, models
-    completed: std.ArrayList(CompletedVtfItem),
-    completed_models: std.ArrayList(vvd.MeshDeferred),
-    completed_generic: std.ArrayList(*iJob),
+    completed: std.ArrayList(CompletedVtfItem) = .{},
+    completed_models: std.ArrayList(vvd.MeshDeferred) = .{},
+    completed_generic: std.ArrayList(*iJob) = .{},
     ///this mutex is used by all the completed_* fields
     completed_mutex: Mutex = .{},
 
@@ -72,9 +73,6 @@ pub const Context = struct {
         return .{
             .map = std.AutoHashMap(std.Thread.Id, *ThreadState).init(alloc),
             .alloc = alloc,
-            .completed = std.ArrayList(CompletedVtfItem).init(alloc),
-            .completed_generic = std.ArrayList(*iJob).init(alloc),
-            .completed_models = std.ArrayList(vvd.MeshDeferred).init(alloc),
             .pool = pool,
             .texture_notify = std.AutoHashMap(vpk.VpkResId, std.ArrayList(*DeferredNotifyVtable)).init(alloc),
         };
@@ -95,13 +93,13 @@ pub const Context = struct {
     pub fn insertCompleted(self: *@This(), item: CompletedVtfItem) !void {
         self.completed_mutex.lock();
         defer self.completed_mutex.unlock();
-        try self.completed.append(item);
+        try self.completed.append(self.alloc, item);
     }
 
     pub fn insertCompletedJob(self: *@This(), item: *iJob) !void {
         self.completed_mutex.lock();
         defer self.completed_mutex.unlock();
-        try self.completed_generic.append(item);
+        try self.completed_generic.append(self.alloc, item);
     }
 
     pub fn notifyCompletedGeneric(self: *@This(), editor: *edit.Context) void {
@@ -126,7 +124,7 @@ pub const Context = struct {
             for (list.items) |vt| {
                 vt.notify(id, editor);
             }
-            list.deinit();
+            list.deinit(self.alloc);
             _ = self.texture_notify.remove(id);
         }
     }
@@ -136,12 +134,12 @@ pub const Context = struct {
         self.notify_mutex.lock();
         defer self.notify_mutex.unlock();
         if (self.texture_notify.getPtr(id)) |list| {
-            try list.append(vt);
+            try list.append(self.alloc, vt);
             return;
         }
 
-        var new_list = std.ArrayList(*DeferredNotifyVtable).init(self.alloc);
-        try new_list.append(vt);
+        var new_list = std.ArrayList(*DeferredNotifyVtable){};
+        try new_list.append(self.alloc, vt);
         try self.texture_notify.put(id, new_list);
     }
 
@@ -152,11 +150,11 @@ pub const Context = struct {
         {
             var it = self.texture_notify.valueIterator();
             while (it.next()) |tx|
-                tx.deinit();
+                tx.deinit(self.alloc);
             self.texture_notify.deinit();
         }
         // freeing memory of any remaining completed is not a priority, may leak.
-        self.completed_generic.deinit();
+        self.completed_generic.deinit(self.alloc);
         var it = self.map.iterator();
         while (it.next()) |item| {
             item.value_ptr.*.deinit();
@@ -166,11 +164,13 @@ pub const Context = struct {
             item.mesh.deinit();
             self.alloc.destroy(item.mesh);
         }
-        self.completed_models.deinit();
+        self.completed_models.deinit(self.alloc);
 
         for (self.completed.items) |*item|
             item.data.deinit();
-        self.completed.deinit();
+        self.completed.deinit(
+            self.alloc,
+        );
         self.map.deinit();
 
         self.alloc.destroy(self.pool);
@@ -194,29 +194,29 @@ pub const Context = struct {
         const mesh = vvd.loadModelCrappy(self, res_id, model_name, vpkctx) catch |err| {
             const LOG_FAILED_MDL = true;
             if (LOG_FAILED_MDL) {
-                std.debug.print("Failed to load model: {s} with error: {!}\n", .{ model_name, err });
+                std.debug.print("Failed to load model: {s} with error: {t}\n", .{ model_name, err });
             }
             return;
         };
         self.completed_mutex.lock();
         defer self.completed_mutex.unlock();
-        self.completed_models.append(mesh) catch return;
+        self.completed_models.append(self.alloc, mesh) catch return;
     }
 
     pub fn workFuncErr(self: *@This(), vpk_res_id: vpk.VpkResId, vpkctx: *vpk.Context) !void {
         const thread_state = try self.getState();
         //const slash = std.mem.lastIndexOfScalar(u8, sl, '/') orelse break :in error.noSlash;
-        if (try vpkctx.getFileFromRes(vpk_res_id, &thread_state.vtf_file_buffer)) |tt| {
+        if (try vpkctx.getFileFromRes(vpk_res_id, .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc })) |tt| {
             const names = vpkctx.namesFromId(vpk_res_id) orelse return error.noNames;
             if (std.mem.eql(u8, names.ext, "png")) {
                 //TODO is spng thread safe?
 
                 var bmp = graph.Bitmap.initFromPngBuffer(self.alloc, tt) catch |err| {
-                    std.debug.print("the png failed with {!}\n", .{err});
+                    std.debug.print("the png failed with {t}\n", .{err});
                     return err;
                 };
-                var mipLevels = std.ArrayList(vtf.VtfBuf.MipLevel).init(self.alloc);
-                try mipLevels.append(.{
+                var mipLevels = std.ArrayList(vtf.VtfBuf.MipLevel){};
+                try mipLevels.append(self.alloc, .{
                     .buf = try bmp.data.toOwnedSlice(),
                     .w = bmp.w,
                     .h = bmp.h,
@@ -224,6 +224,7 @@ pub const Context = struct {
 
                 try self.insertCompleted(.{
                     .data = .{
+                        .alloc = self.alloc,
                         .buffers = mipLevels,
                         .width = bmp.w,
                         .height = bmp.h,
@@ -270,7 +271,7 @@ pub const Context = struct {
                                                         "vtf",
                                                         "{s}/{s}",
                                                         .{ exten, base_name },
-                                                        &thread_state.vtf_file_buffer,
+                                                        .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc },
                                                         true,
                                                     ) orelse {
                                                         continue :fallback_loop;

@@ -15,17 +15,13 @@ pub const Tracker = struct {
 
     // All keys into map are not managed, must live forever
     pub fn init(alloc: std.mem.Allocator) Tracker {
-        return .{
-            .alloc = alloc,
-            .map = MapT.init(alloc),
-            .get_buf = std.ArrayList(Id).init(alloc),
-        };
+        return .{ .alloc = alloc, .map = MapT.init(alloc), .get_buf = .{} };
     }
 
     pub fn deinit(self: *Self) void {
         var it = self.map.iterator();
 
-        self.get_buf.deinit();
+        self.get_buf.deinit(self.alloc);
         while (it.next()) |item| {
             item.value_ptr.deinit(self.alloc);
         }
@@ -67,7 +63,7 @@ pub const Tracker = struct {
         if (self.map.get(class)) |list| {
             for (list.items) |id| {
                 if (!ecs_p.intersects(id, vis_mask))
-                    try self.get_buf.append(id);
+                    try self.get_buf.append(self.alloc, id);
             }
         }
 

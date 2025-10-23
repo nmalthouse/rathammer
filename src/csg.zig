@@ -34,16 +34,16 @@ pub const Context = struct {
     };
     alloc: std.mem.Allocator,
     base_winding: [4]Vec3_64,
-    winding_a: std.ArrayList(Vec3_64),
-    winding_b: std.ArrayList(Vec3_64),
+    winding_a: std.ArrayList(Vec3_64) = .{},
+    winding_b: std.ArrayList(Vec3_64) = .{},
 
-    disp_winding: std.ArrayList(Vec3_32),
+    disp_winding: std.ArrayList(Vec3_32) = .{},
 
-    triangulate_index: std.ArrayList(u32),
-    uvs: std.ArrayList(Vec2),
+    triangulate_index: std.ArrayList(u32) = .{},
+    uvs: std.ArrayList(Vec2) = .{},
 
-    clip_winding_sides: std.ArrayList(SideClass),
-    clip_winding_dists: std.ArrayList(f64),
+    clip_winding_sides: std.ArrayList(SideClass) = .{},
+    clip_winding_dists: std.ArrayList(f64) = .{},
 
     vecmap: VecMap,
 
@@ -51,27 +51,19 @@ pub const Context = struct {
         return .{
             .alloc = alloc,
             .base_winding = undefined,
-            .winding_a = try std.ArrayList(Vec3_64).initCapacity(alloc, INIT_CAPACITY),
-            .winding_b = try std.ArrayList(Vec3_64).initCapacity(alloc, INIT_CAPACITY),
             .vecmap = VecMap.init(alloc),
-
-            .triangulate_index = try std.ArrayList(u32).initCapacity(alloc, INIT_CAPACITY),
-            .uvs = try std.ArrayList(Vec2).initCapacity(alloc, INIT_CAPACITY),
-            .clip_winding_sides = try std.ArrayList(SideClass).initCapacity(alloc, INIT_CAPACITY),
-            .clip_winding_dists = try std.ArrayList(f64).initCapacity(alloc, INIT_CAPACITY),
-            .disp_winding = try std.ArrayList(Vec3_32).initCapacity(alloc, INIT_CAPACITY),
         };
     }
 
     pub fn deinit(self: *Self) void {
-        self.disp_winding.deinit();
-        self.winding_a.deinit();
+        self.disp_winding.deinit(self.alloc);
+        self.winding_a.deinit(self.alloc);
         self.vecmap.deinit();
-        self.winding_b.deinit();
-        self.triangulate_index.deinit();
-        self.uvs.deinit();
-        self.clip_winding_sides.deinit();
-        self.clip_winding_dists.deinit();
+        self.winding_b.deinit(self.alloc);
+        self.triangulate_index.deinit(self.alloc);
+        self.uvs.deinit(self.alloc);
+        self.clip_winding_sides.deinit(self.alloc);
+        self.clip_winding_dists.deinit(self.alloc);
     }
 
     pub fn genMesh2(self: *Self, sides: []const Side, alloc: std.mem.Allocator, strstore: anytype) !ecs.Solid {
@@ -87,7 +79,7 @@ pub const Context = struct {
 
             self.winding_a.clearRetainingCapacity();
             var wind_a = &self.winding_a;
-            try wind_a.appendSlice(try self.baseWinding(plane, @floatFromInt(MAPSIZE / 2)));
+            try wind_a.appendSlice(self.alloc, try self.baseWinding(plane, @floatFromInt(MAPSIZE / 2)));
 
             var wind_b = &self.winding_b;
 
@@ -154,9 +146,9 @@ pub const Context = struct {
 
         for (1..winding.len - 1) |i| {
             const ii: u32 = @intCast(i);
-            try ret.append(0 + offset);
-            try ret.append(ii + 1 + offset);
-            try ret.append(ii + offset);
+            try ret.append(self.alloc, 0 + offset);
+            try ret.append(self.alloc, ii + 1 + offset);
+            try ret.append(self.alloc, ii + offset);
         }
 
         return ret.items;
@@ -169,9 +161,9 @@ pub const Context = struct {
         if (count < 3) return ret.items;
         for (1..count - 1) |i| {
             const ii: u32 = @intCast(i);
-            try ret.append(0 + offset);
-            try ret.append(ii + 1 + offset);
-            try ret.append(ii + offset);
+            try ret.append(self.alloc, 0 + offset);
+            try ret.append(self.alloc, ii + 1 + offset);
+            try ret.append(self.alloc, ii + offset);
         }
         return ret.items;
     }
@@ -183,28 +175,28 @@ pub const Context = struct {
         var dists = &self.clip_winding_dists;
         for (winding_in.items) |wind| {
             const dist = plane.norm.dot(wind) - plane.dist;
-            try dists.append(dist);
+            try dists.append(self.alloc, dist);
             if (dist > EPSILON) {
-                try sides.append(.front);
+                try sides.append(self.alloc, .front);
             } else if (dist < -EPSILON) {
-                try sides.append(.back);
+                try sides.append(self.alloc, .back);
             } else {
-                try sides.append(.on);
+                try sides.append(self.alloc, .on);
             }
         }
         const front = winding_out;
         front.clearRetainingCapacity();
         if (winding_in.items.len == 0) return;
-        try sides.append(sides.items[0]);
-        try dists.append(dists.items[0]);
+        try sides.append(self.alloc, sides.items[0]);
+        try dists.append(self.alloc, dists.items[0]);
 
         for (winding_in.items, 0..) |p_cur, i| {
             if (sides.items[i] == .on) {
-                try front.append(p_cur);
+                try front.append(self.alloc, p_cur);
                 continue;
             }
             if (sides.items[i] == .front)
-                try front.append(p_cur);
+                try front.append(self.alloc, p_cur);
 
             if (sides.items[i + 1] == .on or sides.items[i] == sides.items[i + 1])
                 continue;
@@ -213,7 +205,7 @@ pub const Context = struct {
             const t = dists.items[i] / (dists.items[i] - dists.items[i + 1]);
 
             const v = p_next.sub(p_cur).scale(t);
-            try front.append(p_cur.add(v));
+            try front.append(self.alloc, p_cur.add(v));
         }
     }
 
@@ -230,7 +222,7 @@ pub const Context = struct {
                 @as(f32, @floatCast(item.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw)),
                 @as(f32, @floatCast(item.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th)),
             );
-            try uvs.append(uv);
+            try uvs.append(self.alloc, uv);
             umin = @min(umin, uv.x());
             vmin = @min(vmin, uv.y());
         }
@@ -257,7 +249,7 @@ pub const Context = struct {
                 @as(f32, @floatCast(item.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw)),
                 @as(f32, @floatCast(item.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th)),
             );
-            try uvs.append(uv);
+            try uvs.append(self.alloc, uv);
             umin = @min(umin, uv.x());
             vmin = @min(vmin, uv.y());
         }
@@ -444,12 +436,14 @@ pub const VecMap = struct {
     };
 
     pub const MapT = std.HashMap(Vec3_32, u32, HashCtx, 80);
+    alloc: std.mem.Allocator,
     verts: std.ArrayList(Vec3_32),
     map: MapT,
 
     pub fn init(alloc: std.mem.Allocator) @This() {
         return .{
-            .verts = std.ArrayList(Vec3_32).init(alloc),
+            .alloc = alloc,
+            .verts = .{},
             .map = MapT.initContext(alloc, .{}),
         };
     }
@@ -463,14 +457,14 @@ pub const VecMap = struct {
         const res = try self.map.getOrPut(v);
         if (!res.found_existing) {
             const index = self.verts.items.len;
-            try self.verts.append(v);
+            try self.verts.append(self.alloc, v);
             res.value_ptr.* = @intCast(index);
         }
         return res.value_ptr.*;
     }
 
     pub fn deinit(self: *@This()) void {
-        self.verts.deinit();
+        self.verts.deinit(self.alloc);
         self.map.deinit();
     }
 };

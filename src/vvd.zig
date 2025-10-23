@@ -167,11 +167,11 @@ pub fn loadModelCrappy(
     const print = dummyPrint;
     const alloc = pool_state.alloc;
     //const print = std.debug.print;
-    const info = try mdl.doItCrappy(pool_state.alloc, try vpkctx.getFileTempFmtBuf(
+    var info = try mdl.doItCrappy(pool_state.alloc, try vpkctx.getFileTempFmtBuf(
         "mdl",
         "{s}",
         .{mdln},
-        &thread_state.vtf_file_buffer,
+        .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc },
         true,
     ) orelse return error.nomdl, print);
     defer {
@@ -179,13 +179,13 @@ pub fn loadModelCrappy(
             alloc.free(item);
         for (info.texture_names.items) |item|
             alloc.free(item);
-        info.texture_paths.deinit();
-        info.texture_names.deinit();
-        info.vert_offsets.deinit();
+        info.texture_paths.deinit(alloc);
+        info.texture_names.deinit(alloc);
+        info.vert_offsets.deinit(alloc);
     }
-    var scratch = std.ArrayList(u8).init(alloc);
-    defer scratch.deinit();
-    var texts = std.ArrayList(vpk.VpkResId).init(alloc);
+    var scratch: std.ArrayList(u8) = .{};
+    defer scratch.deinit(alloc);
+    var texts: std.ArrayList(vpk.VpkResId) = .{};
     outer: for (info.texture_names.items) |tname| {
         inner: for (info.texture_paths.items) |tpath| {
             scratch.clearRetainingCapacity();
@@ -201,13 +201,13 @@ pub fn loadModelCrappy(
                 real_tpath = "";
             }
 
-            try scratch.writer().print("{s}{s}", .{ real_tpath, tname });
+            try scratch.print(alloc, "{s}{s}", .{ real_tpath, tname });
             const tex_res_id = try vpkctx.getResourceIdFmt("vmt", "materials/{s}", .{scratch.items}, true) orelse continue :inner;
             try pool_state.loadTexture(tex_res_id, vpkctx);
-            try texts.append(tex_res_id);
+            try texts.append(alloc, tex_res_id);
             continue :outer;
         }
-        try texts.append(0); //Put missing
+        try texts.append(alloc, 0); //Put missing
     }
     var mmesh = try pool_state.alloc.create(MultiMesh);
     errdefer pool_state.alloc.destroy(mmesh);
@@ -220,7 +220,7 @@ pub fn loadModelCrappy(
             "vvd",
             "{s}",
             .{mdln},
-            &thread_state.vtf_file_buffer,
+            .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc },
             true,
         ) orelse return error.notFound;
         var fbs_vvd = std.io.FixedBufferStream([]const u8){ .buffer = slice_vvd, .pos = 0 };
@@ -231,26 +231,26 @@ pub fn loadModelCrappy(
         print("{}\n", .{h1});
 
         fbs_vvd.pos = h1.fixupTableStart;
-        var fixups = std.ArrayList(FixupEntry).init(alloc);
-        defer fixups.deinit();
+        var fixups: std.ArrayList(FixupEntry) = .{};
+        defer fixups.deinit(alloc);
         for (0..h1.numFixups) |_| {
             const fu = try parseStruct(FixupEntry, .little, r);
             print("{}\n", .{fu});
-            try fixups.append(fu);
+            try fixups.append(alloc, fu);
         }
 
-        var verts = std.ArrayList(Vertex).init(alloc);
-        defer verts.deinit();
+        var verts: std.ArrayList(Vertex) = .{};
+        defer verts.deinit(alloc);
         fbs_vvd.pos = h1.vertexDataStart;
         for (0..h1.numLODVertexes[0]) |_| {
             const vert = try parseStruct(Vertex, .little, r);
-            try verts.append(vert);
+            try verts.append(alloc, vert);
         }
         var total: usize = 0;
         if (fixups.items.len > 0) {
             for (fixups.items) |fu| {
                 for (verts.items[fu.source_vertex_id .. fu.source_vertex_id + fu.num_vertex]) |v| {
-                    try mmesh.vertices.append(.{
+                    try mmesh.vertices.append(mmesh.alloc, .{
                         .x = v.pos.x,
                         .y = v.pos.y,
                         .z = v.pos.z,
@@ -269,7 +269,7 @@ pub fn loadModelCrappy(
         } else {
             for (verts.items) |v| {
                 try w.print("v {d} {d} {d}\n", .{ v.pos.x, v.pos.y, v.pos.z });
-                try mmesh.vertices.append(.{
+                try mmesh.vertices.append(mmesh.alloc, .{
                     .x = v.pos.x,
                     .y = v.pos.y,
                     .z = v.pos.z,
@@ -291,7 +291,7 @@ pub fn loadModelCrappy(
             "{s}.dx90",
             .{mdln},
 
-            &thread_state.vtf_file_buffer,
+            .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc },
             true,
         ) orelse return error.broken;
         var fbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
@@ -350,19 +350,19 @@ pub fn loadModelCrappy(
 
                             const sg_start = st;
 
-                            var vert_table = std.ArrayList(u16).init(alloc);
-                            defer vert_table.deinit();
+                            var vert_table: std.ArrayList(u16) = .{};
+                            defer vert_table.deinit(alloc);
                             try setFbs(&fbs, sg_start + SG.vert_offset);
                             for (0..SG.num_verts) |_| {
                                 const v = try parseStruct(Vtx.Vertex, .little, r1);
-                                try vert_table.append(mesh_offset + v.orig_mesh_vert_id);
+                                try vert_table.append(alloc, mesh_offset + v.orig_mesh_vert_id);
                             }
-                            var indices = std.ArrayList(u16).init(alloc);
-                            try indices.ensureTotalCapacity(SG.num_index);
-                            defer indices.deinit();
+                            var indices: std.ArrayList(u16) = .{};
+                            try indices.ensureTotalCapacity(alloc, SG.num_index);
+                            defer indices.deinit(alloc);
                             try setFbs(&fbs, sg_start + SG.index_offset);
                             for (0..SG.num_index) |_| {
-                                try indices.append(try r1.readInt(u16, .little));
+                                try indices.append(alloc, try r1.readInt(u16, .little));
                             }
 
                             try setFbs(&fbs, sg_start + SG.strip_offset);
@@ -391,7 +391,7 @@ pub fn loadModelCrappy(
                                     .trilist, .none => {
                                         for (0..@divFloor(sl.len, 3)) |i| {
                                             const j = i * 3;
-                                            try newm.indicies.appendSlice(&.{
+                                            try newm.indicies.appendSlice(newm.alloc, &.{
                                                 vttt[sl[j + 2]],
                                                 vttt[sl[j + 1]],
                                                 vttt[sl[j]],
@@ -453,19 +453,21 @@ pub const MultiMesh = struct {
         vao: c_uint,
         texture_id: c_uint,
         tex_res_id: vpk.VpkResId,
+        alloc: std.mem.Allocator,
 
         pub fn init(alloc: std.mem.Allocator, tex_res: vpk.VpkResId) @This() {
             return .{
                 .ebo = 0,
                 .vao = 0,
-                .indicies = std.ArrayList(u16).init(alloc),
+                .alloc = alloc,
+                .indicies = .{},
                 .texture_id = 0,
                 .tex_res_id = tex_res,
             };
         }
 
         pub fn deinit(self: *@This()) void {
-            self.indicies.deinit();
+            self.indicies.deinit(self.alloc);
         }
     };
 
@@ -481,8 +483,8 @@ pub const MultiMesh = struct {
 
     pub fn init(alloc: std.mem.Allocator) @This() {
         return Self{
-            .vertices = std.ArrayList(MeshVert).init(alloc),
-            .meshes = std.ArrayList(Mesh).init(alloc),
+            .vertices = .{},
+            .meshes = .{},
             .alloc = alloc,
             .vbo = 0,
             .notify_vt = .{ .notify_fn = &notify },
@@ -519,7 +521,7 @@ pub const MultiMesh = struct {
     }
 
     pub fn newMesh(self: *Self, tex: vpk.VpkResId) !*Mesh {
-        try self.meshes.append(Mesh.init(self.alloc, tex));
+        try self.meshes.append(self.alloc, Mesh.init(self.alloc, tex));
         return &self.meshes.items[self.meshes.items.len - 1];
     }
 
@@ -532,11 +534,11 @@ pub const MultiMesh = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.vertices.deinit();
+        self.vertices.deinit(self.alloc);
         for (self.meshes.items) |*mesh| {
             mesh.deinit();
         }
-        self.meshes.deinit();
+        self.meshes.deinit(self.alloc);
     }
 
     pub fn drawSimple(self: *Self, view: graph.za.Mat4, model: graph.za.Mat4, shader: c_uint) void {

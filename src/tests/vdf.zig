@@ -235,7 +235,7 @@ fn expectParseError(slice: []const u8, ex_err: anyerror, line_num: usize) !void 
         try exd(ex_err, err);
         try exd(line_num, einfo.line_number);
 
-        print("{!} {d}:{d}\n", .{ err, einfo.line_number, einfo.char_number });
+        print("{t} {d}:{d}\n", .{ err, einfo.line_number, einfo.char_number });
         var tok = std.mem.tokenizeScalar(u8, slice[einfo.line_start..], '\n');
         if (tok.next()) |line| {
             print("{s}\n", .{line});

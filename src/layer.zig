@@ -381,10 +381,10 @@ pub const GuiWidget = struct {
 
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
-        var list = std.ArrayList(LayTemp).init(gui.alloc);
-        defer list.deinit();
-        list.append(.{ .ptr = self.ctx.root, .depth = 0 }) catch return;
-        countNodes(self.ctx.root, &list, 1) catch return;
+        var list = std.ArrayList(LayTemp){};
+        defer list.deinit(gui.alloc);
+        list.append(gui.alloc, .{ .ptr = self.ctx.root, .depth = 0 }) catch return;
+        countNodes(self.ctx.root, &list, gui.alloc, 1) catch return;
         if (index >= list.items.len) return;
         const item_h = gui.dstate.style.config.default_item_h;
         var ly = gui.dstate.vlayout(ar.area);
@@ -399,7 +399,7 @@ pub const GuiWidget = struct {
                 .parent = self,
                 .enabled = item.ptr.enabled,
                 .collapse = item.ptr.collapse,
-                .check_color = if (self.ctx.isDisabled(item.ptr.id)) 0x888888ff else 0xff,
+                .check_color = if (self.ctx.isDisabled(item.ptr.id)) 0x888888_ff else 0xff,
             });
         }
     }
@@ -428,11 +428,11 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), depth: u16) !void {
+    fn countNodes(layer: *Layer, list: *std.ArrayList(LayTemp), alloc: std.mem.Allocator, depth: u16) !void {
         if (layer.collapse) return;
         for (layer.children.items) |child| {
-            try list.append(.{ .ptr = child, .depth = depth });
-            try countNodes(child, list, depth + 1);
+            try list.append(alloc, .{ .ptr = child, .depth = depth });
+            try countNodes(child, list, alloc, depth + 1);
         }
     }
 };

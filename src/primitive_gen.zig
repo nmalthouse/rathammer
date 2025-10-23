@@ -11,13 +11,13 @@ const gridutil = @import("grid.zig");
 //just use an arena!
 
 pub const Primitive = struct {
-    verts: std.ArrayList(Vec3),
-    solids: std.ArrayList(std.ArrayList(std.ArrayList(u32))),
+    alloc: std.mem.Allocator,
+    verts: std.ArrayList(Vec3) = .{},
+    solids: std.ArrayList(std.ArrayList(std.ArrayList(u32))) = .{},
 
     pub fn init(alloc: std.mem.Allocator) @This() {
         return .{
-            .verts = std.ArrayList(Vec3).init(alloc),
-            .solids = std.ArrayList(std.ArrayList(std.ArrayList(u32))).init(alloc),
+            .alloc = alloc,
         };
     }
 
@@ -33,13 +33,14 @@ pub const Primitive = struct {
 
     //Ptr is invalid after calling again
     pub fn newSolid(self: *@This()) !*std.ArrayList(std.ArrayList(u32)) {
-        const new = std.ArrayList(std.ArrayList(u32)).init(self.verts.allocator);
-        try self.solids.append(new);
+        const new = std.ArrayList(std.ArrayList(u32)){};
+        try self.solids.append(self.alloc, new);
         return &self.solids.items[self.solids.items.len - 1];
     }
 
     pub fn newFace(self: *@This()) std.ArrayList(u32) {
-        return std.ArrayList(u32).init(self.verts.allocator);
+        _ = self;
+        return std.ArrayList(u32){};
     }
 
     pub fn toObj(self: *const @This(), wr: anytype) !void {
@@ -93,7 +94,7 @@ pub fn cylinder(
     const num_segment = param.num_segment;
     const dtheta: f32 = std.math.tau / @as(f32, @floatFromInt(num_segment));
     const z = param.z;
-    try prim.verts.resize(num_segment * 2);
+    try prim.verts.resize(prim.alloc, num_segment * 2);
     for (0..num_segment) |ni| {
         const fi: f32 = @floatFromInt(ni);
 
@@ -113,11 +114,11 @@ pub fn cylinder(
         var opp_face = prim.newFace();
         for (0..num_segment) |nni| {
             const ni: u32 = @intCast(nni);
-            try face.append(ni);
-            try opp_face.append(num_segment - 1 - ni + num_segment);
+            try face.append(prim.alloc, ni);
+            try opp_face.append(prim.alloc, num_segment - 1 - ni + num_segment);
         }
-        try faces.append(face);
-        try faces.append(opp_face);
+        try faces.append(prim.alloc, face);
+        try faces.append(prim.alloc, opp_face);
     }
 
     for (0..num_segment) |nni| {
@@ -125,13 +126,13 @@ pub fn cylinder(
         const ni: u32 = @intCast(nni);
         const v0 = ni;
         const v1 = (ni + 1) % num_segment;
-        try face.appendSlice(&.{
+        try face.appendSlice(prim.alloc, &.{
             v0 + num_segment,
             v1 + num_segment,
             v1,
             v0,
         });
-        try faces.append(face);
+        try faces.append(prim.alloc, face);
     }
 
     return prim;
@@ -193,7 +194,7 @@ pub fn arch(
     const b2 = param.b;
     const num_segment = param.num_segment;
     const z = param.grid.swiz1(param.z, "z");
-    try prim.verts.resize(num_segment * 4);
+    try prim.verts.resize(prim.alloc, num_segment * 4);
     const dtheta: f32 = std.math.degreesToRadians(param.theta_deg) / @as(f32, @floatFromInt(num_segment - 1)); //Do half only
     const dtheta_deg: f32 = std.math.radiansToDegrees(dtheta);
     for (0..num_segment) |ni| {
@@ -289,33 +290,33 @@ fn rectPrism(
     const faces = try prim.newSolid();
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ v0, v0z, v1z, v1 });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ v0, v0z, v1z, v1 });
+        try faces.append(prim.alloc, face);
     }
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ fv1, fv1z, fv0z, fv0 });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ fv1, fv1z, fv0z, fv0 });
+        try faces.append(prim.alloc, face);
     }
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ fv0, fv0z, v0z, v0 });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ fv0, fv0z, v0z, v0 });
+        try faces.append(prim.alloc, face);
     }
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ v1, v1z, fv1z, fv1 });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ v1, v1z, fv1z, fv1 });
+        try faces.append(prim.alloc, face);
     }
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ v0, v1, fv1, fv0 });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ v0, v1, fv1, fv0 });
+        try faces.append(prim.alloc, face);
     }
     {
         var face = prim.newFace();
-        try face.appendSlice(&.{ fv0z, fv1z, v1z, v0z });
-        try faces.append(face);
+        try face.appendSlice(prim.alloc, &.{ fv0z, fv1z, v1z, v0z });
+        try faces.append(prim.alloc, face);
     }
 }
 
@@ -338,7 +339,7 @@ pub fn cube(alloc: std.mem.Allocator, param: struct { size: Vec3 }) !Primitive {
         Vec3.new(x, y, -z),
         Vec3.new(x, -y, -z),
     };
-    try prim.verts.appendSlice(&verts);
+    try prim.verts.appendSlice(prim.alloc, &verts);
     try rectPrism(&prim, 0, 1, 2, 3, 4, 5, 6, 7);
 
     return prim;
@@ -373,7 +374,7 @@ pub fn stairs(alloc: std.mem.Allocator, param: struct {
     const y0 = param.height / -2;
 
     var last_back: f32 = 0;
-    try prim.verts.resize(num_stairs * 8);
+    try prim.verts.resize(prim.alloc, num_stairs * 8);
     for (0..num_stairs) |ns| {
         const fs: f32 = @floatFromInt(ns);
 
@@ -439,7 +440,7 @@ pub fn uvSphere(alloc: std.mem.Allocator, param: struct {
     const h2 = param.z;
 
     const num: u32 = @intCast(param.theta_seg * param.phi_seg);
-    try prim.verts.resize(num * 2);
+    try prim.verts.resize(prim.alloc, num * 2);
     for (0..param.theta_seg) |dth| {
         const th: f32 = @as(f32, @floatFromInt(dth)) * dtheta;
         for (0..param.phi_seg) |dpi| {

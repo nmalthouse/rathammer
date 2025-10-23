@@ -18,8 +18,8 @@ pub const Skybox = struct {
         });
         return Self{
             .alloc = alloc,
-            .meshes = std.ArrayList(SkyBatch).init(alloc),
-            .textures = std.ArrayList(graph.Texture).init(alloc),
+            .meshes = .{},
+            .textures = .{},
             .shader = sky_shad,
             .sky_name = "",
         };
@@ -81,15 +81,15 @@ pub const Skybox = struct {
                 continue;
             };
             const tex = vtf.loadTexture(vtf_buf, self.alloc) catch |err| {
-                std.debug.print("Had an oopis {!}\n", .{err});
+                std.debug.print("Had an oopis {t}\n", .{err});
                 continue;
             };
             var skybatch = SkyBatch.init(self.alloc);
-            try skybatch.vertices.appendSlice(verts[i * 4 .. i * 4 + 4]);
-            try skybatch.indicies.appendSlice(&ind);
+            skybatch.appendVerts(verts[i * 4 .. i * 4 + 4]);
+            skybatch.appendIndex(&ind);
             skybatch.pushVertexData();
-            try self.meshes.append(skybatch);
-            try self.textures.append(tex);
+            try self.meshes.append(self.alloc, skybatch);
+            try self.textures.append(self.alloc, tex);
         }
     }
 
@@ -98,7 +98,7 @@ pub const Skybox = struct {
             i.deinit();
         for (self.textures.items) |*t|
             t.deinit();
-        self.meshes.deinit();
-        self.textures.deinit();
+        self.meshes.deinit(self.alloc);
+        self.textures.deinit(self.alloc);
     }
 };

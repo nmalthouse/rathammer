@@ -259,8 +259,8 @@ pub const VertexTranslate = struct {
             if (disps_o) |_| {
                 const ar = ed.frame_arena.allocator();
                 var present = std.AutoHashMap(u32, void).init(ar);
-                var offsets = std.ArrayList(Vec3).init(ar);
-                var offset_index = std.ArrayList(u32).init(ar);
+                var offsets: std.ArrayList(Vec3) = .{};
+                var offset_index: std.ArrayList(u32) = .{};
 
                 for (manip_verts.items(.disp_i)) |did| {
                     if (did) |d|
@@ -273,8 +273,8 @@ pub const VertexTranslate = struct {
                     offset_index.clearRetainingCapacity();
                     for (manip_verts.items(.disp_i), 0..) |did, ind| {
                         if (did orelse continue == disp_id.*) {
-                            try offsets.append(dist);
-                            try offset_index.append(manip_verts.items(.index)[ind]);
+                            try offsets.append(ar, dist);
+                            try offset_index.append(ar, manip_verts.items(.index)[ind]);
                         }
                     }
                     try ustack.append(.{ .disp_modify = try .create(
@@ -378,11 +378,11 @@ pub const VertexTranslate = struct {
         const SEL_VERT_COLOR = 0xBA55D3ff;
         {
             var it = self.selected.iterator();
-            var to_remove = std.ArrayList(ecs.EcsT.Id).init(ar);
+            var to_remove = std.ArrayList(ecs.EcsT.Id){};
             while (it.next()) |item| {
                 //Remove any verts that don't belong to a globally selected solid
                 if (!id_mapper.contains(item.key_ptr.*)) {
-                    try to_remove.append(item.key_ptr.*);
+                    try to_remove.append(ar, item.key_ptr.*);
 
                     //We deinit here so we can quickly remove after loop
                     item.value_ptr.deinit(self.selected.allocator);

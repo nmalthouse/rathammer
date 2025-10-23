@@ -60,13 +60,15 @@ pub const SdlFileData = struct {
 
     pool_ptr: *thread_pool.Context,
 
+    alloc: std.mem.Allocator,
     name_buffer: std.ArrayList(u8),
 
     pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, kind: Action) !void {
         const self = try alloc.create(@This());
         self.* = .{
             .job = .{ .onComplete = &onComplete, .user_id = 0 },
-            .name_buffer = std.ArrayList(u8).init(alloc),
+            .name_buffer = .{},
+            .alloc = alloc,
             .pool_ptr = pool,
             .action = kind,
         };
@@ -75,8 +77,8 @@ pub const SdlFileData = struct {
     }
 
     pub fn destroy(self: *@This()) void {
-        const alloc = self.name_buffer.allocator;
-        self.name_buffer.deinit();
+        const alloc = self.alloc;
+        self.name_buffer.deinit(self.alloc);
         alloc.destroy(self);
     }
 
@@ -96,7 +98,7 @@ pub const SdlFileData = struct {
                 edit.paused = false;
                 edit.loadctx.resetTime();
                 edit.loadMap(std.fs.cwd(), self.name_buffer.items, edit.loadctx) catch |err| {
-                    std.debug.print("load failed because {!}\n", .{err});
+                    std.debug.print("load failed because {t}\n", .{err});
                 };
             },
         }
@@ -111,7 +113,7 @@ pub const SdlFileData = struct {
 
     export fn saveFileCallback2(opaque_self: ?*anyopaque, filelist: [*c]const [*c]const u8, index: c_int) void {
         if (opaque_self) |ud| {
-            const self: *SdlFileData = @alignCast(@ptrCast(ud));
+            const self: *SdlFileData = @ptrCast(@alignCast(ud));
             defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
 
             if (filelist == 0 or filelist[0] == 0) {
@@ -126,7 +128,7 @@ pub const SdlFileData = struct {
             }
 
             self.name_buffer.clearRetainingCapacity();
-            self.name_buffer.appendSlice(first) catch return;
+            self.name_buffer.appendSlice(self.alloc, first) catch return;
             self.has_file = .has;
         }
         _ = index;
@@ -195,7 +197,7 @@ pub const MapCompile = struct {
         if (map_builder.buildmap(self.arena.allocator(), args)) {
             self.status = .built;
         } else |err| {
-            log.err("Build map failed with : {!}", .{err});
+            log.err("Build map failed with : {t}", .{err});
             self.status = .failed;
         }
     }
@@ -205,14 +207,14 @@ pub const CompressAndSave = struct {
     const Opts = struct {
         dir: std.fs.Dir,
         name: []const u8,
-        json_buffer: std.ArrayList(u8),
+        json_buffer: []const u8,
         thumbnail: ?graph.Bitmap,
     };
     job: thread_pool.iJob,
     pool_ptr: *thread_pool.Context,
 
     alloc: std.mem.Allocator,
-    json_buf: std.ArrayList(u8),
+    json_buf: []const u8,
 
     dir: std.fs.Dir,
     filename: []const u8,
@@ -238,7 +240,7 @@ pub const CompressAndSave = struct {
     }
 
     pub fn destroy(self: *@This()) void {
-        self.json_buf.deinit();
+        self.alloc.free(self.json_buf);
         self.dir.close();
         self.alloc.free(self.filename);
         if (self.thumb) |th|
@@ -257,7 +259,7 @@ pub const CompressAndSave = struct {
                 edit.notify("Compressed map", .{}, 0x00ff00ff) catch {};
                 if (edit.getMapFullPath()) |full_path| {
                     edit.addRecentMap(full_path) catch |err| {
-                        std.debug.print("Failed to write recent maps {!}\n", .{err});
+                        std.debug.print("Failed to write recent maps {t}\n", .{err});
                     };
                 } else {
                     std.debug.print("Failed to get map full path\n", .{});
@@ -269,33 +271,29 @@ pub const CompressAndSave = struct {
     pub fn workFunc(self: *@This()) void {
         defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
 
-        var compressed = std.ArrayList(u8).init(self.alloc);
+        var compressed = std.Io.Writer.Allocating.init(self.alloc);
         defer compressed.deinit();
-        if (graph.miniz.compressGzip(self.alloc, self.json_buf.items, compressed.writer())) |_| {} else |err| {
-            log.err("compress failed {!}", .{err});
+        if (graph.miniz.compressGzip(self.alloc, self.json_buf, &compressed.writer)) |_| {} else |err| {
+            log.err("compress failed {t}", .{err});
             self.status = .failed;
             return;
         }
 
-        var copy_name = std.ArrayList(u8).init(self.alloc);
-        defer copy_name.deinit();
-        copy_name.appendSlice(self.filename) catch return;
-        copy_name.appendSlice(".saving") catch return;
+        var copy_name: std.ArrayList(u8) = .{};
+        defer copy_name.deinit(self.alloc);
+        copy_name.appendSlice(self.alloc, self.filename) catch return;
+        copy_name.appendSlice(self.alloc, ".saving") catch return;
 
         {
             const file = self.dir.createFile(copy_name.items, .{}) catch |err| {
-                log.err("unable to create file {s} aborting with {!}", .{ copy_name.items, err });
+                log.err("unable to create file {s} aborting with {t}", .{ copy_name.items, err });
                 return;
             };
             defer file.close();
+            var write_buffer: [2048]u8 = undefined;
+            var wr = file.writer(&write_buffer);
 
-            const wr = file.writer();
-            var bwr = std.io.bufferedWriter(wr);
-            defer bwr.flush() catch {};
-
-            var tar_out = std.tar.writer(bwr.writer());
-
-            var comp_fbs = std.io.FixedBufferStream([]const u8){ .buffer = compressed.items, .pos = 0 };
+            var tar_wr = std.tar.Writer{ .underlying_writer = &wr.interface };
 
             if (self.thumb) |th| {
                 var qd = graph.c.qoi_desc{
@@ -309,29 +307,30 @@ pub const CompressAndSave = struct {
                     const qoi_s: [*c]const u8 = @ptrCast(qoi_data);
                     const qlen: usize = if (qoi_len > 0) @intCast(qoi_len) else 0;
                     const slice: []const u8 = qoi_s[0..qlen];
-                    var qfbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
-                    tar_out.writeFileStream("thumbnail.qoi", qlen, qfbs.reader(), .{}) catch |err| {
-                        log.warn("unable to write thumbnail {!}", .{err});
+                    tar_wr.writeFileBytes("thumbnail.qoi", slice, .{}) catch |err| {
+                        log.warn("unable to write thumbnail {t}", .{err});
                     };
                     graph.c.QOI_FREE(qoi_data);
                 }
             }
 
-            tar_out.writeFileStream("map.json.gz", comp_fbs.buffer.len, comp_fbs.reader(), .{}) catch |err| {
-                log.err("file write failed {!}", .{err});
+            tar_wr.writeFileBytes("map.json.gz", compressed.written(), .{}) catch |err| {
+                log.err("file write failed {t}", .{err});
                 self.status = .failed;
                 return;
             };
+
+            wr.interface.flush() catch {};
             self.status = .built;
         }
         // saving file was written, copy then delete
         self.dir.copyFile(copy_name.items, self.dir, self.filename, .{}) catch |err| {
-            log.err("unable to copy {s} to {s} with {!}", .{ copy_name.items, self.filename, err });
+            log.err("unable to copy {s} to {s} with {t}", .{ copy_name.items, self.filename, err });
             return;
         };
 
         self.dir.deleteFile(copy_name.items) catch |err| {
-            log.err("unable to delete {s} with {!}", .{ copy_name.items, err });
+            log.err("unable to delete {s} with {t}", .{ copy_name.items, err });
             return;
         };
     }
@@ -363,7 +362,7 @@ pub const CheckVersionHttp = struct {
 
     pub fn workFunc(self: *@This()) void {
         self.workFuncErr() catch |err| {
-            log.err("Version check failed: {!}", .{err});
+            log.err("Version check failed: {t}", .{err});
         };
     }
 

@@ -174,7 +174,7 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
                 try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
             }
         } else |a| {
-            std.debug.print("Invalid cube {!}\n", .{a});
+            std.debug.print("Invalid cube {t}\n", .{a});
         }
     }
 
@@ -431,7 +431,8 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
 
 pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: Vec3, dist: Vec3) !void {
     const selected = ed.getSelected();
-    var new_ent_list = std.ArrayList(ecs.EcsT.Id).init(ed.frame_arena.allocator());
+    const aa = ed.frame_arena.allocator();
+    var new_ent_list = std.ArrayList(ecs.EcsT.Id){};
     //Map old groups to duped groups
     var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(ed.frame_arena.allocator());
 
@@ -454,7 +455,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
                         if (!group_mapper.contains(group.id)) {
                             try group_mapper.put(group.id, try ed.groups.newGroup(null));
                         }
-                        try new_ent_list.append(duped);
+                        try new_ent_list.append(aa, duped);
                     }
                 }
             }
@@ -517,7 +518,7 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
 pub fn trySave(ed: *Ed) !void {
     if (ed.loaded_map_name) |basename| {
         ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
-            try ed.notify("Failed saving map: {!}", .{err}, colors.bad);
+            try ed.notify("Failed saving map: {t}", .{err}, colors.bad);
         };
     } else {
         try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);

@@ -95,7 +95,7 @@ pub const ErrorInfo = struct {
     slice: []const u8 = "",
 
     pub fn printError(self: @This(), print_func: fn (comptime []const u8, anytype) void, err: anyerror) void {
-        print_func("{!} {d}:{d}\n", .{ err, self.line_number, self.char_number });
+        print_func("{t} {d}:{d}\n", .{ err, self.line_number, self.char_number });
         var tok = std.mem.tokenizeScalar(u8, self.slice[self.line_start..], '\n');
         if (tok.next()) |line| {
             print_func("{s}\n", .{line});
@@ -398,7 +398,7 @@ pub fn fromValue(comptime T: type, parsed: *Parsed, value: *const KV.Value, allo
                     const is_alist = getArrayListChild(f.type);
                     const do_many = (is_alist != null) or (child_info == .pointer and child_info.pointer.size == .slice and child_info.pointer.child != u8);
                     if (!do_many and f.default_value_ptr != null) {
-                        @field(ret, f.name) = @as(*const f.type, @alignCast(@ptrCast(f.default_value_ptr.?))).*;
+                        @field(ret, f.name) = @as(*const f.type, @ptrCast(@alignCast(f.default_value_ptr.?))).*;
                     }
                     const ar_c = is_alist orelse if (do_many) child_info.pointer.child else void;
                     var vec = std.ArrayListUnmanaged(ar_c){};

@@ -133,15 +133,15 @@ pub const Dirs = struct {
 };
 
 pub fn guessSteamPath(env: *std.process.EnvMap, alloc: std.mem.Allocator) !?WrappedDir {
-    var buf = std.ArrayList(u8).init(alloc);
-    defer buf.deinit();
+    var buf: std.ArrayList(u8) = .{};
+    defer buf.deinit(alloc);
     const os = builtin.target.os.tag;
     switch (os) {
-        .windows => try buf.appendSlice("/Program Files (x86)/Steam/steamapps/common"),
+        .windows => try buf.appendSlice(alloc, "/Program Files (x86)/Steam/steamapps/common"),
         .linux => {
             const HOME = env.get("HOME") orelse return null;
-            try buf.appendSlice(HOME);
-            try buf.appendSlice("/.local/share/Steam/steamapps/common");
+            try buf.appendSlice(alloc, HOME);
+            try buf.appendSlice(alloc, "/.local/share/Steam/steamapps/common");
         },
         else => return null,
     }
@@ -149,7 +149,7 @@ pub fn guessSteamPath(env: *std.process.EnvMap, alloc: std.mem.Allocator) !?Wrap
     defer log.info("Guessed steam path {s}", .{buf.items});
     return WrappedDir.absolute(buf.items, .{}, alloc) catch |err| {
         log.warn("Guessed steam path: '{s}' but failed to open", .{buf.items});
-        log.warn("Error: {!}", .{err});
+        log.warn("Error: {t}", .{err});
         return null;
     };
 }
@@ -159,10 +159,10 @@ pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: Wrapped
         return try cwd.openDir(".", .{}, alloc);
 
     const xdg_config_dir = (env.get("XDG_CONFIG_DIR"));
-    var config_path = std.ArrayList(u8).init(alloc);
-    defer config_path.deinit();
+    var config_path: std.ArrayList(u8) = .{};
+    defer config_path.deinit(alloc);
     if (xdg_config_dir) |x| {
-        try config_path.writer().print("{s}/rathammer", .{x});
+        try config_path.print(alloc, "{s}/rathammer", .{x});
     } else {
         switch (builtin.target.os.tag) {
             // Workaround to weird ntdll segfault.
@@ -173,7 +173,7 @@ pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: Wrapped
             .windows => return try app_cwd.openDir(".", .{}, alloc),
             else => {
                 if (env.get("HOME")) |home| {
-                    try config_path.writer().print("{s}/.config/rathammer", .{home});
+                    try config_path.print(alloc, "{s}/.config/rathammer", .{home});
                 } else {
                     log.info("XDG_CONFIG_HOME and $HOME not defined, using config in app dir", .{});
                     return try app_cwd.openDir(".", .{}, alloc);
@@ -195,7 +195,7 @@ pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: Wrapped
 pub fn openGameDir(alloc: std.mem.Allocator, cwd: WrappedDir, arg_override: ?[]const u8, config_steam_dir: []const u8, env: *std.process.EnvMap) !WrappedDir {
     if (arg_override) |cc| {
         return cwd.openDir(cc, .{}, alloc) catch |err| {
-            log.err("Failed to open custom cwd {s} with {!}", .{ cc, err });
+            log.err("Failed to open custom cwd {s} with {t}", .{ cc, err });
             return err;
         };
     } else {
@@ -204,7 +204,7 @@ pub fn openGameDir(alloc: std.mem.Allocator, cwd: WrappedDir, arg_override: ?[]c
                 log.info("Opened config.paths.steam_dir: {s}", .{config_steam_dir});
                 return steam_dir;
             } else |err| {
-                log.err("Failed to open config.paths.steam_dir: {s} with {!}", .{ config_steam_dir, err });
+                log.err("Failed to open config.paths.steam_dir: {s} with {t}", .{ config_steam_dir, err });
             }
         }
         return try guessSteamPath(env, alloc) orelse {

@@ -18,18 +18,15 @@ pub const VpkMapper = struct {
     str_map: std.StringHashMap(vpk.VpkResId),
     arena: std.heap.ArenaAllocator,
     strings: std.ArrayList([]const u8),
+    alloc: std.mem.Allocator,
 
     pub fn init(alloc: std.mem.Allocator) @This() {
-        return .{
-            .str_map = std.StringHashMap(vpk.VpkResId).init(alloc),
-            .arena = std.heap.ArenaAllocator.init(alloc),
-            .strings = std.ArrayList([]const u8).init(alloc),
-        };
+        return .{ .str_map = std.StringHashMap(vpk.VpkResId).init(alloc), .arena = std.heap.ArenaAllocator.init(alloc), .alloc = alloc, .strings = .{} };
     }
     pub fn deinit(self: *@This()) void {
         self.str_map.deinit();
         self.arena.deinit();
-        self.strings.deinit();
+        self.strings.deinit(self.alloc);
     }
 
     pub fn getResourceIdString(self: *@This(), str: []const u8, san: bool) !?vpk.VpkResId {
@@ -39,7 +36,7 @@ pub const VpkMapper = struct {
         const duped = try self.arena.allocator().dupe(u8, str);
 
         const id = self.strings.items.len;
-        try self.strings.append(duped);
+        try self.strings.append(self.alloc, duped);
         try self.str_map.put(duped, id);
         return id;
     }

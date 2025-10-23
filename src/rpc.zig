@@ -150,7 +150,7 @@ pub const RpcServer = struct {
                 '{' => { //Single json object
                     const parsed = std.json.parseFromSliceLeaky(JsonRpcRequest, arena.allocator(), msg_buf.items, .{}) catch |err| {
                         var wr = stream.writer();
-                        wr.print("{!}\n", .{err}) catch {};
+                        wr.print("{t}\n", .{err}) catch {};
                         break;
                     };
                     const slice = try arena.allocator().alloc(JsonRpcRequest, 1);
@@ -159,7 +159,7 @@ pub const RpcServer = struct {
                 },
                 '[' => std.json.parseFromSliceLeaky([]const JsonRpcRequest, arena.allocator(), msg_buf.items, .{}) catch |err| {
                     var wr = stream.writer();
-                    wr.print("{!}\n", .{err}) catch {};
+                    wr.print("{t}\n", .{err}) catch {};
                     break;
                 },
                 else => return error.invalidJson,

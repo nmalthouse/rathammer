@@ -174,7 +174,7 @@ pub const MeshBatch = struct {
     // These are used to draw the solids in 2d views
     lines_vao: c_uint,
     lines_ebo: c_uint,
-    lines_index: std.ArrayList(u32),
+    lines_index: std.array_list.Managed(u32),
 
     pub fn init(alloc: std.mem.Allocator, tex_id: vpk.VpkResId, tex: graph.Texture) Self {
         var ret = MeshBatch{
@@ -185,7 +185,7 @@ pub const MeshBatch = struct {
             .notify_vt = .{ .notify_fn = &notify },
             .lines_vao = 0,
             .lines_ebo = 0,
-            .lines_index = std.ArrayList(u32).init(alloc),
+            .lines_index = .init(alloc),
         };
 
         {
@@ -577,7 +577,7 @@ pub const Side = struct {
         side.th = batch.tex.h;
         const mesh = &batch.mesh;
 
-        try mesh.vertices.ensureUnusedCapacity(side.index.items.len);
+        try mesh.vertices.ensureUnusedCapacity(mesh.alloc, side.index.items.len);
 
         try batch.lines_index.ensureUnusedCapacity(side.index.items.len * 2);
         //const uv_origin = solid.verts.items[side.index.items[0]];
@@ -593,7 +593,7 @@ pub const Side = struct {
         for (side.index.items, 0..) |v_i, i| {
             const v = solid.verts.items[v_i];
             const norm = side.normal(solid).scale(-1);
-            try mesh.vertices.append(.{
+            try mesh.vertices.append(mesh.alloc, .{
                 .x = v.x(),
                 .y = v.y(),
                 .z = v.z(),
@@ -609,7 +609,7 @@ pub const Side = struct {
             try batch.lines_index.append(@intCast(offset + next));
         }
         const indexs = try editor.csgctx.triangulateIndex(@intCast(side.index.items.len), @intCast(offset));
-        try mesh.indicies.appendSlice(indexs);
+        try mesh.indicies.appendSlice(mesh.alloc, indexs);
     }
 
     pub fn serial(self: @This(), editor: *Editor, jw: anytype, ent_id: EcsT.Id) !void {
@@ -932,14 +932,14 @@ pub const Solid = struct {
             };
             const MapT = std.HashMap(HashCtx.Key, void, HashCtx, std.hash_map.default_max_load_percentage);
 
-            var to_remove = std.ArrayList(usize).init(self._alloc);
-            defer to_remove.deinit();
+            var to_remove: std.ArrayList(usize) = .{};
+            defer to_remove.deinit(self._alloc);
             var map = MapT.init(self._alloc);
             defer map.deinit();
             for (self.sides.items, 0..) |side, i| {
                 const res = try map.getOrPut(side.index.items);
                 if (res.found_existing)
-                    try to_remove.append(i);
+                    try to_remove.append(self._alloc, i);
             }
 
             var i = to_remove.items.len;
@@ -1209,7 +1209,7 @@ pub const Solid = struct {
                 const pos = v.add(off);
 
                 const upos = if (texture_lock) v else pos;
-                try batch.vertices.append(.{
+                batch.appendVert(.{
                     .pos = .{
                         .x = pos.x(),
                         .y = pos.y(),
@@ -1223,7 +1223,7 @@ pub const Solid = struct {
                 });
             }
             const indexs = try editor.csgctx.triangulateIndex(@intCast(side.index.items.len), @intCast(ioffset));
-            try batch.indicies.appendSlice(indexs);
+            batch.appendIndex(indexs);
         }
     }
 
@@ -1247,7 +1247,7 @@ pub const Solid = struct {
 
                 const pos = v.add(off);
                 const upos = if (texture_lock) v else pos;
-                try batch.vertices.append(.{
+                batch.appendVert(.{
                     .pos = .{
                         .x = pos.x(),
                         .y = pos.y(),
@@ -1261,7 +1261,7 @@ pub const Solid = struct {
                 });
             }
             const indexs = try ed.csgctx.triangulateIndex(@intCast(side.index.items.len), @intCast(ioffset));
-            try batch.indicies.appendSlice(indexs);
+            batch.appendIndex(indexs);
         }
     }
 
@@ -1603,8 +1603,8 @@ pub const Displacement = struct {
 
         const side = &solid.sides.items[self.parent_side_i];
         const mesh = &batch.mesh;
-        try mesh.vertices.ensureUnusedCapacity(self._verts.items.len);
-        try mesh.indicies.ensureUnusedCapacity(self._index.items.len);
+        try mesh.vertices.ensureUnusedCapacity(mesh.alloc, self._verts.items.len);
+        try mesh.indicies.ensureUnusedCapacity(mesh.alloc, self._index.items.len);
         const si = self.vert_start_i;
         const uvs = try editor.csgctx.calcUVCoordsIndexed(
             solid.verts.items,
@@ -1634,7 +1634,7 @@ pub const Displacement = struct {
             const uv = inter0.lerp(inter1, ci * t);
             const norm = self.normals.items[i];
 
-            try mesh.vertices.append(.{
+            try mesh.vertices.append(mesh.alloc, .{
                 .x = v.x(),
                 .y = v.y(),
                 .z = v.z(),
@@ -1647,7 +1647,7 @@ pub const Displacement = struct {
             });
         }
         for (self._index.items) |ind| {
-            try mesh.indicies.append(ind + @as(u32, @intCast(offset)));
+            try mesh.indicies.append(mesh.alloc, ind + @as(u32, @intCast(offset)));
         }
     }
 
@@ -1701,7 +1701,7 @@ pub const Displacement = struct {
             const off = vertOffsetCb(user_data, v, @intCast(i));
             const nv = off.add(v);
 
-            try batch.vertices.append(.{
+            batch.appendVert(.{
                 .pos = .{
                     .x = nv.x(),
                     .y = nv.y(),
@@ -1712,7 +1712,7 @@ pub const Displacement = struct {
             });
         }
         for (self._index.items) |ind| {
-            try batch.indicies.append(ind + @as(u32, @intCast(offset)));
+            batch.appendInd(ind + @as(u32, @intCast(offset)));
         }
     }
 };

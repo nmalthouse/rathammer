@@ -167,13 +167,13 @@ pub const FgdTokenizer = struct {
     //A multi-line string has the grammar:
     // <multi-line-str> ::= <quoted_string> <newline> | <multi-line-str-cont>
     // <multi-line-str-cont> ::= <plus> <newline> <multi-line-str>
-    pub fn expectMultilineString(self: *@This(), ret: *std.ArrayList(u8)) !void { //TODO return string, requires alloc
+    pub fn expectMultilineString(self: *@This(), ret: *std.ArrayList(u8), alloc: std.mem.Allocator) !void { //TODO return string, requires alloc
         while (true) {
             const n1 = try self.next() orelse return error.multilineStringSyntax;
             if (n1.tag != .quoted_string) {
                 return error.multilineStringSyntax;
             }
-            try ret.appendSlice(self.getSlice(n1));
+            try ret.appendSlice(alloc, self.getSlice(n1));
             const ne = try self.peek() orelse return;
             switch (ne.tag) {
                 .plus => {
@@ -183,7 +183,7 @@ pub const FgdTokenizer = struct {
                     const n = try self.peek() orelse return;
                     switch (n.tag) {
                         .quoted_string => {
-                            try ret.append('\n');
+                            try ret.append(alloc, '\n');
                             continue;
                         },
                         else => return, //A workaround to ill defined syntax
@@ -573,11 +573,9 @@ pub const EntClass = struct {
 };
 
 pub fn loadFgd(ctx: *EntCtx, base_dir: std.fs.Dir, path: []const u8) !void {
-    const in = util.openFileFatal(base_dir, path, .{}, "Where is the fgd?");
-    defer in.close();
     const alloc = ctx.alloc;
 
-    const slice = try in.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+    const slice = util.readFile(alloc, base_dir, path) catch |err| util.fatalPrintFilePath(base_dir, path, err, "Where is the fgd?");
     defer alloc.free(slice);
     var parse = ParseCtx.init(alloc, slice);
     defer parse.deinit();
@@ -599,7 +597,7 @@ pub const ParseCtx = struct {
 
     pub fn init(alloc: std.mem.Allocator, slice: []const u8) @This() {
         return .{
-            .scratch_buf = std.ArrayList(u8).init(alloc),
+            .scratch_buf = .{},
             .slice = slice,
             .alloc = alloc,
             .tkz = FgdTokenizer.init(slice, alloc),
@@ -607,22 +605,19 @@ pub const ParseCtx = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        self.scratch_buf.deinit();
+        self.scratch_buf.deinit(self.alloc);
         self.tkz.deinit();
     }
 
     pub fn sanitizeIdent(self: *Self, string: []const u8) []const u8 {
         self.scratch_buf.clearRetainingCapacity();
-        self.scratch_buf.resize(string.len) catch std.process.exit(1);
+        self.scratch_buf.resize(self.alloc, string.len) catch std.process.exit(1);
         return std.ascii.lowerString(self.scratch_buf.items, string);
     }
 
     pub fn crass(pctx: *Self, ctx: *EntCtx, base_dir: std.fs.Dir) !void {
-        const alloc = pctx.alloc;
         const tkz = &pctx.tkz;
         var ignored_count: usize = 0;
-        var print_buf = std.ArrayList(u8).init(alloc);
-        defer print_buf.deinit();
         while (try tkz.next()) |tk| {
             const tok = tkz.getSlice(tk);
             switch (tk.tag) {
@@ -652,9 +647,7 @@ pub const ParseCtx = struct {
                 //TODO prevent cycles
                 const include_file = try tkz.expectNext(.quoted_string);
                 //Don't use openFileFatal as parse will log the error and line number
-                const in_f = try base_dir.openFile(tkz.getSlice(include_file), .{});
-                defer in_f.close();
-                const slice2 = try in_f.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+                const slice2 = try util.readFile(alloc, base_dir, tkz.getSlice(include_file));
                 defer alloc.free(slice2);
                 var parse = ParseCtx.init(alloc, slice2);
                 defer parse.deinit();
@@ -749,7 +742,7 @@ pub const ParseCtx = struct {
                         _ = try tkz.next(); //peeked
                         try tkz.eatNewline();
                         pctx.scratch_buf.clearRetainingCapacity();
-                        try tkz.expectMultilineString(&pctx.scratch_buf);
+                        try tkz.expectMultilineString(&pctx.scratch_buf, pctx.alloc);
                         new_class.doc = try ctx.dupeString(pctx.scratch_buf.items);
                         //std.debug.print("NEW ONE {s}\n", .{multi_string_buf.items});
                     },
@@ -774,7 +767,6 @@ pub const ParseCtx = struct {
     }
     pub fn parseFields(self: *Self, ctx: *EntCtx, new_class: anytype) !void {
         const tkz = &self.tkz;
-        const buf = &self.scratch_buf;
         while (try tkz.nextEatNewline()) |first| {
             if (first.tag == .r_bracket) break; //this class in done
             const fsl = tkz.getSlice(first);
@@ -791,14 +783,14 @@ pub const ParseCtx = struct {
                 var io_doc: []const u8 = "";
                 if (n1.tag == .colon) {
                     _ = try tkz.next(); //eat peek
-                    buf.clearRetainingCapacity();
-                    try tkz.expectMultilineString(buf);
-                    io_doc = buf.items;
+                    self.scratch_buf.clearRetainingCapacity();
+                    try tkz.expectMultilineString(&self.scratch_buf, self.alloc);
+                    io_doc = self.scratch_buf.items;
                 }
                 const new_io = EntClass.Io{
                     .name = try ctx.dupeString(tkz.getSlice(io_name)),
                     .doc = try ctx.dupeString(io_doc),
-                    .type = try getIoType(tkz.getSlice(io_type), buf),
+                    .type = try getIoType(tkz.getSlice(io_type), &self.scratch_buf, self.alloc),
                     .kind = fw,
                 };
                 try new_class.addIo(new_io);
@@ -848,7 +840,6 @@ pub const ParseCtx = struct {
         var index: i32 = -1;
         var default_str: []const u8 = "";
         const tkz = &self.tkz;
-        const buf = &self.scratch_buf;
         var new_type_doc: []const u8 = "";
         while (true) {
             const n1 = try tkz.peek() orelse return error.syntax;
@@ -879,9 +870,9 @@ pub const ParseCtx = struct {
                             //provided by flags instead
                         },
                         2 => { //doc string
-                            buf.clearRetainingCapacity();
-                            try tkz.expectMultilineString(buf);
-                            new_type_doc = try ctx.dupeString(buf.items);
+                            self.scratch_buf.clearRetainingCapacity();
+                            try tkz.expectMultilineString(&self.scratch_buf, self.alloc);
+                            new_type_doc = try ctx.dupeString(self.scratch_buf.items);
                             break;
                         },
                         else => return error.syntax,
@@ -957,7 +948,7 @@ pub const ParseCtx = struct {
                         }
                     }
                     buf.clearRetainingCapacity();
-                    try buf.writer().print("{d}", .{def_mask});
+                    try buf.print(self.alloc, "{d}", .{def_mask});
                     default_str = buf.items;
                     new_type = .{ .flags = new_flags };
                 },
@@ -984,8 +975,8 @@ pub const ParseCtx = struct {
     }
 };
 
-fn getIoType(string: []const u8, buf: *std.ArrayList(u8)) !EntClass.Io.Type {
-    try buf.resize(string.len);
+fn getIoType(string: []const u8, buf: *std.ArrayList(u8), alloc: std.mem.Allocator) !EntClass.Io.Type {
+    try buf.resize(alloc, string.len);
     _ = std.ascii.lowerString(buf.items, string);
     return stringToEnum(EntClass.Io.Type, buf.items) orelse {
         log.warn("unrecognized io type: {s}", .{string});

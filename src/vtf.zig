@@ -258,6 +258,7 @@ pub const VtfBuf = struct {
 
     /// Caller must free, mip levels, smallest to largest
     /// When (width or height)  / buffers.len != 1, only the last MipLevel is used and mipmaps are generated
+    alloc: std.mem.Allocator,
     buffers: std.ArrayList(MipLevel),
 
     pub fn deinitToTexture(self: *@This(), alloc: std.mem.Allocator) !graph.Texture {
@@ -313,8 +314,8 @@ pub const VtfBuf = struct {
 
     pub fn deinit(self: *VtfBuf) void {
         for (self.buffers.items) |buf|
-            self.buffers.allocator.free(buf.buf);
-        self.buffers.deinit();
+            self.alloc.free(buf.buf);
+        self.buffers.deinit(self.alloc);
     }
 };
 
@@ -375,9 +376,10 @@ pub fn loadBuffer(buffer: []const u8, alloc: std.mem.Allocator) !VtfBuf {
     }
 
     var ret = VtfBuf{
+        .alloc = alloc,
         .width = h1.width,
         .height = h1.height,
-        .buffers = std.ArrayList(VtfBuf.MipLevel).init(alloc),
+        .buffers = .{},
         .pixel_format = try h1.highres_fmt.toOpenGLFormat(),
         .compressed = h1.highres_fmt.isCompressed(),
         .pixel_type = try h1.highres_fmt.toOpenGLType(),
@@ -411,7 +413,7 @@ pub fn loadBuffer(buffer: []const u8, alloc: std.mem.Allocator) !VtfBuf {
                 const am_h = mipResActual(mip_factor, h1.height);
                 const imgdata = try alloc.alloc(u8, bytes);
                 try r.readNoEof(imgdata);
-                try ret.buffers.append(.{
+                try ret.buffers.append(ret.alloc, .{
                     .buf = imgdata,
                     .w = am_w,
                     .h = am_h,
