@@ -26,6 +26,15 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    const remote = b.addExecutable(.{
+        .name = "ratremote",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/rpc/remote.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
+    });
+
     const hammer_exe = b.addExecutable(.{
         .name = "rathammer",
         .root_module = b.createModule(.{
@@ -33,7 +42,6 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
-        .use_llvm = true,
     });
     const ratdep = b.dependency("ratgraph", .{ .target = target, .optimize = optimize });
     const uuid_dep = b.dependency("uuid", .{ .target = target, .optimize = optimize });
@@ -56,6 +64,7 @@ pub fn build(b: *std.Build) void {
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
     b.installArtifact(hammer_exe);
+    b.installArtifact(remote);
     b.installArtifact(jsonToVmf);
     b.installArtifact(mapbuilder);
 

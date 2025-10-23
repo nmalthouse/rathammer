@@ -40,37 +40,6 @@ const version = @import("version.zig");
 // tool changed
 // something undone
 
-fn event_cb(ev: graph.c.SDL_UserEvent) void {
-    const rpc = @import("rpc.zig");
-    const ha = std.hash.Wyhash.hash;
-    const ed: *Editor = @ptrCast(@alignCast(ev.data1 orelse return));
-    const this_id = ed.rpcserv.event_id;
-    if (ev.type == this_id) {
-        if (ev.data2) |us1| {
-            const event: *rpc.Event = @ptrCast(@alignCast(us1));
-            defer event.deinit(ed.rpcserv.alloc);
-            for (event.msg) |msg| {
-                var wr = event.stream.writer();
-                switch (ha(0, msg.method)) {
-                    ha(0, "pause") => {
-                        ed.paused = !ed.paused;
-                        ed.rpcserv.respond(wr, .{
-                            .id = msg.id,
-                            .result = .{ .null = {} },
-                        }) catch {};
-                    },
-                    ha(0, "select_class") => {},
-                    else => {
-                        wr.print("Fuked dude, wrong method\n", .{}) catch {};
-                    },
-                }
-            }
-        }
-    } else {
-        std.debug.print("Unknown event: {d}\n", .{ev.type});
-    }
-}
-
 pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
     const sc = graph.c.SDL_GetWindowDisplayScale(win.win);
     if (sc == 0)
@@ -271,7 +240,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .gl_minor_version = 2,
         .enable_debug = IS_DEBUG,
         .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
-    });
+    }, alloc);
     defer win.destroyWindow();
 
     _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
@@ -416,10 +385,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }
     _ = try gui.addWindow(&launch_win.vt, Rec(0, 300, 1000, 1000), .{});
 
-    var console_active = false;
-    const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.cb_vt);
-    _ = try gui.addWindow(&console_win.vt, Rec(0, 0, 800, 600), .{});
-
     const main_3d_id = try gui.addWindow(try editor_view.Main3DView.create(editor, &gui, &draw), .Empty, .{ .put_fbo = false });
 
     loadctx.cb("Loading");
@@ -431,6 +396,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     editor.draw_state.cam3d.fov = config.window.cam_fov;
     loadctx.setTime();
 
+    win.forcePoll(); // ensure first draw is fast on eventWait
     if (args.blank) |blank| {
         try editor.setMapName(blank);
         try editor.initNewMap("sky_day01_01");
@@ -438,7 +404,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (args.map) |mapname| {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
-            win.forcePoll();
             while (!win.should_exit) {
                 switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, &loadctx, editor, launch_win.should_exit)) {
                     .exit => break,
@@ -552,9 +517,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             last_frame_group_owner = new_id;
         }
 
-        if (win.isBindState(config.keys.toggle_console.b, .rising)) {
-            console_active = !console_active;
-        }
         ws.doTheSliders(win.mouse.pos, win.mouse.delta, win.mouse.left);
         try ws.setWorkspaceAndArea(editor.draw_state.tab_index, winrect);
 

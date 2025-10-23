@@ -2,39 +2,9 @@ const std = @import("std");
 const ArrayList = std.ArrayListUnmanaged;
 const graph = @import("graph");
 const pushEvent = graph.SDL.pushEvent;
+const rpc = @import("rpc.zig");
 
-pub const JsonRpcRequest = struct {
-    jsonrpc: []const u8,
-    method: []const u8,
-    params: std.json.Value = .{ .null = {} },
-    id: []const u8 = "",
-};
-const MsgT = []const JsonRpcRequest;
-
-pub const JsonRpcError = struct {
-    jsonrpc: []const u8,
-    id: []const u8 = "Null",
-    @"error": struct {
-        code: i64,
-        message: []const u8,
-        data: []const u8,
-    },
-};
-
-pub const JsonRpcResponse = struct {
-    jsonrpc: []const u8 = "2.0",
-    result: std.json.Value,
-    id: []const u8,
-};
-
-pub const RpcError = enum(i64) {
-    parse = -32700,
-    invalid_request = -32600,
-    method_not_found = -32601,
-    invalid_param = -32602,
-    internal = -32603,
-};
-
+const MsgT = []const rpc.JsonRpcRequest;
 //allocated by rpc_server
 pub const Event = struct {
     stream: std.net.Stream, // send a response back
@@ -61,15 +31,16 @@ pub const RpcServer = struct {
     event_id: u32,
     user1: ?*anyopaque,
 
-    response_buf: ArrayList(u8) = .{},
+    response_buf: std.Io.Writer.Allocating,
 
-    pub fn create(alloc: std.mem.Allocator, user1: ?*anyopaque) !*Self {
+    pub fn create(alloc: std.mem.Allocator, user1: ?*anyopaque, event_id: u32) !*Self {
         const ret = try alloc.create(Self);
 
         ret.* = Self{
             .alloc = alloc,
-            .event_id = graph.c.SDL_RegisterEvents(1),
+            .event_id = event_id,
             .user1 = user1,
+            .response_buf = .init(alloc),
         };
 
         {
@@ -119,28 +90,32 @@ pub const RpcServer = struct {
         // }
         self.mutex.lock();
         self.threads.deinit(self.alloc);
-        self.response_buf.deinit(self.alloc);
+        self.response_buf.deinit();
 
         self.alloc.destroy(self);
     }
 
     pub fn handleClientThread(self: *Self, stream: std.net.Stream) !void {
+        var read_buffer: [4096]u8 = undefined;
+        var write_buffer: [1024]u8 = undefined;
         defer stream.close();
-        const r = stream.reader();
-        var msg_buf = ArrayList(u8){};
-        defer msg_buf.deinit(self.alloc);
+        var read = stream.reader(&read_buffer);
+        const r = read.interface();
+
+        var msg_buf: std.Io.Writer.Allocating = .init(self.alloc);
+        defer msg_buf.deinit();
+
         while (true) {
+            const length_str = (r.takeDelimiter(':') catch null) orelse break;
+
+            const length = try std.fmt.parseInt(u32, length_str, 10);
+
             msg_buf.clearRetainingCapacity();
-            r.streamUntilDelimiter(msg_buf.writer(self.alloc), ':', null) catch break;
+            _ = try r.stream(&msg_buf.writer, .limited(length));
 
-            const length = try std.fmt.parseInt(u32, msg_buf.items, 10);
-            try msg_buf.resize(self.alloc, length);
-            try r.readNoEof(msg_buf.items);
+            if (try r.takeByte() != ',') return error.expectedComma;
 
-            const expect_comma = try r.readByte();
-            if (expect_comma != ',') return error.expectedComma;
-
-            const trimmed = std.mem.trimLeft(u8, msg_buf.items, " \n\t\r");
+            const trimmed = std.mem.trimLeft(u8, msg_buf.written(), " \n\t\r");
             if (trimmed.len == 0) return error.invalid;
 
             var arena = std.heap.ArenaAllocator.init(self.alloc);
@@ -148,18 +123,20 @@ pub const RpcServer = struct {
 
             const parsed = blk: switch (trimmed[0]) {
                 '{' => { //Single json object
-                    const parsed = std.json.parseFromSliceLeaky(JsonRpcRequest, arena.allocator(), msg_buf.items, .{}) catch |err| {
-                        var wr = stream.writer();
-                        wr.print("{t}\n", .{err}) catch {};
+                    const parsed = std.json.parseFromSliceLeaky(rpc.JsonRpcRequest, arena.allocator(), msg_buf.written(), .{}) catch |err| {
+                        var wr = stream.writer(&write_buffer);
+                        wr.interface.print("{t}\n", .{err}) catch {};
+                        try wr.interface.flush();
                         break;
                     };
-                    const slice = try arena.allocator().alloc(JsonRpcRequest, 1);
+                    const slice = try arena.allocator().alloc(rpc.JsonRpcRequest, 1);
                     slice[0] = parsed;
                     break :blk slice;
                 },
-                '[' => std.json.parseFromSliceLeaky([]const JsonRpcRequest, arena.allocator(), msg_buf.items, .{}) catch |err| {
-                    var wr = stream.writer();
-                    wr.print("{t}\n", .{err}) catch {};
+                '[' => std.json.parseFromSliceLeaky([]const rpc.JsonRpcRequest, arena.allocator(), msg_buf.written(), .{}) catch |err| {
+                    var wr = stream.writer(&write_buffer);
+                    wr.interface.print("{t}\n", .{err}) catch {};
+                    try wr.interface.flush();
                     break;
                 },
                 else => return error.invalidJson,
@@ -171,7 +148,6 @@ pub const RpcServer = struct {
             ev.* = .{
                 .arena = arena,
                 .msg = parsed,
-                //.msg = try self.alloc.dupe(u8, msg_buf.items),
                 .stream = stream,
             };
             try graph.SDL.pushEvent(self.event_id, 0, self.user1, @ptrCast(ev));
@@ -179,10 +155,12 @@ pub const RpcServer = struct {
     }
 
     //Only call this from the main thread.
-    pub fn respond(self: *Self, wr: anytype, resp: JsonRpcResponse) !void {
+    pub fn respond(self: *Self, wr: *std.Io.Writer, resp: rpc.JsonRpcResponse) !void {
         self.response_buf.clearRetainingCapacity();
-        try std.json.stringify(resp, .{}, self.response_buf.writer(self.alloc));
+        try std.json.Stringify.value(resp, .{}, &self.response_buf.writer);
 
-        try wr.print("{d}:{s},", .{ self.response_buf.items.len, self.response_buf.items });
+        const slice = self.response_buf.written();
+        try wr.print("{d}:{s},", .{ slice.len, slice });
+        try wr.flush();
     }
 };

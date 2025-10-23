@@ -29,14 +29,68 @@ const Commands = enum {
     portalfile,
     stats,
     wireframe,
-    set,
     env,
     pos,
 };
 
-pub const CommandCtx = struct {
-    cb_vt: Console.ConsoleCb,
+pub var RpcEventId: u32 = 0;
 
+pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
+    var write_buf: [1024]u8 = undefined;
+    const rpc = @import("rpc/server.zig");
+    const ha = std.hash.Wyhash.hash;
+    const cmd: *CommandCtx = @ptrCast(@alignCast(ev.data1 orelse return));
+    const ed = cmd.ed;
+    if (ev.type == RpcEventId) {
+        if (ev.data2) |us1| {
+            const event: *rpc.Event = @ptrCast(@alignCast(us1));
+            defer event.deinit(ed.rpcserv.alloc);
+            for (event.msg) |msg| {
+                var wr = event.stream.writer(&write_buf);
+                std.debug.print("got {s}\n", .{msg.method});
+                switch (ha(0, msg.method)) {
+                    ha(0, "shell") => {
+                        _ = cmd.arena.reset(.retain_capacity);
+                        const aa = cmd.arena.allocator();
+                        var args = std.ArrayList([]const u8){};
+                        switch (msg.params) {
+                            .array => |arr| {
+                                for (arr.items) |param| {
+                                    switch (param) {
+                                        .string => |str| args.append(aa, str) catch return,
+                                        else => {},
+                                    }
+                                }
+                                var cmd_response = std.array_list.Managed(u8).init(aa);
+                                cmd.execErr(args.items, &cmd_response) catch return;
+
+                                ed.rpcserv.respond(&wr.interface, .{
+                                    .id = msg.id,
+                                    .result = .{ .string = cmd_response.items },
+                                }) catch {};
+                            },
+                            else => {},
+                        }
+                    },
+                    ha(0, "pause") => {
+                        ed.paused = !ed.paused;
+                        ed.rpcserv.respond(&wr.interface, .{
+                            .id = msg.id,
+                            .result = .{ .null = {} },
+                        }) catch {};
+                    },
+                    ha(0, "select_class") => {},
+                    else => {
+                        wr.interface.print("Fuked dude, wrong method\n", .{}) catch {};
+                        wr.interface.flush() catch {};
+                    },
+                }
+            }
+        }
+    }
+}
+
+pub const CommandCtx = struct {
     ed: *Editor,
     env: std.StringHashMap([]const u8),
     arena: std.heap.ArenaAllocator,
@@ -45,7 +99,6 @@ pub const CommandCtx = struct {
         const self = try alloc.create(@This());
 
         self.* = .{
-            .cb_vt = .{ .exec = &exec_command_cb },
             .ed = editor,
             .env = std.StringHashMap([]const u8).init(alloc),
             .arena = std.heap.ArenaAllocator.init(alloc),
@@ -60,13 +113,6 @@ pub const CommandCtx = struct {
         alloc.destroy(self);
     }
 
-    pub fn exec_command_cb(vt: *Console.ConsoleCb, command: []const u8, output: *std.array_list.Managed(u8)) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cb_vt", vt));
-        self.execErr(command, output) catch |err| {
-            output.print("Fatal: command exec failed with {t}", .{err}) catch return;
-        };
-    }
-
     pub fn resolveArg(self: *@This(), token: []const u8, output: *std.array_list.Managed(u8)) !void {
         if (token.len == 0) return;
         switch (token[0]) {
@@ -76,18 +122,8 @@ pub const CommandCtx = struct {
         }
     }
 
-    pub fn execErr(self: *@This(), command: []const u8, wr: *std.array_list.Managed(u8)) anyerror!void {
-        var scratch = std.array_list.Managed(u8).init(self.ed.alloc);
-        defer scratch.deinit();
-        {
-            var args = std.mem.tokenizeAny(u8, command, " \n");
-            //const com_name = args.next() orelse return;
-            while (args.next()) |ar| {
-                try scratch.append(' ');
-                try self.resolveArg(ar, &scratch);
-            }
-        }
-        var args = std.mem.tokenizeAny(u8, scratch.items, " \n");
+    pub fn execErr(self: *@This(), argv: []const []const u8, wr: *std.array_list.Managed(u8)) anyerror!void {
+        var args = SliceIt{ .slices = argv };
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
@@ -115,13 +151,6 @@ pub const CommandCtx = struct {
                             try wr.print("{s}\n", .{f.name});
                         }
                     }
-                },
-                .set => {
-                    const name = args.next() orelse return error.expectedName;
-                    const name_duped = try self.arena.allocator().dupe(u8, name);
-                    const rest = args.rest();
-                    try self.env.put(name_duped, try self.arena.allocator().dupe(u8, rest));
-                    try wr.print("${s}={s}\n", .{ name, rest });
                 },
                 .pos => {
                     const p = self.ed.draw_state.cam3d.pos;
@@ -233,7 +262,7 @@ pub const CommandCtx = struct {
                         try wr.print("Teleporting to {d} {d} {d}\n", .{ vec.x(), vec.y(), vec.z() });
                         self.ed.draw_state.cam3d.pos = vec;
                     } else {
-                        try wr.print("Invalid teleport command: '{s}'\n", .{scratch.items});
+                        //try wr.print("Invalid teleport command: '{s}'\n", .{scratch.items});
                     }
                 },
                 .portalfile => {
@@ -266,9 +295,7 @@ pub const CommandCtx = struct {
                     self.ed.draw_state.portalfile = null;
                 },
             }
-        } else {
-            try wr.print("Unknown command: '{s}' Type help for list of commands", .{scratch.items});
-        }
+        } else {}
     }
 };
 
@@ -278,4 +305,24 @@ fn parseVec(it: anytype) ?Vec3 {
         std.fmt.parseFloat(f32, it.next() orelse return null) catch return null,
         std.fmt.parseFloat(f32, it.next() orelse return null) catch return null,
     );
+}
+
+const SliceIt = struct {
+    pos: usize = 0,
+    slices: []const []const u8,
+
+    fn next(self: *@This()) ?[]const u8 {
+        if (self.pos >= self.slices.len) return null;
+
+        defer self.pos += 1;
+        return self.slices[self.pos];
+    }
+};
+
+fn printCommand(argv: []const []const u8, wr: *std.Io.Writer) !void {
+    for (argv) |arg| {
+        try wr.print("{s}", .{arg});
+    }
+    try wr.print("\n", .{});
+    try wr.flush();
 }

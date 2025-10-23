@@ -48,17 +48,13 @@ pub const iEvent = struct {
 
 pub const EventCtx = struct {
     const ArrayList = std.ArrayListUnmanaged;
-    var SdlEventId: u32 = 0;
+    pub var SdlEventId: u32 = 0;
     const Self = @This();
 
     alloc: std.mem.Allocator,
     listeners: ArrayList(*iEvent) = .{},
 
     subscribers: ArrayList(ArrayList(usize)) = .{},
-
-    pub fn allocateSdlEvent() void {
-        SdlEventId = graph.c.SDL_RegisterEvents(1);
-    }
 
     pub fn create(alloc: std.mem.Allocator) !*Self {
         const ret = try alloc.create(Self);
@@ -106,10 +102,11 @@ pub const EventCtx = struct {
     }
 
     pub fn graph_event_cb(ev: graph.c.SDL_UserEvent) void {
+        std.debug.print("got event {d}\n", .{ev.type});
         if (ev.type == SdlEventId) {
-            const self: *Self = @alignCast(@ptrCast(ev.data1 orelse return));
+            const self: *Self = @ptrCast(@alignCast(ev.data1 orelse return));
             if (ev.data2) |us1| {
-                const event: *Event = @alignCast(@ptrCast(us1));
+                const event: *Event = @ptrCast(@alignCast(us1));
                 const id = @intFromEnum(event.*);
                 if (id < self.subscribers.items.len) {
                     for (self.subscribers.items[id].items) |sub| {

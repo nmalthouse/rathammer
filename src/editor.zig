@@ -47,6 +47,7 @@ const class_tracker = @import("class_track.zig");
 const version = @import("version.zig").version;
 const app = @import("app.zig");
 const action = @import("actions.zig");
+const rpc = @import("rpc/server.zig");
 
 const async_util = @import("async.zig");
 const util3d = @import("util_3d.zig");
@@ -142,6 +143,8 @@ pub const Context = struct {
     /// alpha draw ordering
     tool_res_map: std.AutoHashMap(vpk.VpkResId, void),
     autovis: autovis.VisContext,
+
+    rpcserv: *rpc.RpcServer,
 
     shell: *shell.CommandCtx,
 
@@ -296,6 +299,8 @@ pub const Context = struct {
         loadctx: *LoadCtx,
         dirs: path_guess.Dirs,
     ) !*Self {
+        app.EventCtx.SdlEventId = try win_ptr.addUserEventCb(app.EventCtx.graph_event_cb);
+        shell.RpcEventId = try win_ptr.addUserEventCb(shell.rpc_cb);
         const shader_dir = try dirs.app_cwd.dir.openDir("ratasset/shader", .{});
         var ret = try alloc.create(Context);
         ret.* = .{
@@ -335,6 +340,7 @@ pub const Context = struct {
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
             .eventctx = try app.EventCtx.create(alloc),
+            .rpcserv = try rpc.RpcServer.create(alloc, ret.shell, shell.RpcEventId),
 
             .dirs = dirs,
 
@@ -347,8 +353,6 @@ pub const Context = struct {
                 }),
             },
         };
-        app.EventCtx.allocateSdlEvent();
-        win_ptr.setUserEventCb(app.EventCtx.graph_event_cb);
         //If an error occurs during initilization it is fatal so there is no reason to clean up resources.
         //Thus we call, defer editor.deinit(); after all is initialized..
         try ret.postInit(args, loadctx);
@@ -423,6 +427,7 @@ pub const Context = struct {
     pub fn deinit(self: *Self) void {
         self.asset.deinit();
 
+        self.rpcserv.destroy();
         self.classtrack.deinit();
         self.autovis.deinit();
         self.layers.deinit();
