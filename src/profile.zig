@@ -1,8 +1,26 @@
+test "usage" {
+    var prof = BasicProfiler.init();
+
+    prof.start();
+    //Do stuff
+    prof.end();
+
+    //Other stuff
+
+    prof.start();
+    //do more stuff
+
+    prof.end();
+
+    prof.log("did stuff"); // -> did stuff took: x ms
+}
+
 const std = @import("std");
 
 const config = @import("config");
 
 pub const BasicProfiler = if (config.time_profile) Profile_active else ProfileDummy;
+const logger = std.log.scoped(.profile);
 
 const ProfileDummy = struct {
     pub fn init() @This() {
@@ -35,6 +53,6 @@ const Profile_active = struct {
     }
 
     pub fn log(self: *@This(), name: []const u8) void {
-        std.debug.print("{s} took: {d}ms\n", .{ name, self.time / std.time.ns_per_ms });
+        logger.info("{s} took: {d} ms", .{ name, self.time / std.time.ns_per_ms });
     }
 };

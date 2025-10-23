@@ -27,6 +27,8 @@ const MenuBar = @import("windows/menubar.zig").MenuBar;
 const Ctx2dView = @import("view_2d.zig").Ctx2dView;
 const json_map = @import("json_map.zig");
 const fs = @import("fs.zig");
+const profile = @import("profile.zig").BasicProfiler;
+const async = @import("async.zig");
 
 const build_config = @import("config");
 const Conf = @import("config.zig");
@@ -309,6 +311,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     edit.log.info("gui Size, text: {d} item: {d} ", .{ scaled_text_height, scaled_item_height });
 
     if (!graph.SDL.Window.glHasExtension("GL_EXT_texture_compression_s3tc")) return error.glMissingExt;
+    var basic_prof = profile.init();
+    basic_prof.start();
     var draw = graph.ImmediateDrawingContext.init(alloc);
     defer draw.deinit();
     var font = try graph.Font.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{
@@ -326,14 +330,20 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .gtimer = load_timer,
         .expected_cb = 100,
     } };
+    basic_prof.end();
+    basic_prof.log("draw init");
 
-    var time_init = try std.time.Timer.start();
+    var edit_prof = profile.init();
+    edit_prof.start();
 
     var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &loadctx, dirs);
     defer editor.deinit();
-    std.debug.print("edit init took {d} us\n", .{time_init.read() / std.time.ns_per_us});
+    edit_prof.end();
+    edit_prof.log("edit init");
 
     loadctx.cb("Loading gui");
+    var gui_prof = profile.init();
+    gui_prof.start();
     var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font, &draw);
     defer gui.deinit();
     gui.dstate.style.config.default_item_h = scaled_item_height;
@@ -361,33 +371,48 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const main_2d_id3 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .z), .Empty, .{ .put_fbo = false });
 
     const launch_win = try LaunchWindow.create(&gui, editor);
+    gui_prof.end();
+    gui_prof.log("gui init");
+
     if (args.map == null) { //Only build the recents list if we don't have a map
-        var timer = try std.time.Timer.start();
+        var recent_prof = profile.init();
+        recent_prof.start();
         if (util.readFile(alloc, config_dir.dir, "recent_maps.txt")) |slice| {
             defer alloc.free(slice);
             var it = std.mem.tokenizeScalar(u8, slice, '\n');
+            const missing_tex = edit.missingTexture();
             while (it.next()) |filename| {
                 const EXT = ".ratmap";
                 if (std.mem.endsWith(u8, filename, EXT)) {
                     if (std.fs.cwd().openFile(filename, .{})) |recent_map| {
+                        defer recent_map.close();
                         const qoi_data = util.getFileFromTar(alloc, recent_map, "thumbnail.qoi") catch continue;
 
-                        defer alloc.free(qoi_data);
-                        const qoi = graph.Bitmap.initFromQoiBuffer(alloc, qoi_data) catch continue;
+                        const vpk_id = (editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, false) catch null) orelse {
+                            alloc.free(qoi_data);
+                            continue;
+                        };
+
+                        try editor.textures.put(vpk_id, missing_tex);
+
+                        async.QoiDecode.spawn(alloc, &editor.async_asset_load, qoi_data, vpk_id) catch {
+                            alloc.free(qoi_data);
+                            continue;
+                        };
+
                         const rec = LaunchWindow.Recent{
                             .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
-                            .tex = graph.Texture.initFromBitmap(qoi, .{}),
+                            .tex = vpk_id,
                         };
-                        qoi.deinit();
 
-                        recent_map.close();
                         try launch_win.recents.append(launch_win.alloc, rec);
                     } else |_| {}
                 }
             }
         } else |_| {}
 
-        std.debug.print("Recent build in {d} ms\n", .{timer.read() / std.time.ns_per_ms});
+        recent_prof.end();
+        recent_prof.log("recent build");
     }
     _ = try gui.addWindow(&launch_win.vt, Rec(0, 300, 1000, 1000), .{});
 
@@ -413,6 +438,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (args.map) |mapname| {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
+            win.forcePoll();
             while (!win.should_exit) {
                 switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, &loadctx, editor, launch_win.should_exit)) {
                     .exit => break,
@@ -581,6 +607,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 }
 
 pub fn main() !void {
+    var total_app_profile = profile.init();
+    total_app_profile.start();
+    defer total_app_profile.log("app lifetime");
+    defer total_app_profile.end();
     var gpa = std.heap.GeneralPurposeAllocator(.{
         .stack_trace_frames = if (IS_DEBUG) 0 else 0,
     }){};

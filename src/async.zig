@@ -3,6 +3,7 @@ const thread_pool = @import("thread_pool.zig");
 const Context = @import("editor.zig").Context;
 const graph = @import("graph");
 const compile_conf = @import("config");
+const vpk = @import("vpk.zig");
 
 pub const JobTemplate = struct {
     //Jobs must implement iJob vtable
@@ -414,5 +415,57 @@ pub const CheckVersionHttp = struct {
             edit.notify("New version available: {s}", .{nv}, 0x00ff00ff) catch {};
             edit.notify("Current version: {s}", .{version.version}, 0xfca73fff) catch {};
         }
+    }
+};
+
+pub const QoiDecode = struct {
+    //Jobs must implement iJob vtable
+    job: thread_pool.iJob,
+    //Used to put the finished job in list
+    pool_ptr: *thread_pool.Context,
+
+    alloc: std.mem.Allocator,
+
+    qoi_buf: []const u8,
+
+    bitmap: ?graph.Bitmap = null,
+    id: vpk.VpkResId,
+
+    /// Assumes qoi_buf was allocated with passed in alloc,
+    /// takes ownership of qoi_buf
+    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, qoi_buf: []const u8, id: vpk.VpkResId) !void {
+        const self = try alloc.create(@This());
+        self.* = .{
+            .job = .{ .onComplete = &onComplete, .user_id = 0 },
+            .alloc = alloc,
+            .pool_ptr = pool,
+            .qoi_buf = qoi_buf,
+            .id = id,
+        };
+        try pool.spawnJob(workFunc, .{self});
+    }
+
+    pub fn destroy(self: *@This()) void {
+        if (self.bitmap) |*bmp|
+            bmp.deinit();
+        self.alloc.free(self.qoi_buf);
+        self.alloc.destroy(self);
+    }
+
+    // Called from self.spawn in a worker thread
+    pub fn workFunc(self: *@This()) void {
+        _ = D: {
+            self.bitmap = graph.Bitmap.initFromQoiBuffer(self.alloc, self.qoi_buf) catch break :D;
+        };
+        self.pool_ptr.insertCompletedJob(&self.job) catch {};
+    }
+
+    // Called from main thread.
+    pub fn onComplete(vt: *thread_pool.iJob, edit: *Context) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
+        defer self.destroy();
+
+        if (self.bitmap) |bmp|
+            edit.textures.put(self.id, graph.Texture.initFromBitmap(bmp, .{})) catch {};
     }
 };

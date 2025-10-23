@@ -38,6 +38,7 @@ Second, wine is very slow to startup by default, 'running wineserver --persisten
 
 ### Building from source
 * (debian) Download the correct zig 0.14.1 tar from [zig](https://ziglang.org/download/)
+* If building from master use zig 0.15.2, building latest tagged "v0.1.0" use zig 0.14.1
 * (debian) Install the dependencies listed under [sdl linux](https://github.com/libsdl-org/SDL/blob/main/docs/README-linux.md)
 * Follow the instructions below for building
 

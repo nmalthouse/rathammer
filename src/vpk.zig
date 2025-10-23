@@ -373,23 +373,19 @@ pub const Context = struct {
         try new_dir.fds.put(0x7fff, infile);
         try self.dirs.append(self.alloc, new_dir);
 
-        // We read into fbs because File.Reader is slow!
-        // With 0.15.1, we can probable remove the FastFbs thing
         self.filebuf.clearRetainingCapacity();
         var buf: [4096]u8 = undefined;
         var re = infile.reader(&buf);
         const slice = try re.interface.allocRemaining(self.alloc, .unlimited);
         defer self.alloc.free(slice);
 
-        var r = FastFbs{
-            .slice = slice,
-            .pos = 0,
-        };
-        //const r = fbs.reader();
-        const sig = try r.readInt(u32, .little);
+        var reader: std.Io.Reader = .fixed(slice);
+        const r = &reader;
+
+        const sig = try r.takeInt(u32, .little);
         if (sig != VPK_FILE_SIG)
             return error.invalidVpk;
-        const version = try r.readInt(u32, .little);
+        const version = try r.takeInt(u32, .little);
         const header_size: u32 = switch (version) {
             1 => 12,
             2 => 28,
@@ -397,16 +393,16 @@ pub const Context = struct {
         };
         switch (version) {
             1 => {
-                const tree_size = try r.readInt(u32, .little);
+                const tree_size = try r.takeInt(u32, .little);
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, &r, tree_size, header_size, dir_index, true);
+                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, true);
             },
             2 => {
-                const tree_size = try r.readInt(u32, .little);
-                const filedata_section_size = try r.readInt(u32, .little);
-                const archive_md5_sec_size = try r.readInt(u32, .little);
-                const other_md5_sec_size = try r.readInt(u32, .little);
-                const sig_sec_size = try r.readInt(u32, .little);
+                const tree_size = try r.takeInt(u32, .little);
+                const filedata_section_size = try r.takeInt(u32, .little);
+                const archive_md5_sec_size = try r.takeInt(u32, .little);
+                const other_md5_sec_size = try r.takeInt(u32, .little);
+                const sig_sec_size = try r.takeInt(u32, .little);
                 _ = sig_sec_size;
                 _ = archive_md5_sec_size;
                 _ = filedata_section_size;
@@ -414,7 +410,7 @@ pub const Context = struct {
                 if (other_md5_sec_size != 48) return error.invalidMd5Size;
 
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, &r, tree_size, header_size, dir_index, false);
+                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, false);
             },
             else => {
                 log.err("Unsupported vpk version {d}, file: {s}", .{ version, file_name });
@@ -563,16 +559,10 @@ pub const Context = struct {
     }
 };
 
-fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *FastFbs, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool) !void {
-    var pathbuf: std.ArrayList(u8) = .{};
-    defer pathbuf.deinit(self.alloc);
-    var extbuf: std.ArrayList(u8) = .{};
-    defer extbuf.deinit(self.alloc);
-    var namebuf: std.ArrayList(u8) = .{};
-    defer namebuf.deinit(self.alloc);
+fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *std.Io.Reader, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool) !void {
     while (true) {
-        loadctx.printCb("Dir mounted {d:.2}%", .{@as(f32, @floatFromInt(r.pos)) / @as(f32, @floatFromInt(r.slice.len + 1)) * 100});
-        const ext = try readString(r, &extbuf, self.alloc);
+        loadctx.printCb("Dir mounted {d:.2}%", .{@as(f32, @floatFromInt(r.seek)) / @as(f32, @floatFromInt(r.end + 1)) * 100});
+        const ext = try r.takeDelimiter(0) orelse break;
         if (ext.len == 0)
             break;
         sanatizeVpkString(ext);
@@ -580,27 +570,27 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *FastFbs, tree_size: u
         const ext_stored = try self.string_storage.store(ext);
         const ext_id = try self.extension_map.getPut(ext_stored);
         while (true) {
-            const path = try readString(r, &pathbuf, self.alloc);
-            self.writeDump("    {s}\n", .{path});
+            const path = try r.takeDelimiter(0) orelse break;
             if (path.len == 0)
                 break;
+            self.writeDump("    {s}\n", .{path});
             sanatizeVpkString(path);
             const path_stored = try self.string_storage.store(path);
             const path_id = try self.path_map.getPut(path_stored);
 
             while (true) {
-                const fname = try readString(r, &namebuf, self.alloc);
-                self.writeDump("        {s}\n", .{fname});
+                const fname = try r.takeDelimiter(0) orelse break;
                 if (fname.len == 0)
                     break;
+                self.writeDump("        {s}\n", .{fname});
 
-                _ = try r.readInt(u32, .little); //CRC
-                const preload_count = try r.readInt(u16, .little); //preload bytes
-                var arch_index = try r.readInt(u16, .little); //archive index
-                var offset = try r.readInt(u32, .little);
-                var entry_len = try r.readInt(u32, .little);
+                _ = try r.takeInt(u32, .little); //CRC
+                const preload_count = try r.takeInt(u16, .little); //preload bytes
+                var arch_index = try r.takeInt(u16, .little); //archive index
+                var offset = try r.takeInt(u32, .little);
+                var entry_len = try r.takeInt(u32, .little);
 
-                const term = try r.readInt(u16, .little);
+                const term = try r.takeInt(u16, .little);
                 if (term != 0xffff) return error.badBytes;
                 if (arch_index == 0x7fff) {
                     //TODO put a dir with arch_index 0x7ff do it .
@@ -608,12 +598,12 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *FastFbs, tree_size: u
                 }
 
                 if (entry_len == 0) { //Hack to support preload
-                    offset = @intCast(r.pos);
+                    offset = @intCast(r.seek);
                     arch_index = 0x7fff;
                     entry_len = preload_count;
                 }
 
-                try r.skipBytes(preload_count, .{});
+                r.toss(preload_count);
 
                 sanatizeVpkString(fname);
                 const fname_stored = try self.string_storage.store(fname);
@@ -653,47 +643,3 @@ fn splitPath(sl: []const u8) struct { ext: []const u8, path: []const u8, name: [
         .name = sl[slash + 1 .. dot],
     };
 }
-
-///Read next string in vpk dir file
-///Clears str
-fn readString(r: anytype, str: *std.ArrayList(u8), alloc: std.mem.Allocator) ![]u8 {
-    str.clearRetainingCapacity();
-    while (true) {
-        const char = try r.readByte();
-        if (char == 0)
-            return str.items;
-        try str.append(alloc, char);
-    }
-}
-
-const FastFbs = struct {
-    const Self = @This();
-    slice: []const u8,
-    pos: usize,
-
-    pub fn skipBytes(self: *Self, count: usize, _: anytype) !void {
-        if (count + self.pos > self.slice.len) return error.EndOfStream;
-        self.pos += count;
-    }
-
-    pub fn readByte(self: *Self) !u8 {
-        if (self.pos >= self.slice.len) return error.EndOfStream;
-
-        defer self.pos += 1;
-        return self.slice[self.pos];
-    }
-
-    pub fn readBytesNoEof(self: *Self, comptime count: usize) ![count]u8 {
-        if (count + self.pos > self.slice.len) return error.EndOfStream;
-
-        var bytes: [count]u8 = undefined;
-        @memcpy(&bytes, self.slice[self.pos .. self.pos + count]);
-        self.pos += count;
-        return bytes;
-    }
-
-    pub fn readInt(self: *Self, comptime T: type, endian: std.builtin.Endian) !T {
-        const bytes = try self.readBytesNoEof(@divExact(@typeInfo(T).int.bits, 8));
-        return std.mem.readInt(T, &bytes, endian);
-    }
-};

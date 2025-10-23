@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = optimize,
         }),
+        .use_llvm = true,
     });
     const ratdep = b.dependency("ratgraph", .{ .target = target, .optimize = optimize });
     const uuid_dep = b.dependency("uuid", .{ .target = target, .optimize = optimize });

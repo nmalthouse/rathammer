@@ -1,5 +1,7 @@
 const std = @import("std");
 const graph = @import("graph");
+const vpk = @import("../vpk.zig");
+const ptext = @import("widget_texture.zig");
 const Gui = guis.Gui;
 const Rec = graph.Rec;
 const Rect = graph.Rect;
@@ -26,7 +28,7 @@ pub const LaunchWindow = struct {
 
     pub const Recent = struct {
         name: []const u8,
-        tex: ?graph.Texture,
+        tex: vpk.VpkResId,
     };
 
     const Textboxes = enum {
@@ -64,8 +66,6 @@ pub const LaunchWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         for (self.recents.items) |*rec| {
             self.alloc.free(rec.name);
-            if (rec.tex) |*t|
-                t.deinit();
         }
         self.recents.deinit(self.alloc);
         //self.layout.deinit(gui, vt);
@@ -121,8 +121,8 @@ pub const LaunchWindow = struct {
 
             var ly = gui.dstate.vlayout(sp[1]);
             _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, null);
-            if (rec.tex) |tex|
-                _ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
+            //_ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
+            _ = ptext.PollingTexture.build(area, sp[0], self.editor, rec.tex, "", .{}, .{});
             const ld_btn = ly.getArea() orelse return;
             const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
 

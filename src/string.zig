@@ -2,7 +2,7 @@ const std = @import("std");
 pub const StringStorage = struct {
     const Self = @This();
 
-    set: std.StringHashMap(void),
+    set: std.StringArrayHashMap(void),
     arena: *std.heap.ArenaAllocator,
     retained_alloc: std.mem.Allocator,
     arena_alloc: std.mem.Allocator,
@@ -13,7 +13,7 @@ pub const StringStorage = struct {
         arena.* = std.heap.ArenaAllocator.init(alloc);
         return .{
             .arena = arena,
-            .set = std.StringHashMap(void).init(alloc),
+            .set = .init(alloc),
             .retained_alloc = alloc,
             .arena_alloc = arena.allocator(),
         };
