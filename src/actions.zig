@@ -74,8 +74,31 @@ pub fn redo(ed: *Ed) void {
     ed.eventctx.pushEvent(.{ .redo = {} });
 }
 
+pub fn clearSelection(ed: *Ed) !void {
+    const count = ed.selection.countSelected();
+    if (count == 0)
+        return;
+    const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
+
+    const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
+    ed.selection.list.clear();
+    const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
+
+    try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
+}
+
 pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
     _ = try ed.selection.put(id, ed);
+}
+
+pub fn trySave(ed: *Ed) !void {
+    if (ed.loaded_map_name) |basename| {
+        ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
+            try ed.notify("Failed saving map: {t}", .{err}, colors.bad);
+        };
+    } else {
+        try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);
+    }
 }
 
 pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !void {
@@ -197,19 +220,6 @@ pub fn createCube(ed: *Ed, pos: Vec3, ext: Vec3, tex_id: vpk.VpkResId, select: b
     if (ids.len != 1) return error.horrible;
 
     return ids[0];
-}
-
-pub fn clearSelection(ed: *Ed) !void {
-    const count = ed.selection.countSelected();
-    if (count == 0)
-        return;
-    const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
-
-    const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
-    ed.selection.list.clear();
-    const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
-
-    try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
 }
 
 pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
@@ -513,14 +523,4 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
         }
     }
     ustack.apply(ed);
-}
-
-pub fn trySave(ed: *Ed) !void {
-    if (ed.loaded_map_name) |basename| {
-        ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
-            try ed.notify("Failed saving map: {t}", .{err}, colors.bad);
-        };
-    } else {
-        try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);
-    }
 }

@@ -90,7 +90,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var app_cwd = try fs.openAppCwd(&env, cwd, alloc);
     defer app_cwd.close(alloc);
 
-    const config_dir = try fs.openConfigDir(alloc, cwd, app_cwd, args.config, &env);
+    const config_dir = try fs.openXdgDir(alloc, cwd, app_cwd, args.config, &env, "XDG_CONFIG_DIR");
     defer config_dir.free(alloc);
     // if user has specified a config, don't copy
     const copy_default_config = args.config == null;

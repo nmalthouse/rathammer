@@ -6,6 +6,7 @@ const Console = @import("windows/console.zig");
 const edit = @import("editor.zig");
 const Editor = edit.Context;
 const pointfile = @import("pointfile.zig");
+const actions = @import("actions.zig");
 //TODO
 //add commands for
 //rebuild all meshes
@@ -31,6 +32,14 @@ const Commands = enum {
     wireframe,
     env,
     pos,
+
+    trySave,
+    undo,
+    redo,
+    clearSelection,
+    delete,
+    hide,
+    unhideAll,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -126,6 +135,13 @@ pub const CommandCtx = struct {
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
+                .undo => actions.undo(self.ed),
+                .redo => actions.redo(self.ed),
+                .trySave => try actions.trySave(self.ed),
+                .clearSelection => try actions.clearSelection(self.ed),
+                .delete => try actions.deleteSelected(self.ed),
+                .hide => try actions.hideSelected(self.ed),
+                .unhideAll => try actions.unhideAll(self.ed),
                 .count_ents => {
                     try wr.print("Number of entites: {d}", .{self.ed.ecs.getEntLength()});
                 },

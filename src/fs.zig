@@ -154,11 +154,11 @@ pub fn guessSteamPath(env: *std.process.EnvMap, alloc: std.mem.Allocator) !?Wrap
     };
 }
 
-pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: WrappedDir, arg_override: ?[]const u8, env: *std.process.EnvMap) !WrappedDir {
+pub fn openXdgDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: WrappedDir, arg_override: ?[]const u8, env: *std.process.EnvMap, xdg_dir_name: []const u8) !WrappedDir {
     if (arg_override != null)
         return try cwd.openDir(".", .{}, alloc);
 
-    const xdg_config_dir = (env.get("XDG_CONFIG_DIR"));
+    const xdg_config_dir = (env.get(xdg_dir_name));
     var config_path: std.ArrayList(u8) = .{};
     defer config_path.deinit(alloc);
     if (xdg_config_dir) |x| {
@@ -175,7 +175,7 @@ pub fn openConfigDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: Wrapped
                 if (env.get("HOME")) |home| {
                     try config_path.print(alloc, "{s}/.config/rathammer", .{home});
                 } else {
-                    log.info("XDG_CONFIG_HOME and $HOME not defined, using config in app dir", .{});
+                    log.info("{s} and $HOME not defined, using app dir", .{xdg_dir_name});
                     return try app_cwd.openDir(".", .{}, alloc);
                 }
             },
