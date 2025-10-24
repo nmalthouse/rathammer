@@ -47,7 +47,6 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
             defer event.deinit(ed.rpcserv.alloc);
             for (event.msg) |msg| {
                 var wr = event.stream.writer(&write_buf);
-                std.debug.print("got {s}\n", .{msg.method});
                 switch (ha(0, msg.method)) {
                     ha(0, "shell") => {
                         _ = cmd.arena.reset(.retain_capacity);
@@ -295,7 +294,11 @@ pub const CommandCtx = struct {
                     self.ed.draw_state.portalfile = null;
                 },
             }
-        } else {}
+        } else {
+            try wr.print("Unknown command\n", .{});
+            try printCommand(argv, wr);
+            try wr.print("\n", .{});
+        }
     }
 };
 
@@ -319,10 +322,9 @@ const SliceIt = struct {
     }
 };
 
-fn printCommand(argv: []const []const u8, wr: *std.Io.Writer) !void {
+fn printCommand(argv: []const []const u8, wr: *std.array_list.Managed(u8)) !void {
     for (argv) |arg| {
         try wr.print("{s}", .{arg});
     }
     try wr.print("\n", .{});
-    try wr.flush();
 }

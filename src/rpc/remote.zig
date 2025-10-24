@@ -1,15 +1,30 @@
 const std = @import("std");
 const rpc = @import("rpc.zig");
+const graph = @import("graph");
+const prompt = ">>> ";
+const Arg = graph.ArgGen.Arg;
+const Kind = enum {
+    command,
+    raw,
+};
+pub const Args = [_]graph.ArgGen.ArgItem{
+    Arg("crap", .string, "vmf or json to load"),
+    Arg("socket", .string, "socket to connect"),
+    graph.ArgGen.ArgCustom("kind", Kind, "type of session to start"),
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     //defer _ = gpa.detectLeaks();
     const alloc = gpa.allocator();
 
-    var args = try std.process.argsWithAllocator(alloc);
-    _ = args.next() orelse return error.broken;
+    var arg_it = try std.process.argsWithAllocator(alloc);
+    defer arg_it.deinit();
 
-    const stream = try std.net.connectUnixSocket(args.next() orelse {
+    const args = try graph.ArgGen.parseArgs(&Args, &arg_it);
+    const kind = args.kind orelse .command;
+
+    const stream = try std.net.connectUnixSocket(args.socket orelse {
         std.debug.print("Expected name of socket to open\n", .{});
         return;
     });
@@ -23,6 +38,10 @@ pub fn main() !void {
     var stdin_reader = std.fs.File.stdin().reader(&stdin_buf);
     const stdin = &stdin_reader.interface;
 
+    var stdout_buf: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+    const stdout = &stdout_writer.interface;
+
     var buf: std.Io.Writer.Allocating = .init(alloc);
     defer buf.deinit();
 
@@ -31,46 +50,110 @@ pub fn main() !void {
     var arg_buf = std.array_list.Managed(std.json.Value).init(alloc);
     defer arg_buf.deinit();
 
-    const read_thread = try std.Thread.spawn(.{}, readThread, .{ stream, &readbuf });
-    _ = read_thread;
-    while (true) {
-        const command = try stdin.takeDelimiter('\n') orelse break;
-        var it = std.mem.tokenizeScalar(u8, command, ' ');
-        const method = it.next() orelse break;
+    var arena = std.heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
 
-        arg_buf.clearRetainingCapacity();
-        while (it.next()) |arg| {
-            try arg_buf.append(.{ .string = arg });
-        }
+    //const read_thread = try std.Thread.spawn(.{}, readThread, .{ stream, &readbuf, alloc });
+    //_ = read_thread;
+    switch (kind) {
+        .command => {
+            var read_buf: [1024]u8 = undefined;
+            var read = stream.reader(&read_buf);
+            const r = read.interface();
+            while (true) {
+                try stdout.print("{s}", .{prompt});
+                try stdout.flush();
 
-        //--> {"jsonrpc": "2.0", "method": "subtract", "params": {"minuend": 42, "subtrahend": 23}, "id": 3}
-        buf.clearRetainingCapacity();
-        try std.json.Stringify.value(rpc.JsonRpcRequest{
-            .jsonrpc = "2.0",
-            .method = method,
-            .params = .{ .array = arg_buf },
-            .id = 0,
-        }, .{}, &buf.writer);
+                const command = try stdin.takeDelimiter('\n') orelse break;
+                var it = std.mem.tokenizeScalar(u8, command, ' ');
 
-        const slice = buf.written();
-        try wr.interface.print("{d}:{s},", .{ slice.len, slice });
-        try wr.interface.flush();
+                arg_buf.clearRetainingCapacity();
+                while (it.next()) |arg| {
+                    try arg_buf.append(.{ .string = arg });
+                }
+
+                buf.clearRetainingCapacity();
+                try std.json.Stringify.value(rpc.JsonRpcRequest{
+                    .jsonrpc = "2.0",
+                    .method = "shell",
+                    .params = .{ .array = arg_buf },
+                    .id = 0,
+                }, .{}, &buf.writer);
+
+                const slice = buf.written();
+                try wr.interface.print("{d}:{s},", .{ slice.len, slice });
+                try wr.interface.flush();
+
+                _ = arena.reset(.retain_capacity);
+
+                try awaitResponse(stdout, arena.allocator(), r, &readbuf);
+            }
+        },
+        else => return error.notImplemented,
     }
 }
 
-fn readThread(stream: std.net.Stream, msg_buf: *std.Io.Writer.Allocating) !void {
+fn readThread(stream: std.net.Stream, msg_buf: *std.Io.Writer.Allocating, alloc: std.mem.Allocator) !void {
     var read_buf: [1024]u8 = undefined;
     var read = stream.reader(&read_buf);
     const r = read.interface();
 
+    var arena = std.heap.ArenaAllocator.init(alloc);
+    defer arena.deinit();
+
+    var stdout_buf: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+    const stdout = &stdout_writer.interface;
+
     while (true) {
-        const length_str = (r.takeDelimiter(':') catch null) orelse break;
-        const length = try std.fmt.parseInt(u32, length_str, 10);
-        msg_buf.clearRetainingCapacity();
-        _ = try r.stream(&msg_buf.writer, .limited(length));
+        _ = arena.reset(.retain_capacity);
 
-        if (try r.takeByte() != ',') return error.expectedComma;
+        const parsed = rpc.parseSafe(arena.allocator(), r, msg_buf, rpc.JsonRpcResponse) catch |err| switch (err) {
+            error.invalidStream => return,
+            error.invalidJson => {
+                std.debug.print("recieved invalid response\n", .{});
+                continue;
+            },
+        };
 
-        std.debug.print("{s}\n", .{msg_buf.written()});
+        for (parsed) |pa| {
+            switch (pa.result) {
+                else => {},
+                .string => |str| {
+                    //TODO properly convert all escapes
+                    var it = std.mem.tokenizeSequence(u8, str, "\n");
+                    while (it.next()) |item| {
+                        try stdout.print("{s}\n", .{item});
+                    }
+
+                    try stdout.flush();
+                },
+            }
+        }
+    }
+}
+
+fn awaitResponse(stdout: *std.Io.Writer, alloc: std.mem.Allocator, r: *std.Io.Reader, msg_buf: *std.Io.Writer.Allocating) !void {
+    const parsed = rpc.parseSafe(alloc, r, msg_buf, rpc.JsonRpcResponse) catch |err| switch (err) {
+        error.invalidStream => return,
+        error.invalidJson => {
+            std.debug.print("recieved invalid response\n", .{});
+            return;
+        },
+    };
+
+    for (parsed) |pa| {
+        switch (pa.result) {
+            else => {},
+            .string => |str| {
+                //TODO properly convert all escapes
+                var it = std.mem.tokenizeSequence(u8, str, "\n");
+                while (it.next()) |item| {
+                    try stdout.print("{s}\n", .{item});
+                }
+
+                try stdout.flush();
+            },
+        }
     }
 }

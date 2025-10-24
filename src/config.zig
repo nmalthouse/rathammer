@@ -282,7 +282,8 @@ fn backupKeymod(name: []const u8) graph.SDL.keycodes.Keymod {
 
 pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []const u8) !*ConfigCtx { //Load config
     //
-    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    var stdout_buf: [128]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
     const out = &stdout_writer.interface;
 
     var realpath_buf: [256]u8 = undefined;

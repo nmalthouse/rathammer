@@ -427,7 +427,6 @@ pub const Context = struct {
     pub fn deinit(self: *Self) void {
         self.asset.deinit();
 
-        self.rpcserv.destroy();
         self.classtrack.deinit();
         self.autovis.deinit();
         self.layers.deinit();
@@ -472,6 +471,7 @@ pub const Context = struct {
         self.async_asset_load.deinit();
         self._selection_scratch.deinit(self.alloc);
         self.eventctx.destroy();
+        self.rpcserv.destroy();
 
         //destroy does not take a pointer to alloc, so this is safe.
         self.alloc.destroy(self);

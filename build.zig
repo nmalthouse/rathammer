@@ -32,6 +32,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/rpc/remote.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = true,
         }),
     });
 
@@ -51,6 +52,7 @@ pub fn build(b: *std.Build) void {
     hammer_exe.root_module.addImport("uuidlib", uuidmod);
     jsonToVmf.root_module.addImport("graph", ratmod);
     mapbuilder.root_module.addImport("graph", ratmod);
+    remote.root_module.addImport("graph", ratmod);
 
     const opts = b.addOptions();
     opts.addOption(bool, "time_profile", b.option(bool, "profile", "profile the time loading takes") orelse false);

@@ -102,44 +102,29 @@ pub const RpcServer = struct {
         var read = stream.reader(&read_buffer);
         const r = read.interface();
 
+        var write = stream.writer(&write_buffer);
+        const wr = &write.interface;
+
         var msg_buf: std.Io.Writer.Allocating = .init(self.alloc);
         defer msg_buf.deinit();
 
         while (true) {
-            const length_str = (r.takeDelimiter(':') catch null) orelse break;
-
-            const length = try std.fmt.parseInt(u32, length_str, 10);
-
-            msg_buf.clearRetainingCapacity();
-            _ = try r.stream(&msg_buf.writer, .limited(length));
-
-            if (try r.takeByte() != ',') return error.expectedComma;
-
-            const trimmed = std.mem.trimLeft(u8, msg_buf.written(), " \n\t\r");
-            if (trimmed.len == 0) return error.invalid;
-
             var arena = std.heap.ArenaAllocator.init(self.alloc);
             errdefer arena.deinit();
 
-            const parsed = blk: switch (trimmed[0]) {
-                '{' => { //Single json object
-                    const parsed = std.json.parseFromSliceLeaky(rpc.JsonRpcRequest, arena.allocator(), msg_buf.written(), .{}) catch |err| {
-                        var wr = stream.writer(&write_buffer);
-                        wr.interface.print("{t}\n", .{err}) catch {};
-                        try wr.interface.flush();
-                        break;
-                    };
-                    const slice = try arena.allocator().alloc(rpc.JsonRpcRequest, 1);
-                    slice[0] = parsed;
-                    break :blk slice;
+            const parsed = rpc.parseSafe(arena.allocator(), r, &msg_buf, rpc.JsonRpcRequest) catch |err| switch (err) {
+                error.invalidStream => return,
+                error.invalidJson => {
+                    try respondBuf(wr, .{
+                        .id = 0,
+                        .@"error" = .{
+                            .code = @intFromEnum(rpc.RpcError.parse),
+                            .message = "bad json",
+                            .data = "",
+                        },
+                    }, &msg_buf);
+                    continue;
                 },
-                '[' => std.json.parseFromSliceLeaky([]const rpc.JsonRpcRequest, arena.allocator(), msg_buf.written(), .{}) catch |err| {
-                    var wr = stream.writer(&write_buffer);
-                    wr.interface.print("{t}\n", .{err}) catch {};
-                    try wr.interface.flush();
-                    break;
-                },
-                else => return error.invalidJson,
             };
 
             //defer parsed.deinit();
@@ -154,13 +139,17 @@ pub const RpcServer = struct {
         }
     }
 
-    //Only call this from the main thread.
-    pub fn respond(self: *Self, wr: *std.Io.Writer, resp: rpc.JsonRpcResponse) !void {
-        self.response_buf.clearRetainingCapacity();
-        try std.json.Stringify.value(resp, .{}, &self.response_buf.writer);
+    pub fn respondBuf(wr: *std.Io.Writer, resp: rpc.JsonRpcResponse, msg_buf: *std.Io.Writer.Allocating) !void {
+        msg_buf.clearRetainingCapacity();
+        try std.json.Stringify.value(resp, .{}, &msg_buf.writer);
 
-        const slice = self.response_buf.written();
+        const slice = msg_buf.written();
         try wr.print("{d}:{s},", .{ slice.len, slice });
         try wr.flush();
+    }
+
+    /// Only call this from the main thread.
+    pub fn respond(self: *Self, wr: *std.Io.Writer, resp: rpc.JsonRpcResponse) !void {
+        try respondBuf(wr, resp, &self.response_buf);
     }
 };
