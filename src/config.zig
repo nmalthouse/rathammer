@@ -84,6 +84,8 @@ pub const Config = struct {
         clip_commit: Keybind = .{ .b = SC(.RETURN, 0) },
 
         inspector_tab: ArrayList(Keybind) = .{},
+
+        ignore_groups: Keybind = .{ .b = SC(.G, mask(&.{.CTRL})) },
     } = .{},
     window: struct {
         height_px: i32 = 600,

@@ -15,6 +15,7 @@ const label = guis.label;
 const action = @import("../actions.zig");
 const version = @import("../version.zig");
 const colors = @import("../colors.zig").colors;
+const app = @import("../app.zig");
 
 const MenuBtn = enum(guis.Uid) {
     save,
@@ -48,6 +49,7 @@ const menus = [_][]const u8{
 pub const MenuBar = struct {
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
+    ev_vt: app.iEvent = .{ .cb = event_cb },
 
     ed: *Context,
 
@@ -59,6 +61,10 @@ pub const MenuBar = struct {
             }, &self.vt),
             .ed = editor,
         };
+
+        if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.menubar_dirty)) catch {};
+        } else |_| {}
 
         return &self.vt;
     }
@@ -106,6 +112,17 @@ pub const MenuBar = struct {
 
             _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
             ar.x += b + pad;
+        }
+    }
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        switch (ev) {
+            .menubar_dirty => {
+                self.vt.needs_rebuild = true;
+            },
+            else => {},
         }
     }
 

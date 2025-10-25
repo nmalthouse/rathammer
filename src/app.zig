@@ -30,6 +30,7 @@ pub const EventKind = enum(EventKindT) {
     redo,
     tool_changed,
     saved,
+    menubar_dirty,
     //select,
 };
 
@@ -39,6 +40,7 @@ pub const Event = union(EventKind) {
     //select: void,
     tool_changed: void,
     saved: void,
+    menubar_dirty: void,
 };
 
 pub const EventCb = fn (user: *iEvent, ev: Event) void;

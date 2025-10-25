@@ -1627,6 +1627,11 @@ pub const Context = struct {
             if (ed.isBindState(config.keys.grid_dec.b, .rising))
                 ed.grid.half();
 
+            if (ed.isBindState(config.keys.ignore_groups.b, .rising)) {
+                ed.selection.ignore_groups = !ed.selection.ignore_groups;
+                ed.eventctx.pushEvent(.{ .menubar_dirty = {} });
+            }
+
             {
                 for (config.keys.tool.items, 0..) |b, i| {
                     if (ed.isBindState(b.b, .rising)) {

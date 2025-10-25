@@ -835,34 +835,26 @@ pub const UndoAmal = struct {
     dep: u64 = 0, // The id of the first undo item this depends on
 
     pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
-        inline for (0..tt.Count) |index| {
-            const en: tt.EnumT = @enumFromInt(index);
-            if (en == self.d)
-                @field(self.d, @tagName(en)).deinit(alloc);
+        switch (self.d) {
+            inline else => |w| w.deinit(alloc),
         }
     }
 
     pub fn undo(self: *const Self, ed: *Editor) void {
-        inline for (0..tt.Count) |index| {
-            const en: tt.EnumT = @enumFromInt(index);
-            if (en == self.d)
-                @field(self.d, @tagName(en)).undo(ed);
+        switch (self.d) {
+            inline else => |w| w.undo(ed),
         }
     }
 
     pub fn redo(self: *const Self, ed: *Editor) void {
-        inline for (0..tt.Count) |index| {
-            const en: tt.EnumT = @enumFromInt(index);
-            if (en == self.d)
-                @field(self.d, @tagName(en)).redo(ed);
+        switch (self.d) {
+            inline else => |w| w.redo(ed),
         }
     }
 
     pub fn depId(self: *const Self) ?Id {
-        inline for (0..tt.Count) |index| {
-            const en: tt.EnumT = @enumFromInt(index);
-            if (en == self.d)
-                return @field(self.d, @tagName(en)).depId();
+        switch (self.d) {
+            inline else => |w| return w.depId(),
         }
         return null;
     }
