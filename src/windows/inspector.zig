@@ -199,7 +199,14 @@ pub const InspectorWindow = struct {
             ly.padding.top = 10;
 
             const names = [6][]const u8{ "Listen", "target", "input", "value", "delay", "fc" };
-            const BetterNames = [names.len][]const u8{ "My output named", "Target entities named", "Via this input", "With a parameter of", "After a delay is seconds of", "Limit to this many fires" };
+            const BetterNames = [names.len][]const u8{
+                "My output named",
+                "Target entities named",
+                "Via this input",
+                "With a parameter of",
+                "After a delay is seconds of",
+                "Limit to this many fires",
+            };
             _ = Wg.DynamicTable.build(vt, sp[0], win, .{
                 .column_positions = &self.io_columns_width,
                 .column_names = &names,
@@ -218,15 +225,23 @@ pub const InspectorWindow = struct {
                     const ar = ly.getArea() orelse break;
                     const sp1 = ar.split(.vertical, ar.w / 2);
 
-                    _ = Wg.Text.buildStatic(vt, sp1[0], n, null);
+                    switch (i) {
+                        1 => {
+                            const count = self.editor.targetname_track.count(li.target.items, &self.editor.ecs);
+                            _ = Wg.Text.buildStatic(vt, sp1[0], self.editor.printArena("{s} ({d})", .{ n, count }) catch n, null);
+                        },
+                        else => _ = Wg.Text.buildStatic(vt, sp1[0], n, null),
+                    }
                     _ = switch (i) {
                         0 => self.buildOutputCombo(vt, sp1[1]),
-                        1 => Wg.Textbox.buildOpts(vt, sp1[1], .{
-                            .init_string = li.target.items,
-                            .user_id = 1,
-                            .commit_vt = &self.cbhandle,
-                            .commit_cb = &ioTextboxCb,
-                        }),
+                        1 => {
+                            _ = Wg.Textbox.buildOpts(vt, sp1[1], .{
+                                .init_string = li.target.items,
+                                .user_id = 1,
+                                .commit_vt = &self.cbhandle,
+                                .commit_cb = &ioTextboxCb,
+                            });
+                        },
                         2 => self.buildInputCombo(vt, sp1[1]),
                         3 => Wg.Textbox.buildOpts(vt, sp1[1], .{
                             .init_string = li.value.items,
@@ -327,7 +342,7 @@ pub const InspectorWindow = struct {
                     fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                         const fields = lself.editor.fgd_ctx.ents.items;
-                        if (id >= fields.len) return "BROKEN";
+                        if (id >= fields.len) return "none";
                         return fields[id].name;
                     }
                 };
@@ -783,13 +798,20 @@ pub const InspectorWindow = struct {
                 .cb_vt = &self.cbhandle,
                 .user_1 = if (self.selected_io_index == ind) 1 else 0,
             };
-            const strs = [4][]const u8{ con.listen_event, con.target.items, con.input, con.value.items };
+            const strs = [4][]const u8{
+                con.listen_event,
+                con.target.items,
+                con.input,
+                con.value.items,
+            };
             //con.delay, con.fire_count };
             for (strs) |str|
                 _ = Wg.Button.build(lay, tly.getArea(), str, opts);
+            _ = Wg.Button.build(lay, tly.getArea(), self.editor.printScratch("{d}", .{con.delay}) catch "", opts);
+            _ = Wg.Button.build(lay, tly.getArea(), self.editor.printScratch("{d}", .{con.fire_count}) catch "", opts);
             //TODO make these buttons too
-            _ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.delay});
-            _ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.fire_count});
+            //_ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.delay});
+            //_ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.fire_count});
         }
     }
 
@@ -855,8 +877,8 @@ pub const InspectorWindow = struct {
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                const class = lself.getEntDef() orelse return "broken";
-                if (id >= class.outputs.items.len) return "BROKEN";
+                const class = lself.getEntDef() orelse return "none";
+                if (id >= class.outputs.items.len) return "none";
                 const ind = class.outputs.items[id];
                 return class.io_data.items[ind].name;
             }
@@ -884,7 +906,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn buildInputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
-        const Lam = struct {
+        const InputCombo = struct {
             fn commit(vtt: *CbHandle, id: usize, _: void) void {
                 const lself = vtt.cast(InspectorWindow, "cbhandle");
                 const lcons = lself.getConsPtr() orelse return;
@@ -898,7 +920,7 @@ pub const InspectorWindow = struct {
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                 const lself = vtt.cast(InspectorWindow, "cbhandle");
                 const list = lself.editor.fgd_ctx.all_inputs.items;
-                if (id >= list.len) return "BROKEN";
+                if (id >= list.len) return "none";
                 return list[id].name;
             }
         };
@@ -910,8 +932,8 @@ pub const InspectorWindow = struct {
         const index = if (self.editor.fgd_ctx.all_input_map.get(current_item)) |io| io else 0;
         _ = Wg.ComboUser(void).build(lay, aa, .{
             .user_vt = &self.cbhandle,
-            .commit_cb = &Lam.commit,
-            .name_cb = &Lam.name,
+            .commit_cb = &InputCombo.commit,
+            .name_cb = &InputCombo.name,
             .current = index,
             .count = self.editor.fgd_ctx.all_inputs.items.len,
         }, {});

@@ -2,7 +2,9 @@ const std = @import("std");
 const ecs = @import("ecs.zig");
 const Id = ecs.EcsT.Id;
 
-//Map ent class's to entity id's
+/// Map arbitrary string to set of entity id's
+/// Only strings with length > 0 are stored
+/// Used for mapping ent.class -> [ids]
 pub const Tracker = struct {
     const Self = @This();
     const List = std.ArrayListUnmanaged(Id);
@@ -29,6 +31,7 @@ pub const Tracker = struct {
     }
 
     pub fn put(self: *Self, class: []const u8, id: Id) !void {
+        if (class.len == 0) return;
         var res = try self.map.getOrPut(class);
         if (!res.found_existing) {
             res.value_ptr.* = .{};
@@ -41,6 +44,7 @@ pub const Tracker = struct {
     }
 
     pub fn remove(self: *Self, class: []const u8, id: Id) void {
+        if (class.len == 0) return;
         if (self.map.getPtr(class)) |list| {
             for (list.items, 0..) |item, i| {
                 if (item == id) {
@@ -85,11 +89,17 @@ pub const Tracker = struct {
         return null;
     }
 
-    pub fn getFirstDeprecate(self: *Self, class: []const u8) ?Id {
+    pub fn count(self: *const Self, class: []const u8, ecs_p: *ecs.EcsT) usize {
+        if (class.len == 0) return 0;
+
+        var num: usize = 0;
+        const vis_mask = ecs.EcsT.getComponentMask(&.{ .invisible, .deleted });
         if (self.map.get(class)) |list| {
-            if (list.items.len > 0)
-                return list.items[0];
+            for (list.items) |id| {
+                if (!ecs_p.intersects(id, vis_mask))
+                    num += 1;
+            }
         }
-        return null;
+        return num;
     }
 };

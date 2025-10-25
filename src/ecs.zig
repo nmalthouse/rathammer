@@ -292,6 +292,7 @@ pub const Entity = struct {
         angles,
         model,
         point0,
+        targetname,
 
         pub fn needsSync(key: []const u8) @This() {
             return std.meta.stringToEnum(@This(), key) orelse .none;
@@ -302,14 +303,16 @@ pub const Entity = struct {
     angle: Vec3 = Vec3.zero(),
     class: []const u8 = "",
 
+    _targetname: []const u8 = "",
+
     /// Fields with _ are not serialized
     /// These are used to draw the entity
     _model_id: ?vpk.VpkResId = null,
     _sprite: ?vpk.VpkResId = null,
 
-    //CRAP FOr the FUCKING LADDERS. THE ONLY FUCKING THING THAT REQUIRES TWO HULLS AND ONLY fucking HALF LIFE 2
-    //has the fucking FUNC_USABLE LADDERS GODDAMMIT.
-    _multi_bb_index: bool = false,
+    /// set to true when this entity has a kv point0 that should be synced with origin
+    /// used for the damn hl2 ladders.
+    _has_point0: bool = false,
 
     pub fn dupe(self: *const @This(), ecs: *EcsT, new_id: EcsT.Id) anyerror!@This() {
         _ = ecs;
@@ -317,6 +320,7 @@ pub const Entity = struct {
         return self.*;
     }
 
+    //TODO what is this for again?
     pub fn getKvString(self: *@This(), kind: KvSync, kvs: *KeyValues, val: *KeyValues.Value) !void {
         switch (kind) {
             .none => {}, //no op
@@ -339,7 +343,17 @@ pub const Entity = struct {
             .model => {
                 try self.setModel(ed, id, .{ .name = val.slice() }, false);
             },
+            .targetname => try self.setTargetname(ed, id, val.slice()),
             .none => {},
+        }
+    }
+
+    pub fn setTargetname(self: *@This(), ed: *Editor, id: EcsT.Id, targetname: []const u8) !void {
+        const stored = try ed.storeString(targetname);
+        try ed.targetname_track.change(stored, self._targetname, id);
+        self._targetname = stored;
+        if (try ed.ecs.getOptPtr(id, .key_values)) |kvs| {
+            try kvs.putStringNoNotify("targetname", self._targetname);
         }
     }
 
@@ -350,7 +364,7 @@ pub const Entity = struct {
         if (try ed.ecs.getOptPtr(self_id, .key_values)) |kvs| {
             try kvs.putStringNoNotify("origin", try ed.printScratch("{d} {d} {d}", .{ origin.x(), origin.y(), origin.z() }));
             //If we are a ladder, update that
-            if (self._multi_bb_index) {
+            if (self._has_point0) {
                 try kvs.putStringNoNotify("point0", try ed.printScratch("{d} {d} {d}", .{ origin.x(), origin.y(), origin.z() }));
             }
         }
@@ -403,7 +417,7 @@ pub const Entity = struct {
     pub fn setClass(self: *@This(), editor: *Editor, class: []const u8, self_id: EcsT.Id) !void {
         const old = self.class;
         self.class = try editor.storeString(class);
-        self._multi_bb_index = false;
+        self._has_point0 = false;
 
         try editor.classtrack.change(self.class, old, self_id);
 
@@ -437,7 +451,7 @@ pub const Entity = struct {
                         self._model_id = id;
                 }
                 if (base.has_hull) {
-                    self._multi_bb_index = true;
+                    self._has_point0 = true;
                     const bb = (try editor.ecs.getPtr(self_id, .bounding_box));
                     bb.a = Vec3.new(0, 0, 0);
                     bb.b = Vec3.new(32, 32, 72);
@@ -455,7 +469,7 @@ pub const Entity = struct {
         text_param: ?*const graph.ImmediateDrawingContext.TextParam = null,
         screen_area: graph.Rect,
     }) !void {
-        //if(ent._multi_bb_index != null) {
+        //if(ent._has_point0 != null) {
         //    draw.cube(ent.origin)
         //}
         const EXTRA_RENDER_DIST = 64 * 5;

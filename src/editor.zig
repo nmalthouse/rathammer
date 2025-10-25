@@ -153,6 +153,7 @@ pub const Context = struct {
     eventctx: *app.EventCtx,
 
     classtrack: class_tracker.Tracker,
+    targetname_track: class_tracker.Tracker,
 
     stack_owns_input: bool = false,
     stack_grabbed_mouse: bool = false,
@@ -309,7 +310,8 @@ pub const Context = struct {
             .asset = undefined,
             .asset_atlas = undefined,
 
-            .classtrack = class_tracker.Tracker.init(alloc),
+            .classtrack = .init(alloc),
+            .targetname_track = .init(alloc),
             .loadctx = loadctx,
             .win = win_ptr,
             .notifier = NotifyCtx.init(alloc, 4000),
@@ -428,6 +430,7 @@ pub const Context = struct {
         self.asset.deinit();
 
         self.classtrack.deinit();
+        self.targetname_track.deinit();
         self.autovis.deinit();
         self.layers.deinit();
         self.tools.deinit();
@@ -504,6 +507,7 @@ pub const Context = struct {
         const duped = try self.ecs.dupeEntity(ent);
         if (self.getComponent(duped, .entity)) |new_ent| {
             try new_ent.setClass(self, new_ent.class, duped);
+            try new_ent.setTargetname(self, duped, new_ent._targetname);
         }
         //a layer of 0 is implied
         if (self.edit_state.selected_layer != .none) {
@@ -877,6 +881,10 @@ pub const Context = struct {
             var it = self.ecs.iterator(.entity);
             while (it.next()) |ent| {
                 try ent.setClass(self, ent.class, it.i);
+
+                if (try self.ecs.getOptPtr(it.i, .key_values)) |kvs| {
+                    try ent.setTargetname(self, it.i, kvs.getString("targetname") orelse "");
+                }
                 // Clear before we iterate solids as they will insert themselves into here
                 //ent.solids.clearRetainingCapacity();
             }
@@ -1377,6 +1385,10 @@ pub const Context = struct {
         self.scratch_buf.clearRetainingCapacity();
         try self.scratch_buf.print(self.alloc, str, args);
         return self.scratch_buf.items;
+    }
+
+    pub fn printArena(self: *Self, comptime str: []const u8, args: anytype) ![]const u8 {
+        return try std.fmt.allocPrint(self.frame_arena.allocator(), str, args);
     }
 
     pub fn printScratchZ(self: *Self, comptime str: []const u8, args: anytype) ![]const u8 {
