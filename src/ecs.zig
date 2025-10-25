@@ -1175,6 +1175,24 @@ pub const Solid = struct {
         }
     }
 
+    pub fn drawEdgeOutlineFast(self: *Self, line_batch: *graph.ImmediateDrawingContext.Line3DBatch, point_batch: *graph.ImmediateDrawingContext.Point3DBatch, offset: Vec3, edge_color: u32, point_color: u32) void {
+        const v = self.verts.items;
+        for (self.sides.items) |side| {
+            if (side.index.items.len < 3) continue;
+            const ind = side.index.items;
+
+            var last = v[ind[ind.len - 1]].add(offset);
+            for (0..ind.len) |ti| {
+                const p = v[ind[ti]].add(offset);
+                if (edge_color > 0)
+                    graph.ImmediateDrawingContext.line3DBatch(line_batch, last, p, edge_color);
+                if (point_color > 0)
+                    graph.ImmediateDrawingContext.point3DBatch(point_batch, p, point_color);
+                last = p;
+            }
+        }
+    }
+
     pub fn getSidePtr(self: *Self, side_id: ?u32) ?*Side {
         if (side_id) |si| {
             if (si >= self.sides.items.len) return null;

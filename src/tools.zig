@@ -54,6 +54,25 @@ pub const i3DTool = struct {
     selected_solid_edge_color: u32 = 0xff00ff,
     selected_solid_point_color: u32 = 0,
     selected_bb_color: u32 = 0xff00ff,
+
+    pub fn drawSelectedOutline(self: *@This(), ed: *Editor, draw: *graph.ImmediateDrawingContext, selected: []const ecs.EcsT.Id, edge_size: f32, point_size: f32, offset: Vec3) void {
+        draw.ensurePoint3DBatch(point_size) catch return;
+        draw.ensureLine3DBatch(edge_size) catch return;
+        const line_batch = draw.getLine3DBatch(edge_size) orelse return;
+        const point_batch = draw.getPoint3DBatch(point_size) orelse return;
+
+        for (selected) |sel| {
+            if (ed.getComponent(sel, .solid)) |solid| {
+                solid.drawEdgeOutlineFast(
+                    line_batch,
+                    point_batch,
+                    offset,
+                    self.selected_solid_edge_color,
+                    self.selected_solid_point_color,
+                );
+            }
+        }
+    }
 };
 
 pub const ToolEvent = enum {

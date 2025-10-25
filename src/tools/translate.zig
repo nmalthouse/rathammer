@@ -380,7 +380,11 @@ pub const Translate = struct {
             }
             // on giz -> rising, dupe selected and use that until giz_active -> low
             // on event -> unFocus, if we have a selection, put it back
-            //
+            if (giz_active == .high) {
+                const edge_size = 2;
+                const point_size = self.config.dot_size;
+                tool.vt.drawSelectedOutline(self, draw_nd, selected, edge_size, point_size, dist);
+            }
             for (selected) |id| {
                 if (self.getComponent(id, .solid)) |solid| {
                     if (giz_active == .rising) {

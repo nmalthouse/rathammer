@@ -389,18 +389,12 @@ pub fn draw3Dview(
     }
 
     if (self.getCurrentTool()) |vt| {
-        const selected = self.getSelected();
         if (self.draw_state.draw_outlines) {
-            for (selected) |sel| {
-                if (self.getComponent(sel, .solid)) |solid| {
-                    solid.drawEdgeOutline(draw_nd, Vec3.zero(), .{
-                        .point_color = vt.selected_solid_point_color,
-                        .edge_color = vt.selected_solid_edge_color,
-                        .edge_size = 2,
-                        .point_size = self.config.dot_size,
-                    });
-                }
-            }
+            const selected = self.getSelected();
+            const edge_size = 2;
+            const point_size = self.config.dot_size;
+
+            vt.drawSelectedOutline(self, draw_nd, selected, edge_size, point_size, Vec3.zero());
         }
         try vt.runTool_fn(vt, td, self);
     }
