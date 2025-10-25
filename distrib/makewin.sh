@@ -29,7 +29,7 @@ cp -r rat_custom "$RATOUT"
 cp extra/thirdparty_legal.txt "$RATOUT"/thirdparty_legal.txt
 cp LICENSE "$RATOUT"/LICENSE
 cp README.md "$RATOUT"/README.md
-cp extra/antivirus.txt "$RATOUT"/antivirus.txt
+cp extra/antivirus.txt "$RATOUT"/WINDOWS_USERS_README.txt
 
 cd distrib
 zip -r rathammer_windows.zip rathammer-windows

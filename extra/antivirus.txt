@@ -1,12 +1,27 @@
-On Windows, rathammer.exe and/or mapbuilder.exe are sometimes flagged as virus's.
+IF you did not download rathammer from "https://github.com/nmalthouse/rathammer" then I can not guarantee the security of it.
 
-On my system (Windows 10), it labeled rathammer as a PUA and mapbuilder as something really dangerous or something. (The learn more linked to nothing)
+On Windows, rathammer.exe are sometimes flagged as virus's by Windows Defender and moved to quarantine.
 
-Whitelist rathammer by going to windows defender, finding the threat, and selecting "restore".
+IF Rathammer "crashes" while loading/saving AND you get a Windows defender notification, Defender probably killed one of the loading threads.
 
-Rathammer and mapbuilder both create child process, (vbsp, vvis, vrad), to compile your map, which is probably part of why they get flagged.
+Rathammer uses a thread pool to load assets and do other jobs. For example, when you press ctrl+s to save, Rathammer creates a thread which does the actual compression and writing of the map to disk. IF Windows decides this thread is a "trojan" for whatever reason, rathammer will crash and your map will not have been saved. Sorry, but there is nothing I can do about this short of paying Microsoft to shut up.
+
+IF Defender quarantines any of the exe's:
+White-list rathammer by going to Windows Defender, finding the threat, and selecting "restore".
+
+Rathammer does a number of things which look suspicious to an AV, these include:
+* Creating child process, (vbsp, vvis, vrad), to compile your map.
+* Creating a socket file for the console/remote control functionality
+* Sending a network request on startup to check for newer versions 
 
 If you do not trust that the software is safe, you are free to audit the source code at:
 https://github.com/nmalthouse/rathammer
 
-and build it from source yourself.
+And build it from source yourself.
+
+
+The files you may want to look at include:
+* src/map_builder.zig               # spawns child processs
+* src/rpc/server.zig                # creates a socket file
+* src/async.zig CheckVersionHttp    # Sends a single http GET request on startup to a hard-coded URL: "http://nmalthouse.net:80/api/version"
+
