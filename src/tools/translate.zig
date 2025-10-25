@@ -20,6 +20,10 @@ const Editor = edit.Context;
 const toolcom = @import("../tool_common.zig");
 const action = @import("../actions.zig");
 
+//const COLOR_MOVE = 0xe8a130_ee;
+const COLOR_MOVE = 0x00ff00ff;
+const COLOR_DUPE = 0xfc35ac_ee;
+
 pub const Translate = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
     pub const DrawCustomCtx = struct {
@@ -86,6 +90,9 @@ pub const Translate = struct {
                 .tool_icon_fn = &@This().drawIcon,
                 .gui_build_cb = &buildGui,
                 .event_fn = &event,
+
+                .selected_solid_edge_color = COLOR_MOVE,
+                .selected_solid_point_color = 0,
             },
             .ed = ed,
             .gizmo_rotation = .{},
@@ -193,9 +200,8 @@ pub const Translate = struct {
         const draw_nd = &self.draw_state.ctx;
         const draw = td.draw;
         const dupe = self.isBindState(self.config.keys.duplicate.b, .high);
-        const COLOR_MOVE = 0xe8a130_ee;
-        const COLOR_DUPE = 0xfc35ac_ee;
         const color: u32 = if (dupe) COLOR_DUPE else COLOR_MOVE;
+        tool.vt.selected_solid_edge_color = color;
 
         var angle: Vec3 = Vec3.zero();
         var angle_delta = Vec3.zero();
@@ -249,8 +255,6 @@ pub const Translate = struct {
                         if (dupe) { //Draw original
                             try solid.drawImmediate(draw, self, Vec3.zero(), null, true);
                         }
-                        //if (draw_verts)
-                        //solid.drawEdgeOutline(draw_nd, color, 0xff0000ff, dist);
                     }
                 }
                 if (self.getComponent(id, .entity)) |ent| {
@@ -303,9 +307,8 @@ pub const Translate = struct {
         const draw_nd = &self.draw_state.ctx;
         const draw = td.draw;
         const dupe = self.isBindState(self.config.keys.duplicate.b, .high);
-        const COLOR_MOVE = 0xe8a130_ee;
-        const COLOR_DUPE = 0xfc35ac_ee;
         const color: u32 = if (dupe) COLOR_DUPE else COLOR_MOVE;
+        tool.vt.selected_solid_edge_color = color;
 
         const giz_origin = tool.getOrigin(self);
         if (giz_origin) |origin| {
@@ -367,8 +370,6 @@ pub const Translate = struct {
             const commit = self.edit_state.rmouse == .rising;
             const real_commit = giz_active == .high and commit;
             const dist = self.grid.snapV3(origin_mut.sub(origin));
-            const MAX_DRAWN_VERTS = 500;
-            const draw_verts = selected.len < MAX_DRAWN_VERTS;
             switch (giz_active) {
                 .low, .rising => {},
                 .high => tool._delta = dist,
@@ -396,13 +397,6 @@ pub const Translate = struct {
                         if (dupe) { //Draw original
                             try solid.drawImmediate(draw, self, Vec3.zero(), null, true);
                         }
-                        if (draw_verts)
-                            solid.drawEdgeOutline(draw_nd, dist, .{
-                                .point_color = 0xff0000ff,
-                                .edge_color = color,
-                                .edge_size = 2,
-                                .point_size = self.config.dot_size,
-                            });
                     }
                 }
                 if (self.getComponent(id, .displacements)) |disps| {

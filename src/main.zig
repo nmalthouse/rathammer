@@ -73,7 +73,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         gui.drawFbos();
     }
     try draw.flush(null, null);
-    try loadctx.loadedSplash(win.keys.len > 0);
+    try loadctx.loadedSplash();
 
     try draw.end(editor.draw_state.cam3d);
     win.swap();
@@ -546,7 +546,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         gui.drawFbos();
 
         draw.setViewport(null);
-        try loadctx.loadedSplash(win.keys.len > 0);
+        try loadctx.loadedSplash();
         try draw.end(editor.draw_state.cam3d);
         win.swap();
     }

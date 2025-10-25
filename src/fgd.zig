@@ -467,6 +467,9 @@ pub const EntClass = struct {
             angle: void,
             generic: void,
         };
+        /// Display name of key
+        doc_name: []const u8,
+        /// Name of key
         name: []const u8,
         type: Type,
         default: []const u8,
@@ -807,6 +810,7 @@ pub const ParseCtx = struct {
                 const mask_default = tt[1];
                 try new_class.addField(.{
                     .name = try ctx.dupeString(self.sanitizeIdent(fsl)),
+                    .doc_name = try ctx.dupeString(dat.prop_name),
                     .type = new_type,
                     .default = try ctx.dupeString(mask_default orelse dat.def),
                     .doc_string = dat.doc,
@@ -827,7 +831,7 @@ pub const ParseCtx = struct {
                         log.err("MODIFIER '{s}'\n", .{pl});
                         return error.invalidModifier;
                     };
-                    _ = try tkz.next();
+                    _ = try tkz.next(); //Discard peek
                 },
                 else => break,
             }
@@ -836,11 +840,12 @@ pub const ParseCtx = struct {
 
     /// Parse the what all kv fields have
     /// : "Kv name" : "default" : "doc string"
-    pub fn parseKVCommon(self: *Self, ctx: *EntCtx) !struct { def: []const u8, doc: []const u8 } {
+    pub fn parseKVCommon(self: *Self, ctx: *EntCtx) !struct { def: []const u8, doc: []const u8, prop_name: []const u8 } {
         var index: i32 = -1;
         var default_str: []const u8 = "";
         const tkz = &self.tkz;
         var new_type_doc: []const u8 = "";
+        var prop_name: []const u8 = "";
         while (true) {
             const n1 = try tkz.peek() orelse return error.syntax;
             switch (n1.tag) {
@@ -860,8 +865,12 @@ pub const ParseCtx = struct {
                 },
                 .plain_string, .quoted_string => {
                     switch (index) {
-                        0 => { //prop name
-                            _ = try tkz.next();
+                        0 => {
+                            if (try tkz.next()) |prop_name_t| {
+                                prop_name = tkz.getSlice(prop_name_t);
+                            } else {
+                                log.warn("missing doc name", .{});
+                            }
                         },
                         1 => { //default value
                             const t = (try tkz.next()) orelse return error.syntax;
@@ -883,6 +892,7 @@ pub const ParseCtx = struct {
         return .{
             .def = default_str,
             .doc = new_type_doc,
+            .prop_name = prop_name,
         };
     }
 

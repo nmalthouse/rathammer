@@ -344,7 +344,7 @@ pub const InspectorWindow = struct {
                 }
                 ly.pushRemaining();
                 _ = Wg.VScroll.build(lay, ly.getArea(), .{
-                    .build_cb = &buildScrollItems,
+                    .build_cb = &buildPropScroll,
                     .build_vt = &self.cbhandle,
                     .win = win,
                     .count = fields.len,
@@ -377,7 +377,11 @@ pub const InspectorWindow = struct {
             if (self.selected_kv_index >= class.field_data.items.len) return;
             const field = &class.field_data.items[self.selected_kv_index];
 
-            _ = Wg.Text.buildStatic(lay, ly.getArea(), field.name, null);
+            {
+                var hy = gui.dstate.hlayout(ly.getArea() orelse return, 2);
+                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.doc_name, null);
+                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.name, null);
+            }
             if (self.show_help and field.doc_string.len > 0) {
                 ly.pushHeight(Wg.TextView.heightForN(gui, 4));
                 _ = Wg.TextView.build(lay, ly.getArea(), &.{field.doc_string}, win, .{
@@ -387,13 +391,18 @@ pub const InspectorWindow = struct {
             const kvs = self.getKvsPtr() orelse return;
             const val = kvs.map.getPtr(field.name) orelse return;
             const cb_id = self.getId(field.name);
-            const ar = ly.getArea();
-            _ = Wg.Textbox.buildOpts(lay, ar, .{
-                .init_string = val.slice(),
-                .user_id = cb_id,
-                .commit_vt = &self.cbhandle,
-                .commit_cb = &cb_commitTextbox,
-            });
+            if (ly.getArea()) |edit_tb_ar| { // raw edit
+                const label = "Raw edit: ";
+                const width = gui.dstate.minWidgetWidth(label);
+                const sp = edit_tb_ar.split(.vertical, width);
+                _ = Wg.Text.buildStatic(lay, sp[0], label, null);
+                _ = Wg.Textbox.buildOpts(lay, sp[1], .{
+                    .init_string = val.slice(),
+                    .user_id = cb_id,
+                    .commit_vt = &self.cbhandle,
+                    .commit_cb = &cb_commitTextbox,
+                });
+            }
             //Extra stuff for typed fields TODO put in a scroll
             switch (field.type) {
                 .flags => |flags| {
@@ -414,8 +423,8 @@ pub const InspectorWindow = struct {
         }
     }
 
-    pub fn buildScrollItems(cb: *CbHandle, vt: *iArea, index: usize) void {
-        buildScrollItemsErr(cb, vt, index) catch return;
+    pub fn buildPropScroll(cb: *CbHandle, vt: *iArea, index: usize) void {
+        buildPropScrollErr(cb, vt, index) catch return;
     }
 
     pub fn getSelId(self: *Self) ?ecs.EcsT.Id {
@@ -446,7 +455,7 @@ pub const InspectorWindow = struct {
         return null;
     }
 
-    pub fn buildScrollItemsErr(cb: *CbHandle, vt: *iArea, index: usize) !void {
+    pub fn buildPropScrollErr(cb: *CbHandle, vt: *iArea, index: usize) !void {
         const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.resetIds();
@@ -465,7 +474,9 @@ pub const InspectorWindow = struct {
                 };
                 for (fields[index..], index..) |req_f, f_i| {
                     const cb_id = self.getId(req_f.name);
-                    _ = Wg.Button.build(a, ly.getArea(), req_f.name, .{
+                    // fallback to key name, spawnflags isn't named
+                    const field_display_name = if (req_f.doc_name.len > 0) req_f.doc_name else req_f.name;
+                    _ = Wg.Button.build(a, ly.getArea(), field_display_name, .{
                         .cb_vt = &self.cbhandle,
                         .cb_fn = &select_kv_cb,
                         .id = f_i,
@@ -473,19 +484,13 @@ pub const InspectorWindow = struct {
                         .user_1 = if (self.selected_kv_index == f_i) 1 else 0,
                     });
                     const value = try kvs.getOrPutDefault(&ed.ecs, sel_id, req_f.name, req_f.default);
-                    //const res = try kvs.map.getOrPut(req_f.name);
-                    //if (!res.found_existing) {
-                    //    res.value_ptr.* = try ecs.KeyValues.initDefault(&ed.ecs, sel_id, req_f.name, req_f.default);
-                    //    //var new_list = std.ArrayList(u8).init(ed.alloc);
-                    //    //try new_list.appendSlice(req_f.default);
-                    //    //res.value_ptr.* = .{ ._string = new_list };
-                    //}
                     switch (req_f.type) {
                         .model, .material => {
                             const H = struct {
                                 fn btn_cb(cbb: *CbHandle, id: u64, _: guis.MouseCbState, _: *iWindow) void {
                                     // if msb of id is set, its a texture not model
                                     // hacky yea.
+                                    // FIXME less hacky please.
                                     const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cbb));
                                     const idd = id << 1 >> 1; //clear msb;
 

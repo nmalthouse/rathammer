@@ -104,7 +104,6 @@ pub const EventCtx = struct {
     }
 
     pub fn graph_event_cb(ev: graph.c.SDL_UserEvent) void {
-        std.debug.print("got event {d}\n", .{ev.type});
         if (ev.type == SdlEventId) {
             const self: *Self = @ptrCast(@alignCast(ev.data1 orelse return));
             if (ev.data2) |us1| {

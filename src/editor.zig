@@ -1702,7 +1702,7 @@ pub const LoadCtx = struct {
         self.draw.rect(pbar.split(.vertical, pbar.w * p)[0], colors.progress);
     }
 
-    pub fn loadedSplash(oself: *@This(), end: bool) !void {
+    pub fn loadedSplash(oself: *@This()) !void {
         const self = &(oself.opt orelse return);
         if (DISABLE_SPLASH)
             return;
@@ -1717,9 +1717,10 @@ pub const LoadCtx = struct {
             });
             graph.c.glEnable(graph.c.GL_BLEND);
             //graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
-            self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
+            if (colors.splash_tint > 0)
+                self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
             oself.drawSplash(1.0, fbs.getWritten());
-            if (end)
+            if (self.win.keys.len > 0 or self.win.mouse.left != .low or self.win.mouse.right != .low)
                 self.draw_splash = false;
         }
     }
