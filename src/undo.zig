@@ -755,6 +755,44 @@ pub const UndoAttachLayer = struct {
     }
 };
 
+pub const UndoSetClass = struct {
+    id: Id,
+
+    old_class: []const u8,
+    new_class: []const u8,
+
+    pub fn depId(self: *const @This()) ?Id {
+        return self.id;
+    }
+
+    pub fn create(alloc: std.mem.Allocator, id: Id, old: []const u8, new: []const u8) !*@This() {
+        const obj = try alloc.create(@This());
+        obj.* = .{
+            .id = id,
+            .old_class = try alloc.dupe(u8, old),
+            .new_class = try alloc.dupe(u8, new),
+        };
+        return obj;
+    }
+
+    pub fn undo(self: *@This(), editor: *Editor) void {
+        if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
+            ent.setClass(editor, self.old_class, self.id) catch {};
+        }
+    }
+    pub fn redo(self: *@This(), editor: *Editor) void {
+        if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
+            ent.setClass(editor, self.new_class, self.id) catch {};
+        }
+    }
+
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        alloc.free(self.old_class);
+        alloc.free(self.new_class);
+        alloc.destroy(self);
+    }
+};
+
 /// This is a noop
 pub const UndoTemplate = struct {
     pub fn create(alloc: std.mem.Allocator) !*@This() {
@@ -825,6 +863,7 @@ const tt = genUnion(&.{
     .{ "disp_modify", UndoDisplacmentModify },
     .{ "set_layer", UndoSetLayer },
     .{ "attach_layer", UndoAttachLayer },
+    .{ "set_class", UndoSetClass },
 });
 
 pub const UndoAmal = struct {

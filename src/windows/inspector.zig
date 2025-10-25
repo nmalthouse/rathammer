@@ -302,7 +302,7 @@ pub const InspectorWindow = struct {
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
                 const aa = ly.getArea() orelse return;
-                const Lam = struct {
+                const ClassCombo = struct {
                     fn commit(cb: *CbHandle, id: usize, _: void) void {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
                         const fields = lself.editor.fgd_ctx.ents.items;
@@ -310,8 +310,16 @@ pub const InspectorWindow = struct {
                         if (id >= fields.len) return;
                         const led = lself.editor;
                         if (led.selection.getGroupOwnerExclusive(&led.groups)) |lsel_id| {
+                            const new_class_name = fields[id].name;
                             if (led.ecs.getOptPtr(lsel_id, .entity) catch null) |lent| {
-                                lent.setClass(led, fields[id].name, lsel_id) catch return;
+                                const ustack = led.undoctx.pushNewFmt("change class {s} -> {s}", .{ lent.class, new_class_name }) catch return;
+                                ustack.append(.{ .set_class = undo.UndoSetClass.create(
+                                    ustack.alloc,
+                                    lsel_id,
+                                    lent.class,
+                                    new_class_name,
+                                ) catch return }) catch return;
+                                ustack.apply(led);
                             }
                         }
                     }
@@ -327,8 +335,8 @@ pub const InspectorWindow = struct {
                 if (guis.label(lay, aa, "Ent Class", .{})) |ar|
                     _ = Wg.ComboUser(void).build(lay, ar, .{
                         .user_vt = &self.cbhandle,
-                        .commit_cb = &Lam.commit,
-                        .name_cb = &Lam.name,
+                        .commit_cb = &ClassCombo.commit,
+                        .name_cb = &ClassCombo.name,
                         .current = self.selected_class_id orelse 0,
                         .count = self.editor.fgd_ctx.ents.items.len,
                     }, {});

@@ -6,6 +6,7 @@ const guiutil = graph.gui_app;
 const Vec3 = graph.za.Vec3;
 const edit = @import("editor.zig");
 const Config = @import("config.zig");
+const undo = @import("undo.zig");
 const ecs = @import("ecs.zig");
 const Gui = graph.Gui;
 const guis = graph.RGui;
@@ -75,24 +76,37 @@ pub const AssetBrowserGui = struct {
     pub fn applyDialogState(self: *Self, editor: *edit.Context) !void {
         defer self.dialog_state = null;
         if (self.dialog_state) |ds| {
+            //const ent = try editor.getOptPtr(ds.target_id, .entity) orelse return;
+            const kvs = editor.getComponent(ds.target_id, .key_values) orelse return;
             switch (ds.kind) {
                 .model => {
                     const mid = editor.edit_state.selected_model_vpk_id orelse return;
-                    if (try editor.ecs.getOptPtr(ds.target_id, .entity)) |ent| {
-                        try ent.setModel(editor, ds.target_id, .{ .id = mid }, false);
+                    if (editor.vpkctx.resolveId(.{ .id = mid }, false) catch null) |name| {
+                        const ustack = editor.undoctx.pushNewFmt("Set model {s}", .{name.name}) catch return;
+
+                        ustack.append(.{ .set_kv = undo.UndoSetKeyValue.create(
+                            editor.undoctx.alloc,
+                            ds.target_id,
+                            "model",
+                            kvs.getString("model") orelse "",
+                            name.name,
+                        ) catch return }) catch return;
+                        ustack.apply(editor);
                     }
-                    //To set the model, first change the kv,
-                    //then set ent._model_id
                 },
                 .texture => {
                     const tid = editor.edit_state.selected_texture_vpk_id orelse return;
-                    if (try editor.ecs.getOptPtr(ds.target_id, .key_values)) |ent| {
-                        if (try editor.vpkctx.resolveId(.{ .id = tid }, false)) |idd| {
-                            //var name = idd.name;
-                            //if (std.mem.startsWith(u8, name, "materials/"))
-                            //    name = idd.name["materials/".len..];
-                            try ent.putString(editor, ds.target_id, "texture", idd.name);
-                        }
+                    if (try editor.vpkctx.resolveId(.{ .id = tid }, false)) |idd| {
+                        const ustack = editor.undoctx.pushNewFmt("Set texture {s}", .{idd.name}) catch return;
+
+                        ustack.append(.{ .set_kv = undo.UndoSetKeyValue.create(
+                            editor.undoctx.alloc,
+                            ds.target_id,
+                            "texture",
+                            kvs.getString("texture") orelse "",
+                            idd.name,
+                        ) catch return }) catch return;
+                        ustack.apply(editor);
                     }
                 },
             }

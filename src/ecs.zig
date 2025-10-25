@@ -1743,6 +1743,7 @@ pub const Layer = struct {
     }
 };
 
+//TODO don't trust that passed keys are static strings, always pass them through stringstorage
 pub const KeyValues = struct {
     const Strings = @import("string.zig");
     const Value = struct {
