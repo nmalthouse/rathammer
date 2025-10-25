@@ -144,6 +144,9 @@ const VpkBrowser = struct {
     win: *iWindow,
 
     cbhandle: guis.CbHandle = .{},
+    selected_index: usize = 0,
+
+    scroll_index: usize = 0,
 
     lscb: ListSearchCb = .{
         .search_cb = searchCb,
@@ -151,7 +154,10 @@ const VpkBrowser = struct {
 
     list: ListSearch,
 
+    vpk_buffer: ArrayList(u8) = .{},
+
     pub fn deinit(self: *@This()) void {
+        self.vpk_buffer.deinit(self.list.alloc);
         self.list.deinit();
     }
 
@@ -161,27 +167,45 @@ const VpkBrowser = struct {
 
     pub fn build(self: *@This(), lay: *iArea, win: *iWindow, gui: *Gui, area: Rect) void {
         const sp = area.split(.vertical, area.w / 2);
-        var ly = gui.dstate.vlayout(sp[0]);
-        if (ly.getArea()) |header| {
-            const header_col = 4;
-            var hy = gui.dstate.hlayout(header, header_col);
-            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
-                self.list.addTextbox(lay, gui, win, ar);
-            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
-                _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
+        {
+            var ly = gui.dstate.vlayout(sp[0]);
+            if (ly.getArea()) |header| {
+                const header_col = 4;
+                var hy = gui.dstate.hlayout(header, header_col);
+                if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
+                    self.list.addTextbox(lay, gui, win, ar);
+                if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+                    _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
+                }
+            }
+            _ = ly.getArea(); //break
+
+            ly.pushRemaining();
+            if (Wg.VScroll.build(lay, ly.getArea(), .{
+                .build_cb = buildVpkList,
+                .build_vt = &self.cbhandle,
+                .win = win,
+                .count = self.list.count(),
+                .item_h = gui.dstate.style.config.default_item_h,
+                .current_index = self.selected_index,
+                .index_ptr = &self.scroll_index,
+            }) == .good) {
+                self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
             }
         }
-        _ = ly.getArea(); //break
 
-        ly.pushRemaining();
-        if (Wg.VScroll.build(lay, ly.getArea(), .{
-            .build_cb = buildVpkList,
-            .build_vt = &self.cbhandle,
-            .win = win,
-            .count = self.list.count(),
-            .item_h = gui.dstate.style.config.default_item_h,
-        }) == .good) {
-            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
+        {
+            var ly = gui.dstate.vlayout(sp[1]);
+            ly.pushRemaining();
+            if (self.list.getSearchItem(self.selected_index)) |res_id| {
+                if (self.ed.vpkctx.getFileFromRes(res_id, .{ .list = &self.vpk_buffer, .alloc = self.list.alloc }) catch null) |contents| {
+                    if (std.unicode.utf8ValidateSlice(contents)) {
+                        _ = Wg.TextView.build(lay, ly.getArea(), &.{contents}, win, .{
+                            .mode = .split_on_space,
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -191,24 +215,54 @@ const VpkBrowser = struct {
         const list = self.list.getSlice();
         if (index >= list.len) return;
         var ly = gui.dstate.vlayout(vt.area);
-        for (list[index..]) |item| {
+        for (list[index..], index..) |item, i| {
             const tt = self.ed.vpkctx.entries.get(item) orelse return;
             const dd = vpk.decodeResourceId(item);
             const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
-            _ = Wg.Text.build(
+            _ = Wg.Button.build(
                 vt,
                 ly.getArea(),
-                "{s}/{s}.{s}",
-                .{ tt.path, tt.name, ext },
+                self.ed.printScratch("{s}/{s}.{s}", .{ tt.path, tt.name, ext }) catch "err",
+                .{
+                    .id = i,
+                    .cb_vt = &self.cbhandle,
+                    .custom_draw = inspector.customButtonDraw,
+                    .user_1 = if (self.selected_index == i) 1 else 0,
+                    .cb_fn = btnCb,
+                },
             );
         }
     }
 
+    fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.setSelected(id);
+    }
+
+    fn setSelected(self: *@This(), id: usize) void {
+        self.selected_index = id;
+        if (id < self.list.list_a.items.len) {
+            const vpkid = self.list.list_a.items[id];
+            self.ed.edit_state.selected_model_vpk_id = vpkid;
+        }
+        self.win.needs_rebuild = true;
+    }
+
     fn searchCb(lscb: *ListSearchCb, id: VpkId, search: []const u8) bool {
         const self: *@This() = @alignCast(@fieldParentPtr("lscb", lscb));
+        if (search.len == 0) return true;
         const tt = self.ed.vpkctx.entries.get(id) orelse return false;
-        const io = std.mem.indexOf;
-        return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
+        const dd = vpk.decodeResourceId(id);
+        const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
+        var it = std.mem.splitScalar(u8, search, ',');
+        var matched = true;
+        while (it.next()) |keyword| {
+            matched = matched and (containsSubstring(&.{
+                tt.path, tt.name, ext,
+            }, keyword));
+        }
+        return matched;
+        //return (io(u8, tt.path, search) != null or io(u8, tt.name, search) != null);
     }
 };
 
@@ -702,6 +756,11 @@ const ListSearch = struct {
         }
     }
 
+    pub fn getSearchItem(self: *const @This(), index: usize) ?VpkId {
+        if (index >= self.list_a.items.len) return null;
+        return self.list_a.items[index];
+    }
+
     fn cb_commitTextbox(cb: *CbHandle, gui: *Gui, string: []const u8, _: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (std.mem.eql(u8, string, self.prev_search.items))
@@ -737,3 +796,47 @@ const ListSearch = struct {
         self.selected_index = id;
     }
 };
+
+fn containsSubstring(haystack: []const []const u8, needle: []const u8) bool {
+    var total_len: usize = 0;
+    for (haystack) |h| total_len += h.len;
+
+    if (needle.len > total_len) return false;
+
+    var start_h: usize = 0;
+    while (start_h < haystack.len) : (start_h += 1) {
+        const h = haystack[start_h];
+        var start_i: usize = 0;
+        while (start_i < h.len) : (start_i += 1) {
+            if (multiStartsWith(haystack[start_h..], start_i, needle)) return true;
+        }
+    }
+
+    return false;
+}
+
+fn multiStartsWith(multi: []const []const u8, multi_start_i: usize, needle: []const u8) bool {
+    if (needle.len == 0) return true;
+    var start_i = multi_start_i;
+
+    var needle_i: usize = 0;
+    for (multi) |m| {
+        for (m[start_i..]) |h| {
+            if (needle[needle_i] == h) {} else {
+                return false;
+            }
+
+            needle_i += 1;
+            if (needle_i >= needle.len) return true;
+        }
+        start_i = 0;
+    }
+    return false;
+}
+
+test "multisearch" {
+    try std.testing.expectEqual(true, containsSubstring(&.{ "hello", "world" }, "hellowor"));
+    try std.testing.expectEqual(false, containsSubstring(&.{""}, "hell"));
+    try std.testing.expectEqual(true, containsSubstring(&.{ "hello", "", "world" }, "hellowor"));
+    try std.testing.expectEqual(true, containsSubstring(&.{ "hello", "", "world" }, ""));
+}
