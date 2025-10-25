@@ -52,6 +52,8 @@ pub const InspectorWindow = struct {
     selected_io_index: usize = 0,
     io_scroll_index: usize = 0,
 
+    matched_input_set: std.AutoArrayHashMap(fgd.InputId, void),
+
     layer_widget: Layer.GuiWidget,
 
     show_help: bool = true,
@@ -62,6 +64,7 @@ pub const InspectorWindow = struct {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
+            .matched_input_set = .init(editor.alloc),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
@@ -82,6 +85,7 @@ pub const InspectorWindow = struct {
         //self.layout.deinit(gui, vt);
         self.kv_id_map.deinit();
         self.id_kv_map.deinit();
+        self.matched_input_set.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -320,12 +324,12 @@ pub const InspectorWindow = struct {
                 const ClassCombo = struct {
                     fn commit(cb: *CbHandle, id: usize, _: void) void {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
-                        const fields = lself.editor.fgd_ctx.ents.items;
+                        const fields = lself.editor.fgd_ctx.derivable.items;
                         lself.vt.needs_rebuild = true;
                         if (id >= fields.len) return;
                         const led = lself.editor;
                         if (led.selection.getGroupOwnerExclusive(&led.groups)) |lsel_id| {
-                            const new_class_name = fields[id].name;
+                            const new_class_name = lself.editor.fgd_ctx.ents.items[fields[id]].name;
                             if (led.ecs.getOptPtr(lsel_id, .entity) catch null) |lent| {
                                 const ustack = led.undoctx.pushNewFmt("change class {s} -> {s}", .{ lent.class, new_class_name }) catch return;
                                 ustack.append(.{ .set_class = undo.UndoSetClass.create(
@@ -341,19 +345,19 @@ pub const InspectorWindow = struct {
 
                     fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                        const fields = lself.editor.fgd_ctx.ents.items;
+                        const fields = lself.editor.fgd_ctx.derivable.items;
                         if (id >= fields.len) return "none";
-                        return fields[id].name;
+                        return lself.editor.fgd_ctx.ents.items[fields[id]].name;
                     }
                 };
-                self.selected_class_id = ed.fgd_ctx.getId(ent.class);
+                self.selected_class_id = std.mem.indexOfScalar(usize, ed.fgd_ctx.derivable.items, ed.fgd_ctx.getId(ent.class) orelse 0) orelse 0;
                 if (guis.label(lay, aa, "Ent Class", .{})) |ar|
                     _ = Wg.ComboUser(void).build(lay, ar, .{
                         .user_vt = &self.cbhandle,
                         .commit_cb = &ClassCombo.commit,
                         .name_cb = &ClassCombo.name,
                         .current = self.selected_class_id orelse 0,
-                        .count = self.editor.fgd_ctx.ents.items.len,
+                        .count = self.editor.fgd_ctx.derivable.items.len,
                     }, {});
                 const eclass = ed.fgd_ctx.getPtr(ent.class) orelse return;
                 const fields = eclass.field_data.items;
@@ -862,7 +866,7 @@ pub const InspectorWindow = struct {
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
 
-        const Lam = struct {
+        const OutputCombo = struct {
             fn commit(vtt: *CbHandle, id: usize, _: void) void {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const lcons = lself.getConsPtr() orelse return;
@@ -884,6 +888,8 @@ pub const InspectorWindow = struct {
             }
         };
 
+        //TODO determine set of valid outputs and limit to that
+
         const current_item = cons.list.items[self.selected_io_index].listen_event;
         const class = self.getEntDef() orelse return;
         var index: usize = 0;
@@ -897,8 +903,8 @@ pub const InspectorWindow = struct {
 
         _ = Wg.ComboUser(void).build(lay, aa, .{
             .user_vt = &self.cbhandle,
-            .commit_cb = &Lam.commit,
-            .name_cb = &Lam.name,
+            .commit_cb = &OutputCombo.commit,
+            .name_cb = &OutputCombo.name,
             .current = index,
             //.current = self.selected_class_id orelse 0,
             .count = class.outputs.items.len,
@@ -912,30 +918,60 @@ pub const InspectorWindow = struct {
                 const lcons = lself.getConsPtr() orelse return;
                 if (lself.selected_io_index >= lcons.list.items.len) return;
 
-                const list = lself.editor.fgd_ctx.all_inputs.items;
+                //const list = lself.editor.fgd_ctx.all_inputs.items;
+
+                const list = lself.matched_input_set.keys();
                 if (id >= list.len) return;
-                lcons.list.items[lself.selected_io_index].input = list[id].name;
+
+                const item = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
+
+                lcons.list.items[lself.selected_io_index].input = item;
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                 const lself = vtt.cast(InspectorWindow, "cbhandle");
-                const list = lself.editor.fgd_ctx.all_inputs.items;
+                const list = lself.matched_input_set.keys();
                 if (id >= list.len) return "none";
-                return list[id].name;
+                return lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
             }
         };
+
+        self.matched_input_set.clearRetainingCapacity();
+        if (self.getSelectedIoItemPtr()) |ptr| {
+            const arena = self.editor.frame_arena.allocator();
+            var classes = std.StringHashMap(void).init(arena);
+            if (self.editor.targetname_track.get(ptr.target.items, &self.editor.ecs)) |id_list| {
+                for (id_list) |id| {
+                    if (self.editor.getComponent(id, .entity)) |ent| {
+                        classes.put(ent.class, {}) catch {};
+                    }
+                }
+            } else |_| {}
+
+            var it = classes.keyIterator();
+
+            while (it.next()) |class| {
+                const eclass = self.editor.fgd_ctx.getPtr(class.*) orelse continue;
+                for (eclass.inputs.items) |o_id| {
+                    const gid = self.editor.fgd_ctx.all_inputs_map.get(eclass.io_data.items[o_id].name) orelse continue;
+                    self.matched_input_set.put(gid, {}) catch continue;
+                }
+            }
+        }
 
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
         const current_item = cons.list.items[self.selected_io_index].input;
+        const input_id = if (self.editor.fgd_ctx.all_inputs_map.get(current_item)) |io| io else .none;
 
-        const index = if (self.editor.fgd_ctx.all_input_map.get(current_item)) |io| io else 0;
+        const current_index = self.matched_input_set.getIndex(input_id) orelse 0;
+
         _ = Wg.ComboUser(void).build(lay, aa, .{
             .user_vt = &self.cbhandle,
             .commit_cb = &InputCombo.commit,
             .name_cb = &InputCombo.name,
-            .current = index,
-            .count = self.editor.fgd_ctx.all_inputs.items.len,
+            .current = current_index,
+            .count = self.matched_input_set.count(),
         }, {});
     }
 
@@ -972,6 +1008,14 @@ pub const InspectorWindow = struct {
         if (tex.id == missing.id) return;
         self.editor.edit_state.selected_texture_vpk_id = vpk_id;
         self.vt.needs_rebuild = true;
+    }
+
+    fn getSelectedIoItemPtr(self: *Self) ?*ecs.Connection {
+        if (self.getConsPtr()) |cons| {
+            if (self.selected_io_index < cons.list.items.len)
+                return &cons.list.items[self.selected_io_index];
+        }
+        return null;
     }
 };
 

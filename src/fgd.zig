@@ -385,6 +385,14 @@ test {
     }
 }
 
+pub const InputId = enum(usize) {
+    none = std.math.maxInt(usize),
+    _,
+};
+pub const OutputId = enum(usize) {
+    none = std.math.maxInt(usize),
+    _,
+};
 pub const EntCtx = struct {
     const Self = @This();
 
@@ -392,10 +400,15 @@ pub const EntCtx = struct {
     alloc: Allocator,
     ents: ArrayList(EntClass) = .{},
 
+    /// Indxe into ents, all non base entities
+    derivable: ArrayList(usize) = .{},
     base: std.StringHashMapUnmanaged(usize) = .{}, // classname -> ents.items[index]
 
-    all_input_map: std.StringHashMapUnmanaged(usize) = .{},
+    all_inputs_map: std.StringHashMapUnmanaged(InputId) = .{},
     all_inputs: ArrayList(EntClass.Io) = .{},
+
+    all_outputs_map: std.StringHashMapUnmanaged(OutputId) = .{},
+    all_outputs: ArrayList(EntClass.Io) = .{},
 
     pub fn init(alloc: Allocator) Self {
         return .{
@@ -410,11 +423,16 @@ pub const EntCtx = struct {
 
     pub fn addIo(self: *Self, io: EntClass.Io) !void {
         switch (io.kind) {
-            .output => {},
+            .output => {
+                if (self.all_outputs_map.contains(io.name)) return;
+                const index = self.all_outputs.items.len;
+                try self.all_outputs_map.put(self.alloc, io.name, @enumFromInt(index));
+                try self.all_outputs.append(self.alloc, io);
+            },
             .input => {
-                if (self.all_input_map.contains(io.name)) return;
+                if (self.all_inputs_map.contains(io.name)) return;
                 const index = self.all_inputs.items.len;
-                try self.all_input_map.put(self.alloc, io.name, index);
+                try self.all_inputs_map.put(self.alloc, io.name, @enumFromInt(index));
                 try self.all_inputs.append(self.alloc, io);
             },
         }
@@ -426,8 +444,11 @@ pub const EntCtx = struct {
         }
         self.base.deinit(self.alloc);
         self.ents.deinit(self.alloc);
-        self.all_input_map.deinit(self.alloc);
+        self.all_inputs_map.deinit(self.alloc);
         self.all_inputs.deinit(self.alloc);
+        self.all_outputs_map.deinit(self.alloc);
+        self.derivable.deinit(self.alloc);
+        self.all_outputs.deinit(self.alloc);
         self.string_alloc.deinit();
     }
 
@@ -510,6 +531,7 @@ pub const EntClass = struct {
     iconsprite: []const u8 = "",
     studio_model: []const u8 = "",
     has_hull: bool = false,
+    is_base: bool = false,
 
     pub fn init(alloc: Allocator) Self {
         return .{ .alloc = alloc };
@@ -671,6 +693,8 @@ pub const ParseCtx = struct {
             },
             .PointClass, .BaseClass, .NPCClass, .SolidClass, .FilterClass, .KeyFrameClass, .MoveClass => {
                 var new_class = EntClass.init(alloc);
+                if (directive == .BaseClass)
+                    new_class.is_base = true;
                 while (try tkz.next()) |t| { //Parse all the inherited classes
                     switch (t.tag) {
                         .plain_string => {
@@ -758,13 +782,11 @@ pub const ParseCtx = struct {
 
                 try pctx.parseFields(ctx, &new_class);
 
-                switch (directive) {
-                    else => {
-                        const index = ctx.ents.items.len;
-                        try ctx.ents.append(ctx.alloc, new_class);
-                        try ctx.base.put(ctx.alloc, new_class.name, index);
-                    },
-                }
+                const index = ctx.ents.items.len;
+                try ctx.ents.append(ctx.alloc, new_class);
+                if (!new_class.is_base)
+                    try ctx.derivable.append(ctx.alloc, index);
+                try ctx.base.put(ctx.alloc, new_class.name, index);
             },
         }
     }
