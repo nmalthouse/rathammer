@@ -1,0 +1,10 @@
+GameInfo {
+    game    "left for dead 2"
+
+
+    FileSystem {
+        SearchPaths {
+            game       left4dead2/pak01.vpk
+        }
+    }
+}

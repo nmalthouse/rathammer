@@ -50,6 +50,19 @@ pub const Object = struct {
             return error.invalid;
         return n.obj.recursiveGetFirst(p, keys[1..]);
     }
+
+    pub fn print(self: *Self, depth: usize, parsed: *Parsed) void {
+        std.debug.print("{{\n", .{});
+        defer std.debug.print("}}\n", .{});
+        for (self.list.items) |kv| {
+            for (0..depth) |_| std.debug.print(" ", .{});
+            std.debug.print("\"{s}\" ", .{parsed.stringFromId(kv.key) orelse "BROKE"});
+            switch (kv.val) {
+                .literal => |l| std.debug.print(" {s}\n", .{l}),
+                .obj => |o| o.print(depth + 1, parsed),
+            }
+        }
+    }
 };
 
 pub const Parsed = struct {
@@ -84,6 +97,10 @@ pub const Parsed = struct {
         try self.strings.append(self.alloc, dupe);
         try self.string_map.put(dupe, id);
         return id;
+    }
+
+    pub fn print(self: *Self) void {
+        self.value.print(0, self);
     }
 };
 

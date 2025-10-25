@@ -257,7 +257,15 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     const o1 = try parseStruct(Studiohdr_01, .little, r);
     if (!std.mem.eql(u8, &o1.id, MDL_MAGIC_STRING))
         return error.notMdl;
-    const supported = [_]u32{ 44, 48 }; //This is bullshit lol
+    const supported = [_]u32{
+        // Differences in version are not documented on the wiki afaik.
+        // so we just add versions that parse correctly to this list
+        44,
+        45,
+        46,
+        48,
+        49,
+    };
     if (std.mem.indexOfScalar(u32, &supported, o1.version) == null) {
         log.warn("Unsupported mdl version {d} , attempting to parse", .{o1.version});
     }

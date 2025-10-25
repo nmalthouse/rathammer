@@ -6,6 +6,7 @@ const vdf = @import("vdf.zig");
 const vvd = @import("vvd.zig");
 const edit = @import("editor.zig");
 const graph = @import("graph");
+const DEBUG_PRINT = false;
 
 pub const ThreadState = struct {
     alloc: std.mem.Allocator,
@@ -240,6 +241,7 @@ pub const Context = struct {
                 defer obj.deinit();
                 //All vmt are a single root object with a shader name as key
                 var was_found = false;
+                var had_match = false;
                 if (obj.value.list.items.len > 0) {
                     const extensions = [_][]const u8{
                         "materials",
@@ -254,18 +256,9 @@ pub const Context = struct {
                                     fallback_loop: for (fallback_keys) |fbkey| {
                                         const id = try obj.stringId(fbkey);
                                         if (o.getFirst(id)) |base| {
+                                            had_match = true;
                                             if (base == .literal) {
-                                                const base_name = blk: {
-                                                    if (base.literal.len == 0) break :blk base.literal;
-                                                    const a = base.literal[0];
-                                                    const start: usize = if (a == '\\' or a == '/') 1 else 0;
-                                                    if (start != 0) {
-                                                        std.debug.print("vmt specifies an absolute path, attempting to load relative: {s}/{s}\n", .{ names.path, names.name });
-                                                        std.debug.print("ABSOLUTE PATHS ARE NOT RELATIVE!\n", .{});
-                                                        std.debug.print("FIX YOUR FILES\n", .{});
-                                                    }
-                                                    break :blk base.literal[start..];
-                                                };
+                                                const base_name = sanitizeVtfName(base.literal);
                                                 const buf = try vtf.loadBuffer(
                                                     try vpkctx.getFileTempFmtBuf(
                                                         "vtf",
@@ -295,23 +288,45 @@ pub const Context = struct {
                             else => {},
                         }
                     }
-                    if (!was_found) {
-                        std.debug.print("A texture was not found\n", .{});
+                    if (!was_found and DEBUG_PRINT) {
+                        std.debug.print("Vmt found but no keys found: ", .{});
+                        std.debug.print("had match {any}\n", .{had_match});
                         //std.debug.print("{s}\n", .{tt});
                         std.debug.print("{s}/{s}\n", .{ names.path, names.name });
+
+                        obj.print();
                         //std.debug.print("{s}\n", .{tt});
                     }
                 }
             }
         } else {
-            const names = vpkctx.namesFromId(vpk_res_id);
-            if (names) |n| {
-                log.warn("Can't find vtf for {s}/{s}", .{ n.path, n.name });
-            } else {
-                log.warn("Can't find vtf", .{});
+            if (DEBUG_PRINT) {
+                const names = vpkctx.namesFromId(vpk_res_id);
+                if (names) |n| {
+                    log.warn("Can't find texture {s}/{s}.{s}", .{ n.path, n.name, n.ext });
+                } else {
+                    log.warn("Can't find vtf", .{});
+                }
             }
         }
     }
 };
+
+fn sanitizeVtfName(dirty: []const u8) []const u8 {
+    const relative = blk: { //Strip leading slashes
+        if (dirty.len == 0) break :blk dirty;
+        const a = dirty[0];
+        const start: usize = if (a == '\\' or a == '/') 1 else 0;
+        if (start != 0) {
+            //Complain to the user about their shitty textures
+        }
+        break :blk dirty[start..];
+    };
+
+    if (std.mem.endsWith(u8, relative, ".vtf")) {
+        return relative[0 .. relative.len - ".vtf".len];
+    }
+    return relative;
+}
 
 //threadpool object
