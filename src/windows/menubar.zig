@@ -113,6 +113,10 @@ pub const MenuBar = struct {
 
             _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
             ar.x += b + pad;
+
+            const ww = gui.dstate.minWidgetWidth(version.version_short);
+            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{version.version_short});
+            ar.x += ww + pad;
         }
     }
 

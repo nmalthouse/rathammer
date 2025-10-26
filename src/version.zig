@@ -16,6 +16,7 @@ pub const version = blk: {
     _ = parsed;
     break :blk version_private;
 };
+pub const version_short = version_private;
 
 pub fn parseSemver(string: []const u8) ![3]u32 {
     var tkz = std.mem.tokenizeAny(u8, string, ".-");

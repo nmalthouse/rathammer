@@ -316,6 +316,7 @@ pub fn draw3Dview(
         while (tool_it.next()) |item| {
             const mesh = self.meshmap.get(item.key_ptr.*) orelse continue;
             mesh.mesh.drawSimple(view_3d, mat, self.draw_state.basic_shader);
+            self.renderer.countDCall();
         }
     }
 
@@ -479,6 +480,7 @@ pub fn draw3Dview(
             mt.textFmt("  nbatch, ", .{}, fh, col);
             mt.textFmt("draw  {d}    ", .{draw.batches.count()}, fh, col);
             mt.textFmt("drnd  {d}    ", .{draw_nd.batches.count()}, fh, col);
+            mt.textFmt("dcall {d}    ", .{self.renderer.last_frame_draw_call_count}, fh, col);
         }
         {
             const notify_slice = try self.notifier.getSlice(self.draw_state.frame_time_ms);

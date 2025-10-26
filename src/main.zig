@@ -416,10 +416,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
     }
 
-    editor.layers.printVis(editor.layers.root, 0);
-
     //TODO with assets loaded dynamically, names might not be correct when saving before all loaded
-
     loadctx.setTime();
 
     graph.c.glEnable(graph.c.GL_CULL_FACE);

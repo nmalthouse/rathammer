@@ -111,6 +111,11 @@ pub const InitFromJsonCtx = struct {
     str_store: *StringStorage,
 };
 
+//TODO amalgamating multiple json maps:
+//  Groups need to be remapped
+//  layers need to be remapped
+//  entids need to be remapped
+
 const log = std.log.scoped(.json_map);
 pub fn loadJson(
     ctx: InitFromJsonCtx,

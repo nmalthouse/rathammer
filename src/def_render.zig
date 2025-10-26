@@ -36,6 +36,8 @@ pub const Renderer = struct {
     hdrbuffer: HdrBuffer,
     csm: Csm,
 
+    last_frame_draw_call_count: usize = 0,
+
     alloc: std.mem.Allocator,
     draw_calls: std.ArrayList(DrawCall) = .{},
     last_frame_view_mat: Mat4 = undefined,
@@ -124,7 +126,12 @@ pub const Renderer = struct {
     }
 
     pub fn beginFrame(self: *Self) void {
+        self.last_frame_draw_call_count = self.draw_calls.items.len;
         self.draw_calls.clearRetainingCapacity();
+    }
+
+    pub fn countDCall(self: *Self) void {
+        self.last_frame_draw_call_count += 1;
     }
 
     pub fn clearLights(self: *Self) void {

@@ -294,7 +294,6 @@ pub const VtfBuf = struct {
             }, @intCast(0));
             graph.c.glBindTexture(graph.c.GL_TEXTURE_2D, tex.id);
             graph.c.glGenerateMipmap(graph.c.GL_TEXTURE_2D);
-            std.debug.print("Fallback texture\n", .{});
         } else {
             for (self.buffers.items, 0..) |buf, mi| {
                 const level = mip_count - mi - 1;

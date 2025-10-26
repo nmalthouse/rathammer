@@ -1160,29 +1160,30 @@ pub const Context = struct {
         var parsed = try json_map.loadJson(jsonctx, slice, loadctx, &self.ecs, &self.vpkctx, &self.groups);
         defer parsed.deinit();
 
-        try self.setMapName(filename);
-
-        try self.skybox.loadSky(try self.storeString(parsed.value.sky_name), &self.vpkctx);
-        parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
-        self.edit_state.map_version = parsed.value.editor.map_version;
-        self.edit_state.map_uuid = parsed.value.editor.uuid;
-        log.info("Map version : {d}", .{self.edit_state.map_version});
-        if (parsed.value.extra == .object) {
-            const ex = &parsed.value.extra;
-            if (std.json.parseFromValue(struct { recent_mat: [][]const u8 }, self.alloc, ex.*, .{})) |v| {
-                defer v.deinit();
-                for (v.value.recent_mat) |mat| {
-                    if (try self.vpkctx.resolveId(.{ .name = mat }, false)) |id| {
-                        try self.asset_browser.recent_mats.append(id.id);
+        if (!self.has_loaded_map) {
+            try self.setMapName(filename);
+            try self.skybox.loadSky(try self.storeString(parsed.value.sky_name), &self.vpkctx);
+            parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
+            self.edit_state.map_version = parsed.value.editor.map_version;
+            self.edit_state.map_uuid = parsed.value.editor.uuid;
+            log.info("Map version : {d}", .{self.edit_state.map_version});
+            if (parsed.value.extra == .object) {
+                const ex = &parsed.value.extra;
+                if (std.json.parseFromValue(struct { recent_mat: [][]const u8 }, self.alloc, ex.*, .{})) |v| {
+                    defer v.deinit();
+                    for (v.value.recent_mat) |mat| {
+                        if (try self.vpkctx.resolveId(.{ .name = mat }, false)) |id| {
+                            try self.asset_browser.recent_mats.append(id.id);
+                        }
                     }
-                }
-                if (self.asset_browser.recent_mats.list.items.len > 0) {
-                    self.edit_state.selected_texture_vpk_id = self.asset_browser.recent_mats.list.items[0];
-                }
-            } else |_| {} //This data is not essential to parse
-        }
+                    if (self.asset_browser.recent_mats.list.items.len > 0) {
+                        self.edit_state.selected_texture_vpk_id = self.asset_browser.recent_mats.list.items[0];
+                    }
+                } else |_| {} //This data is not essential to parse
+            }
 
-        try self.layers.insertVisgroupsFromJson(parsed.value.visgroup);
+            try self.layers.insertVisgroupsFromJson(parsed.value.visgroup);
+        }
 
         loadctx.cb("Building meshes");
         try self.rebuildAllDependentState();
@@ -1192,11 +1193,7 @@ pub const Context = struct {
     //Then, only have a single function to load serialized data into engine "loadJson"
     fn loadVmf(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
         const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
-        self.has_loaded_map = true;
-        if (false and self.has_loaded_map) {
-            log.err("Map already loaded", .{});
-            return error.multiMapLoadNotSupported;
-        }
+        defer self.has_loaded_map = true;
         var timer = try std.time.Timer.start();
 
         defer log.info("Loaded vmf in {d}ms", .{timer.read() / std.time.ns_per_ms});
@@ -1208,11 +1205,14 @@ pub const Context = struct {
         var obj = try vdf.parse(self.alloc, slice, null, .{});
         defer obj.deinit();
         loadctx.cb("vmf parsed");
-        try self.setMapName(filename);
         const vmf_ = try vdf.fromValue(vmf.Vmf, &obj, &.{ .obj = &obj.value }, aa.allocator(), null);
         if (vis_override == null)
             try self.layers.buildMappingFromVmf(vmf_.visgroups.visgroup, self.layers.root);
-        try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
+
+        if (!self.has_loaded_map) {
+            try self.setMapName(filename);
+            try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
+        }
         {
             loadctx.addExpected(vmf_.world.solid.len + vmf_.entity.len + 10);
             var gen_timer = try std.time.Timer.start();
@@ -1286,7 +1286,7 @@ pub const Context = struct {
             const nm = self.meshmap.count();
             const whole_time = gen_timer.read();
 
-            log.info("csg took {d} {d:.2} us", .{ nm, csg.gen_time / std.time.ns_per_us / nm });
+            log.info("csg took {d} {d:.2} us", .{ nm, csg.gen_time / std.time.ns_per_us / (nm + 1) });
             log.info("Generated {d} meshes in {d:.2} ms", .{ nm, whole_time / std.time.ns_per_ms });
         }
         aa.deinit();
