@@ -255,12 +255,12 @@ pub const InspectorWindow = struct {
                 const ClassCombo = struct {
                     fn commit(cb: *CbHandle, id: usize, _: void) void {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
-                        const fields = lself.editor.fgd_ctx.derivable.items;
+                        const fields = lself.editor.fgd_ctx.classSlice();
                         lself.vt.needs_rebuild = true;
                         if (id >= fields.len) return;
                         const led = lself.editor;
                         if (led.selection.getGroupOwnerExclusive(&led.groups)) |lsel_id| {
-                            const new_class_name = lself.editor.fgd_ctx.ents.items[fields[id]].name;
+                            const new_class_name = lself.editor.fgd_ctx.getPtrId(id).name;
                             if (led.ecs.getOptPtr(lsel_id, .entity) catch null) |lent| {
                                 const ustack = led.undoctx.pushNewFmt("change class {s} -> {s}", .{ lent.class, new_class_name }) catch return;
                                 ustack.append(.{ .set_class = undo.UndoSetClass.create(
@@ -276,19 +276,17 @@ pub const InspectorWindow = struct {
 
                     fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                        const fields = lself.editor.fgd_ctx.derivable.items;
-                        if (id >= fields.len) return "none";
-                        return lself.editor.fgd_ctx.ents.items[fields[id]].name;
+                        return lself.editor.fgd_ctx.getPtrId(id).name;
                     }
                 };
-                self.selected_class_id = std.mem.indexOfScalar(usize, ed.fgd_ctx.derivable.items, ed.fgd_ctx.getId(ent.class) orelse 0) orelse 0;
+                self.selected_class_id = ed.fgd_ctx.getId(ent.class);
                 if (guis.label(lay, aa, "Ent Class", .{})) |ar|
                     _ = Wg.ComboUser(void).build(lay, ar, .{
                         .user_vt = &self.cbhandle,
                         .commit_cb = &ClassCombo.commit,
                         .name_cb = &ClassCombo.name,
                         .current = self.selected_class_id orelse 0,
-                        .count = self.editor.fgd_ctx.derivable.items.len,
+                        .count = self.editor.fgd_ctx.classSlice().len,
                     }, {});
                 const eclass = ed.fgd_ctx.getPtr(ent.class) orelse return;
                 const fields = eclass.field_data.items;
@@ -331,7 +329,7 @@ pub const InspectorWindow = struct {
         defer scr.hintBounds(ly.getUsed());
         const ed = self.editor;
         if (self.selected_class_id) |cid| {
-            const class = &ed.fgd_ctx.ents.items[cid];
+            const class = ed.fgd_ctx.getPtrId(cid);
             if (self.selected_kv_index >= class.field_data.items.len) return;
             const field = &class.field_data.items[self.selected_kv_index];
 
@@ -416,7 +414,7 @@ pub const InspectorWindow = struct {
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
             if (ed.ecs.getOptPtr(sel_id, .entity) catch null) |ent| {
                 const eclass = ed.fgd_ctx.getPtr(ent.class) orelse return;
-                const class_i = ed.fgd_ctx.base.get(ent.class) orelse return;
+                const class_i = ed.fgd_ctx.getId(ent.class) orelse return;
                 const fields = eclass.field_data.items;
                 if (index >= fields.len) return;
                 const kvs = if (try ed.ecs.getOptPtr(sel_id, .key_values)) |kv| kv else blk: {
@@ -651,7 +649,7 @@ pub const InspectorWindow = struct {
             fn commit(vtt: *CbHandle, id: usize, lam: @This()) void {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
-                const fields = lself.editor.fgd_ctx.ents.items;
+                const fields = lself.editor.fgd_ctx.classSlice();
                 const f = fields[lam.fgd_class_index];
                 const fie = f.field_data.items[lam.fgd_field_index];
 
@@ -660,7 +658,7 @@ pub const InspectorWindow = struct {
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) []const u8 {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                const class = lself.editor.fgd_ctx.ents.items[lam.fgd_class_index];
+                const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
                 const field = class.field_data.items[lam.fgd_field_index];
                 if (field.type == .choices) {
                     if (id < field.type.choices.items.len)

@@ -398,11 +398,9 @@ pub const EntCtx = struct {
 
     string_alloc: std.heap.ArenaAllocator,
     alloc: Allocator,
-    ents: ArrayList(EntClass) = .{},
 
-    /// Indxe into ents, all non base entities
-    derivable: ArrayList(usize) = .{},
-    base: std.StringHashMapUnmanaged(usize) = .{}, // classname -> ents.items[index]
+    base: std.StringArrayHashMapUnmanaged(EntClass) = .{},
+    real: std.StringArrayHashMapUnmanaged(EntClass) = .{},
 
     all_inputs_map: std.StringHashMapUnmanaged(InputId) = .{},
     all_inputs: ArrayList(EntClass.Io) = .{},
@@ -439,31 +437,48 @@ pub const EntCtx = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        for (self.ents.items) |*item| {
-            item.deinit();
-        }
+        for (self.base.values()) |*val|
+            val.deinit();
+
+        for (self.real.values()) |*val|
+            val.deinit();
+
         self.base.deinit(self.alloc);
-        self.ents.deinit(self.alloc);
+        self.real.deinit(self.alloc);
+
         self.all_inputs_map.deinit(self.alloc);
         self.all_inputs.deinit(self.alloc);
         self.all_outputs_map.deinit(self.alloc);
-        self.derivable.deinit(self.alloc);
         self.all_outputs.deinit(self.alloc);
         self.string_alloc.deinit();
     }
 
-    pub fn getId(self: *Self, class_name: []const u8) ?usize {
-        return self.base.get(class_name);
-    }
-
+    // Only returns real class'
     pub fn getPtr(self: *Self, class_name: []const u8) ?*EntClass {
-        const index = self.base.get(class_name) orelse return null;
-        if (index >= self.ents.items.len)
-            return null;
-        return &self.ents.items[index];
+        return self.real.getPtr(class_name);
     }
 
-    pub fn nameFromId(self: *Self, id: usize) ?[]const u8 {
+    pub fn getId(self: *Self, class_name: []const u8) ?usize {
+        return self.real.getIndex(class_name);
+    }
+
+    /// Does not check bounds!
+    pub fn getPtrId(self: *Self, id: usize) *EntClass {
+        return &self.real.values()[id];
+    }
+
+    pub fn classSlice(self: *Self) []const EntClass {
+        return self.real.values();
+    }
+
+    /// Returns any class, for inheritance
+    fn getPtrAny(self: *Self, class_name: []const u8) ?*EntClass {
+        return self.base.getPtr(class_name) orelse {
+            return self.real.getPtr(class_name);
+        };
+    }
+
+    pub fn nameFromIdOLD(self: *Self, id: usize) ?[]const u8 {
         if (id < self.ents.items.len)
             return self.ents.items[id].name;
         return null;
@@ -693,8 +708,6 @@ pub const ParseCtx = struct {
             },
             .PointClass, .BaseClass, .NPCClass, .SolidClass, .FilterClass, .KeyFrameClass, .MoveClass => {
                 var new_class = EntClass.init(alloc);
-                if (directive == .BaseClass)
-                    new_class.is_base = true;
                 while (try tkz.next()) |t| { //Parse all the inherited classes
                     switch (t.tag) {
                         .plain_string => {
@@ -741,7 +754,7 @@ pub const ParseCtx = struct {
                                     .base => {
                                         var it = Token.orderedTokenIterator(.comma, ps);
                                         while (it.next()) |tt| {
-                                            const base = ctx.getPtr(tkz.getSlice(tt)) orelse {
+                                            const base = ctx.getPtrAny(tkz.getSlice(tt)) orelse {
                                                 log.warn("INVALID CLASS {s}", .{tkz.getSlice(tt)});
                                                 continue;
                                             };
@@ -782,11 +795,11 @@ pub const ParseCtx = struct {
 
                 try pctx.parseFields(ctx, &new_class);
 
-                const index = ctx.ents.items.len;
-                try ctx.ents.append(ctx.alloc, new_class);
-                if (!new_class.is_base)
-                    try ctx.derivable.append(ctx.alloc, index);
-                try ctx.base.put(ctx.alloc, new_class.name, index);
+                if (directive == .BaseClass) {
+                    try ctx.base.put(ctx.alloc, new_class.name, new_class);
+                } else {
+                    try ctx.real.put(ctx.alloc, new_class.name, new_class);
+                }
             },
         }
     }
