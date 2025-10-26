@@ -18,6 +18,7 @@ const layer = @import("layer.zig");
 const prim_gen = @import("primitive_gen.zig");
 const csg = @import("csg.zig");
 const toolutil = @import("tool_common.zig");
+const StringStorage = @import("string.zig").StringStorage;
 pub const SparseSet = graph.SparseSet;
 const ArrayList = std.ArrayListUnmanaged;
 //Global TODO for ecs stuff
@@ -1976,6 +1977,7 @@ pub const KeyValues = struct {
 };
 
 pub const Connection = struct {
+    pub const StringFmtCsv = "{[listen_event]s},{[target]s},{[input]s},{[value]s},{[delay]d},{[fire_count]d}";
     const Self = @This();
     listen_event: []const u8 = "", //Allocated by someone else (string storage)
 
@@ -2007,6 +2009,25 @@ pub const Connection = struct {
             .fire_count = self.fire_count,
             ._alloc = self._alloc,
         };
+    }
+
+    pub fn initCsv(alloc: std.mem.Allocator, str_store: *StringStorage, csv: []const u8) !@This() {
+        var it = std.mem.splitScalar(u8, csv, ',');
+        const listen = it.next() orelse return error.invalid;
+        const target = it.next() orelse return error.invalid;
+        const input = it.next() orelse return error.invalid;
+        const value = it.next() orelse return error.invalid;
+        const delay = try std.fmt.parseFloat(f32, it.next() orelse return error.invalid);
+        const fc = try std.fmt.parseInt(i32, it.next() orelse return error.invalid, 10);
+
+        var ret = init(alloc);
+        ret.listen_event = try str_store.store(listen);
+        try ret.target.appendSlice(ret._alloc, target);
+        ret.input = try str_store.store(input);
+        try ret.value.appendSlice(ret._alloc, value);
+        ret.delay = delay;
+        ret.fire_count = fc;
+        return ret;
     }
 
     pub fn initFromVmf(alloc: std.mem.Allocator, con: vmf.Connection, str_store: anytype) !@This() {

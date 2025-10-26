@@ -724,6 +724,7 @@ const IoWg = struct {
     cbhandle: CbHandle = .{},
     io_columns_width: [5]f32 = .{ 0.2, 0.4, 0.6, 0.8, 0.9 },
     selected_io_index: usize = 0,
+    right_click_index: ?usize = null,
     io_scroll_index: usize = 0,
     matched_input_set: std.AutoArrayHashMap(fgd.InputId, void),
     editor: *Context,
@@ -754,10 +755,91 @@ const IoWg = struct {
         self.buildIoTab(vt.area, vt, index) catch return;
     }
 
-    fn io_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, win: *iWindow) void {
+    fn io_btn_cb(cb: *CbHandle, id: usize, mb: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.selected_io_index = id;
-        win.needs_rebuild = true;
+        const cons = self.getConsPtr() orelse return;
+        const real_id = if (id >= cons.list.items.len) null else id;
+        switch (mb.btn) {
+            else => {
+                if (real_id) |rid|
+                    self.selected_io_index = rid;
+                win.needs_rebuild = true;
+            },
+            .right => {
+                const bi = guis.Widget.BtnContextWindow.buttonId;
+                const pos = graph.Vec2f{ .x = @round(mb.pos.x), .y = @round(mb.pos.y) };
+                const aa = self.editor.frame_arena.allocator();
+                var btns = std.ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
+
+                btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
+                btns.append(aa, .{ bi("copy"), "copy io string", .btn }) catch {};
+                btns.append(aa, .{ bi("paste"), "paste new", .btn }) catch {};
+                btns.append(aa, .{ bi("delete"), "delete", .btn }) catch {};
+
+                const r_win = guis.Widget.BtnContextWindow.create(mb.gui, pos, .{
+                    .buttons = btns.items,
+                    .btn_cb = rightClickMenuBtn,
+                    .btn_vt = &self.cbhandle,
+                }) catch return;
+                self.right_click_index = real_id;
+                mb.gui.setTransientWindow(r_win);
+            },
+        }
+    }
+
+    fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        //const ed = self.editor;
+        //const sel_id = self.right_click_id orelse return;
+        const bi = guis.Widget.BtnContextWindow.buttonId;
+        switch (id) {
+            bi("copy") => {
+                //TODO ensure comma's are escaped
+                if (self.getSelectedIoItemPtr()) |sel| {
+                    const str = self.editor.printArena(ecs.Connection.StringFmtCsv, .{
+                        .listen_event = sel.listen_event,
+                        .target = sel.target.items,
+                        .input = sel.input,
+                        .value = sel.value.items,
+                        .delay = sel.delay,
+                        .fire_count = sel.fire_count,
+                    }) catch "error.printFailed";
+                    graph.SDL.Window.setClipboard(self.editor.alloc, str) catch {};
+                }
+            },
+            bi("delete") => {
+                _ = dat;
+                _ = win;
+                //broker
+                //if (self.right_click_index) |rc|
+                //ioBtnCb(cb, rc, dat, win);
+            },
+            bi("paste") => {
+                const color = @import("../colors.zig").colors;
+                const clip = graph.SDL.Window.getClipboard(self.editor.alloc) catch return;
+                defer self.editor.alloc.free(clip);
+                if (ecs.Connection.initCsv(self.editor.alloc, &self.editor.string_storage, clip)) |new| {
+                    if (self.getConsPtr()) |cons| {
+                        const index = @min(self.right_click_index orelse cons.list.items.len, cons.list.items.len);
+                        const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
+
+                        if (self.editor.undoctx.pushNewFmt("paste io", .{})) |ustack| {
+                            defer ustack.apply(self.editor);
+                            ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
+                                .id = sel_id,
+                                .index = index,
+                                .old = null,
+                                .new = new,
+                            }) catch return }) catch {};
+                        } else |_| {}
+                    }
+                } else |err| {
+                    self.editor.notify("invalid io csv: {t}", .{err}, color.bad) catch {};
+                }
+            },
+            else => {},
+        }
+        self.win_ptr.needs_rebuild = true;
     }
 
     fn buildIoTab(self: *@This(), area: Rect, lay: *iArea, index: usize) !void {
@@ -767,9 +849,18 @@ const IoWg = struct {
         //const num_w = th * 2;
         //const rem4 = @trunc((area.w - num_w * 2) / 4);
         var widths: [6]f32 = undefined;
-        //const col_ws = [6]f32{ rem4, rem4, rem4, rem4, num_w, num_w };
+
+        //Make a dummy button covering the thing so we can right click anywhere
+        if (Wg.Button.build(lay, area, "", .{
+            .id = std.math.maxInt(guis.Uid),
+            .cb_fn = &io_btn_cb,
+            .cb_vt = &self.cbhandle,
+        }) == .good) {
+            if (lay.getLastChild()) |lc|
+                lc.draw_fn = null;
+        }
+
         var tly = Wg.DynamicTable.calcLayout(&self.io_columns_width, &widths, area, gui) orelse return;
-        //var tly1 = guis.TableLayoutCustom{ .item_height = gui.style.config.default_item_h, .bounds = area, .column_widths = &col_ws };
         if (index >= cons.list.items.len) return;
         for (cons.list.items[index..], index..) |con, ind| {
             const opts = Wg.Button.Opts{
@@ -790,9 +881,6 @@ const IoWg = struct {
                 _ = Wg.Button.build(lay, tly.getArea(), str, opts);
             _ = Wg.Button.build(lay, tly.getArea(), self.editor.printScratch("{d}", .{con.delay}) catch "", opts);
             _ = Wg.Button.build(lay, tly.getArea(), self.editor.printScratch("{d}", .{con.fire_count}) catch "", opts);
-            //TODO make these buttons too
-            //_ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.delay});
-            //_ = Wg.Text.build(lay, tly.getArea(), "{d}", .{con.fire_count});
         }
     }
 
@@ -803,7 +891,7 @@ const IoWg = struct {
         switch (id) {
             .delete => {
                 if (self.getConsPtr()) |cons| {
-                    if (self.selected_io_index > cons.list.items.len) return;
+                    if (self.selected_io_index >= cons.list.items.len) return;
                     const sel = cons.list.items[self.selected_io_index];
                     if (self.editor.undoctx.pushNewFmt("delete io", .{})) |ustack| {
                         defer ustack.apply(self.editor);
@@ -814,6 +902,8 @@ const IoWg = struct {
                             .new = null,
                         }) catch return }) catch {};
                     } else |_| {}
+                    if (self.selected_io_index > 0)
+                        self.selected_io_index -= 1;
                 }
             },
             .new => {
@@ -833,10 +923,10 @@ const IoWg = struct {
                 } else |_| {}
 
                 self.selected_io_index = index;
-                win.needs_rebuild = true;
             },
             else => {},
         }
+        win.needs_rebuild = true;
     }
 
     fn ioTextboxCb(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
