@@ -195,6 +195,8 @@ pub const Context = struct {
             models: bool = true,
             skybox: bool = true,
 
+            debug_stats: bool = false,
+
             model_render_dist: f32 = 512 * 2,
         } = .{},
 

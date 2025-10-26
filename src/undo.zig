@@ -793,12 +793,148 @@ pub const UndoSetClass = struct {
     }
 };
 
+pub const UndoConnectDelta = struct {
+    /// Allocation matches that of Connection.
+    /// index 0 is old, 1 is new
+    pub const Delta = union(enum) {
+        listen_event: [2][]const u8,
+        target: [2][]const u8, //duped
+        input: [2][]const u8,
+        value: [2][]const u8, //duped
+        delay: [2]f32,
+        fire_count: [2]i32,
+    };
+
+    delta: Delta,
+    id: Id,
+    index: usize,
+
+    /// delta memory is duped
+    pub fn create(alloc: std.mem.Allocator, delta: Delta, id: Id, index: usize) !*@This() {
+        const obj = try alloc.create(@This());
+        obj.* = .{
+            .delta = switch (delta) {
+                else => delta, //Those fields are static strings or numbers
+                .target => |t| .{ .target = [2][]const u8{ try alloc.dupe(u8, t[0]), try alloc.dupe(u8, t[1]) } },
+                .value => |t| .{ .value = [2][]const u8{ try alloc.dupe(u8, t[0]), try alloc.dupe(u8, t[1]) } },
+            },
+            .id = id,
+            .index = index,
+        };
+        return obj;
+    }
+
+    pub fn depId(self: *const @This()) ?Id {
+        return self.id;
+    }
+
+    pub fn undo(self: *@This(), editor: *Editor) void {
+        self.undoArg(editor, 0) catch {};
+    }
+    pub fn redo(self: *@This(), editor: *Editor) void {
+        self.undoArg(editor, 1) catch {};
+    }
+
+    pub fn undoArg(self: *@This(), ed: *Editor, comptime ind: u1) !void {
+        if (try ed.ecs.getOptPtr(self.id, .connections)) |cons| {
+            if (self.index >= cons.list.items.len) return;
+            const mod = &cons.list.items[self.index];
+            switch (self.delta) {
+                .listen_event => |l| mod.listen_event = l[ind],
+                .input => |l| mod.input = l[ind],
+                .delay => |l| mod.delay = l[ind],
+                .fire_count => |l| mod.fire_count = l[ind],
+                .target => |t| {
+                    mod.target.clearRetainingCapacity();
+                    try mod.target.appendSlice(mod._alloc, t[ind]);
+                },
+                .value => |v| {
+                    mod.value.clearRetainingCapacity();
+                    try mod.value.appendSlice(mod._alloc, v[ind]);
+                },
+            }
+        }
+    }
+
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        switch (self.delta) {
+            else => {},
+            .target, .value => |tv| {
+                alloc.free(tv[0]);
+                alloc.free(tv[1]);
+            },
+        }
+        alloc.destroy(self);
+    }
+};
+
+pub const UndoConnectionManip = struct {
+    old: ?ecs.Connection,
+    new: ?ecs.Connection,
+    id: Id,
+    index: usize,
+
+    /// takes ownership of passed in Connection's, be sure to dupe any currently living
+    pub fn create(alloc: std.mem.Allocator, new: UndoConnectionManip) !*@This() {
+        const obj = try alloc.create(@This());
+        obj.* = new;
+        return obj;
+    }
+
+    pub fn depId(self: *const @This()) ?Id {
+        return self.id;
+    }
+
+    pub fn undo(self: *@This(), editor: *Editor) void {
+        undoArgs(self.old, self.new, self.index, self.id, editor) catch {};
+    }
+
+    pub fn redo(self: *@This(), editor: *Editor) void {
+        undoArgs(self.new, self.old, self.index, self.id, editor) catch {};
+    }
+
+    fn undoArgs(old: ?ecs.Connection, new: ?ecs.Connection, index: usize, id: Id, ed: *Editor) !void {
+        if (try ed.ecs.getOptPtr(id, .connections)) |cons| {
+            if (old) |*old_| {
+                // we can't insert past end of list, it would create uninit items
+                if (index > cons.list.items.len)
+                    return;
+
+                if (new) |_| {
+                    var rem = cons.list.orderedRemove(index);
+                    rem.deinit();
+                }
+
+                try cons.list.insert(cons._alloc, index, try old_.dupe());
+            } else {
+                if (index >= cons.list.items.len) return;
+
+                var rem = cons.list.orderedRemove(index);
+                rem.deinit();
+            }
+        }
+    }
+
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        if (self.old) |*old|
+            old.deinit();
+        if (self.new) |*new|
+            new.deinit();
+        alloc.destroy(self);
+    }
+};
+
 /// This is a noop
 pub const UndoTemplate = struct {
     pub fn create(alloc: std.mem.Allocator) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{};
         return obj;
+    }
+
+    pub fn depId(self: *const @This()) ?Id {
+        _ = self;
+        return null;
     }
 
     pub fn undo(self: *@This(), editor: *Editor) void {
@@ -864,6 +1000,8 @@ const tt = genUnion(&.{
     .{ "set_layer", UndoSetLayer },
     .{ "attach_layer", UndoAttachLayer },
     .{ "set_class", UndoSetClass },
+    .{ "connect", UndoConnectionManip },
+    .{ "connect_delta", UndoConnectDelta },
 });
 
 pub const UndoAmal = struct {

@@ -106,8 +106,9 @@ const ImageFormat = enum(i32) {
             .IMAGE_FORMAT_RGB888_BLUESCREEN => graph.c.GL_RGB,
             .IMAGE_FORMAT_BGR888_BLUESCREEN => graph.c.GL_RGB,
 
+            .IMAGE_FORMAT_BGRX8888 => graph.c.GL_BGRA,
+
             .IMAGE_FORMAT_RGB565 => return error.formatNotSupported,
-            .IMAGE_FORMAT_BGRX8888 => return error.formatNotSupported,
             .IMAGE_FORMAT_BGR565 => return error.formatNotSupported,
             .IMAGE_FORMAT_BGRX5551 => return error.formatNotSupported,
             .IMAGE_FORMAT_BGRA4444 => return error.formatNotSupported,

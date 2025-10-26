@@ -93,7 +93,7 @@ pub const Renderer = struct {
         });
         const hdr_shad = try graph.Shader.loadFromFilesystem(alloc, shader_dir, &.{ .{ .path = "hdr.vert", .t = .vert }, .{ .path = "hdr.frag", .t = .frag } });
         var sun_batch = SunQuadBatch.init(alloc);
-        sun_batch.clear();
+        _ = sun_batch.clear();
         sun_batch.appendVerts(&.{
             .{ .pos = graph.Vec3f.new(-1, 1, 0), .uv = graph.Vec2f.new(0, 1) },
             .{ .pos = graph.Vec3f.new(-1, -1, 0), .uv = graph.Vec2f.new(0, 0) },

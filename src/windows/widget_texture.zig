@@ -85,7 +85,7 @@ pub const PollingTexture = struct {
             const h = @min(d.style.config.default_item_h, r.h);
             const tr = graph.Rec(r.x, r.y + r.h - h, r.w, h);
             d.ctx.rect(tr, 0xff);
-            d.ctx.textClipped(tr, "{s}", .{self.text}, d.textP(0xffff_ffff), .right);
+            d.ctx.textClipped(tr, "{s}", .{self.text}, d.textP(0xffff_ffff), .left);
         }
     }
 

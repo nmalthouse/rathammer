@@ -661,7 +661,7 @@ const TextureBrowser = struct {
             const tt = self.ed.vpkctx.entries.get(mat) orelse return;
             const tint: u32 = if (mat == self.ed.edit_state.selected_texture_vpk_id) 0xff8888_ff else 0xffff_ffff;
             _ = ptext.PollingTexture.build(vt, tly.getArea(), self.ed, mat, "{s}/{s}", .{
-                tt.path, tt.name,
+                stripPrefix(tt.path, "materials/"), tt.name,
             }, .{
                 .cb_vt = cb,
                 .cb_fn = cb_tex_btn,
@@ -832,6 +832,12 @@ fn multiStartsWith(multi: []const []const u8, multi_start_i: usize, needle: []co
         start_i = 0;
     }
     return false;
+}
+
+pub fn stripPrefix(str: []const u8, prefix: []const u8) []const u8 {
+    if (std.mem.startsWith(u8, str, prefix))
+        return str[prefix.len..];
+    return str;
 }
 
 test "multisearch" {

@@ -54,8 +54,9 @@ pub const EcsT = graph.Ecs.Registry(&.{
     Comp("displacements", Displacements),
     Comp("key_values", KeyValues),
     Comp("connections", Connections),
-
     Comp("layer", Layer),
+
+    // transient state
     Comp("autovis_invisible", EmptyT),
     Comp("invisible", EmptyT),
     Comp("deleted", EmptyT),
@@ -1994,6 +1995,18 @@ pub const Connection = struct {
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{ ._alloc = alloc };
+    }
+
+    pub fn dupe(self: *const Self) !Self {
+        return Self{
+            .listen_event = self.listen_event,
+            .target = try self.target.clone(self._alloc),
+            .input = self.input,
+            .value = try self.value.clone(self._alloc),
+            .delay = self.delay,
+            .fire_count = self.fire_count,
+            ._alloc = self._alloc,
+        };
     }
 
     pub fn initFromVmf(alloc: std.mem.Allocator, con: vmf.Connection, str_store: anytype) !@This() {

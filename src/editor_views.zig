@@ -475,13 +475,18 @@ pub fn draw3Dview(
         if (self.edit_state.manual_hidden_count > 0) {
             mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, HIDDEN_COLOR);
         }
+        if (self.draw_state.tog.debug_stats) {
+            mt.textFmt("  nbatch, ", .{}, fh, col);
+            mt.textFmt("draw  {d}    ", .{draw.batches.count()}, fh, col);
+            mt.textFmt("drnd  {d}    ", .{draw_nd.batches.count()}, fh, col);
+        }
         {
-            //TODO put an actual dt here
             const notify_slice = try self.notifier.getSlice(self.draw_state.frame_time_ms);
             for (notify_slice) |n| {
                 mt.text(n.msg, fh, n.color);
             }
         }
+
         mt.drawBgRect(0x99, fh * 30);
     }
 

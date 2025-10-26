@@ -18,12 +18,13 @@ const fgd = @import("../fgd.zig");
 const app = @import("../app.zig");
 const Layer = @import("../layer.zig");
 const CbHandle = guis.CbHandle;
-//TODO
-// to get this to work we need to first add a getptr cb to all existing
-// widgets and use that to obtain our values.
-// second, we need an 'onUpdate' that lets us check if we need to rebuild by comparing
-// old selection to new for example.
-// or, we have the editor.selection emit an event.
+
+const IoBtn = enum(usize) {
+    new,
+    delete,
+    _,
+};
+
 pub const InspectorWindow = struct {
     pub const tabs = [_][]const u8{ "props", "io", "tool", "layer" };
     const Self = @This();
@@ -48,27 +49,27 @@ pub const InspectorWindow = struct {
 
     str: []const u8 = "ass",
 
-    io_columns_width: [5]f32 = .{ 0.2, 0.4, 0.6, 0.8, 0.9 },
-    selected_io_index: usize = 0,
-    io_scroll_index: usize = 0,
-
-    matched_input_set: std.AutoArrayHashMap(fgd.InputId, void),
-
     layer_widget: Layer.GuiWidget,
 
     show_help: bool = true,
 
     ev_vt: app.iEvent = .{ .cb = event_cb },
 
+    io: IoWg,
+
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
-            .matched_input_set = .init(editor.alloc),
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .kv_id_map = std.AutoHashMap(usize, []const u8).init(gui.alloc),
             .id_kv_map = std.StringHashMap(usize).init(gui.alloc),
+            .io = .{
+                .matched_input_set = .init(editor.alloc),
+                .editor = editor,
+                .win_ptr = &self.vt,
+            },
         };
 
         if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
@@ -85,7 +86,7 @@ pub const InspectorWindow = struct {
         //self.layout.deinit(gui, vt);
         self.kv_id_map.deinit();
         self.id_kv_map.deinit();
-        self.matched_input_set.deinit();
+        self.io.matched_input_set.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -196,77 +197,7 @@ pub const InspectorWindow = struct {
             return;
         }
         if (eql(u8, tab_name, "io")) {
-            const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
-            var ly = gui.dstate.vlayout(sp[1]);
-            ly.padding.left = 10;
-            ly.padding.right = 10;
-            ly.padding.top = 10;
-
-            const names = [6][]const u8{ "Listen", "target", "input", "value", "delay", "fc" };
-            const BetterNames = [names.len][]const u8{
-                "My output named",
-                "Target entities named",
-                "Via this input",
-                "With a parameter of",
-                "After a delay is seconds of",
-                "Limit to this many fires",
-            };
-            _ = Wg.DynamicTable.build(vt, sp[0], win, .{
-                .column_positions = &self.io_columns_width,
-                .column_names = &names,
-                .build_cb = &buildIo,
-                .build_vt = &self.cbhandle,
-            });
-
-            _ = Wg.Button.build(vt, ly.getArea(), "Add new", .{
-                .cb_vt = &self.cbhandle,
-                .cb_fn = &ioBtnCbAdd,
-            });
-            const cons = self.getConsPtr() orelse return;
-            if (self.selected_io_index < cons.list.items.len) {
-                const li = &cons.list.items[self.selected_io_index];
-                for (BetterNames, 0..) |n, i| {
-                    const ar = ly.getArea() orelse break;
-                    const sp1 = ar.split(.vertical, ar.w / 2);
-
-                    switch (i) {
-                        1 => {
-                            const count = self.editor.targetname_track.count(li.target.items, &self.editor.ecs);
-                            _ = Wg.Text.buildStatic(vt, sp1[0], self.editor.printArena("{s} ({d})", .{ n, count }) catch n, null);
-                        },
-                        else => _ = Wg.Text.buildStatic(vt, sp1[0], n, null),
-                    }
-                    _ = switch (i) {
-                        0 => self.buildOutputCombo(vt, sp1[1]),
-                        1 => {
-                            _ = Wg.Textbox.buildOpts(vt, sp1[1], .{
-                                .init_string = li.target.items,
-                                .user_id = 1,
-                                .commit_vt = &self.cbhandle,
-                                .commit_cb = &ioTextboxCb,
-                            });
-                        },
-                        2 => self.buildInputCombo(vt, sp1[1]),
-                        3 => Wg.Textbox.buildOpts(vt, sp1[1], .{
-                            .init_string = li.value.items,
-                            .user_id = 3,
-                            .commit_vt = &self.cbhandle,
-                            .commit_cb = &ioTextboxCb,
-                        }),
-                        4 => Wg.TextboxNumber.build(vt, sp1[1], li.delay, .{
-                            .user_id = 4,
-                            .commit_vt = &self.cbhandle,
-                            .commit_cb = &ioTextboxCb,
-                        }),
-                        5 => Wg.TextboxNumber.build(vt, sp1[1], li.fire_count, .{
-                            .user_id = 5,
-                            .commit_vt = &self.cbhandle,
-                            .commit_cb = &ioTextboxCb,
-                        }),
-                        else => {},
-                    };
-                }
-            }
+            self.io.buildTab(vt);
         }
         if (eql(u8, tab_name, "tool")) {
             const tool = self.editor.getCurrentTool() orelse return;
@@ -472,13 +403,6 @@ pub const InspectorWindow = struct {
                 return ed.fgd_ctx.getPtr(ent.class);
             }
         }
-        return null;
-    }
-
-    pub fn getConsPtr(self: *Self) ?*ecs.Connections {
-        const ed = self.editor;
-        if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id|
-            return (ed.ecs.getOptPtr(sel_id, .connections) catch null);
         return null;
     }
 
@@ -759,6 +683,52 @@ pub const InspectorWindow = struct {
         );
     }
 
+    pub fn selectedTextureWidget(self: *Self, lay: *iArea, area: graph.Rect) void {
+        const ed = self.editor;
+        const sp = area.split(.vertical, area.w / 2);
+        if (ed.edit_state.selected_texture_vpk_id) |id| {
+            const tt = ed.vpkctx.entries.get(id) orelse return;
+            _ = ptext.PollingTexture.build(lay, sp[0], ed, id, "{s}/{s}", .{
+                tt.path, tt.name,
+            }, .{});
+        }
+        {
+            const max = 16;
+            var tly = guis.TableLayout{ .columns = 4, .item_height = sp[1].h / 4, .bounds = sp[1] };
+            const recent_list = ed.asset_browser.recent_mats.list.items;
+            for (recent_list[0..@min(max, recent_list.len)], 0..) |rec, id| {
+                _ = ptext.PollingTexture.build(lay, tly.getArea(), ed, rec, "", .{}, .{
+                    .cb_vt = &self.cbhandle,
+                    .cb_fn = recent_texture_btn_cb,
+                    .id = id,
+                });
+            }
+        }
+    }
+
+    pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *guis.iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const asb = &self.editor.asset_browser;
+        if (id >= asb.recent_mats.list.items.len) return;
+        const missing = edit.missingTexture();
+        const vpk_id = asb.recent_mats.list.items[id];
+        const tex = self.editor.getTexture(vpk_id) catch return;
+        if (tex.id == missing.id) return;
+        self.editor.edit_state.selected_texture_vpk_id = vpk_id;
+        self.vt.needs_rebuild = true;
+    }
+};
+
+/// namespace for io gui stuff
+const IoWg = struct {
+    cbhandle: CbHandle = .{},
+    io_columns_width: [5]f32 = .{ 0.2, 0.4, 0.6, 0.8, 0.9 },
+    selected_io_index: usize = 0,
+    io_scroll_index: usize = 0,
+    matched_input_set: std.AutoArrayHashMap(fgd.InputId, void),
+    editor: *Context,
+    win_ptr: *iWindow,
+
     fn buildIo(user_vt: *CbHandle, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", user_vt));
         const cons = self.getConsPtr() orelse return;
@@ -770,6 +740,13 @@ pub const InspectorWindow = struct {
             .item_h = gui.dstate.style.config.default_item_h,
             .index_ptr = &self.io_scroll_index,
         });
+    }
+
+    pub fn getConsPtr(self: *IoWg) ?*ecs.Connections {
+        const ed = self.editor;
+        if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id|
+            return (ed.ecs.getOptPtr(sel_id, .connections) catch null);
+        return null;
     }
 
     fn buildIoScrollCb(cb: *CbHandle, vt: *iArea, index: usize) void {
@@ -819,19 +796,47 @@ pub const InspectorWindow = struct {
         }
     }
 
-    fn ioBtnCbAdd(cb: *CbHandle, _: usize, _: guis.MouseCbState, _: *iWindow) void {
+    fn ioBtnCb(cb: *CbHandle, un_i: usize, _: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        const cons = self.getConsPtr() orelse blk: {
-            if (self.editor.selection.getGroupOwnerExclusive(&self.editor.groups)) |sel_id| {
-                self.editor.ecs.attach(sel_id, .connections, ecs.Connections.init(self.editor.alloc)) catch return;
-                break :blk self.getConsPtr() orelse return;
-            }
-            return;
-        };
-        const index = cons.list.items.len;
-        cons.addEmpty() catch return;
-        self.selected_io_index = index;
-        self.vt.needs_rebuild = true;
+        const id: IoBtn = @enumFromInt(un_i);
+        const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
+        switch (id) {
+            .delete => {
+                if (self.getConsPtr()) |cons| {
+                    if (self.selected_io_index > cons.list.items.len) return;
+                    const sel = cons.list.items[self.selected_io_index];
+                    if (self.editor.undoctx.pushNewFmt("delete io", .{})) |ustack| {
+                        defer ustack.apply(self.editor);
+                        ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
+                            .id = sel_id,
+                            .index = self.selected_io_index,
+                            .old = sel.dupe() catch return,
+                            .new = null,
+                        }) catch return }) catch {};
+                    } else |_| {}
+                }
+            },
+            .new => {
+                const cons = self.getConsPtr() orelse blk: {
+                    self.editor.ecs.attach(sel_id, .connections, ecs.Connections.init(self.editor.alloc)) catch return;
+                    break :blk self.getConsPtr() orelse return;
+                };
+                const index = cons.list.items.len;
+                if (self.editor.undoctx.pushNewFmt("Add io", .{})) |ustack| {
+                    defer ustack.apply(self.editor);
+                    ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
+                        .id = sel_id,
+                        .index = index,
+                        .old = null,
+                        .new = .init(ustack.alloc),
+                    }) catch return }) catch {};
+                } else |_| {}
+
+                self.selected_io_index = index;
+                win.needs_rebuild = true;
+            },
+            else => {},
+        }
     }
 
     fn ioTextboxCb(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
@@ -839,27 +844,41 @@ pub const InspectorWindow = struct {
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
         const con = &cons.list.items[self.selected_io_index];
+        //TODO don't do this, it might cause corruption of undo stack?
+        const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
 
         //Numbers are indexes into the table "names"
-        switch (id) {
-            1 => { //Target
-                con.target.clearRetainingCapacity();
-                con.target.appendSlice(con._alloc, string) catch return;
+        const delta: undo.UndoConnectDelta.Delta = switch (id) {
+            0 => .{
+                .listen_event = [2][]const u8{ con.listen_event, string },
             },
-            3 => {
-                con.value.clearRetainingCapacity();
-                con.value.appendSlice(con._alloc, string) catch return;
+            1 => .{
+                .target = [2][]const u8{ con.target.items, string },
             },
-            4 => { //delay
-                const num = std.fmt.parseFloat(f32, string) catch return;
-                con.delay = num;
+            2 => .{
+                .input = [2][]const u8{ con.input, string },
             },
-            5 => {
-                const num = std.fmt.parseInt(i32, string, 10) catch return;
-                con.fire_count = num;
+            3 => .{
+                .value = [2][]const u8{ con.value.items, string },
             },
-            else => {},
-        }
+            4 => .{
+                .delay = [2]f32{ con.delay, std.fmt.parseFloat(f32, string) catch return },
+            },
+            5 => .{ .fire_count = [2]i32{ con.fire_count, std.fmt.parseInt(i32, string, 10) catch return } },
+            else => return,
+        };
+
+        if (self.editor.undoctx.pushNewFmt("edit io {t}", .{delta})) |ustack| {
+            defer ustack.apply(self.editor);
+            ustack.append(.{ .connect_delta = undo.UndoConnectDelta.create(
+                ustack.alloc,
+                delta,
+                sel_id,
+                self.selected_io_index,
+            ) catch return }) catch {};
+        } else |_| {}
+
+        self.win_ptr.needs_rebuild = true;
     }
 
     pub fn buildOutputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
@@ -868,19 +887,19 @@ pub const InspectorWindow = struct {
 
         const OutputCombo = struct {
             fn commit(vtt: *CbHandle, id: usize, _: void) void {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                const lcons = lself.getConsPtr() orelse return;
-                if (lself.selected_io_index >= lcons.list.items.len) return;
+                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
                 const class = lself.getEntDef() orelse return;
                 if (id >= class.outputs.items.len) return;
                 const ind = class.outputs.items[id];
                 const lname = class.io_data.items[ind].name;
-                lcons.list.items[lself.selected_io_index].listen_event = lname;
+
+                const OUTPUT_TABLE_INDEX = 0;
+                ioTextboxCb(vtt, lself.win_ptr.gui_ptr, lname, OUTPUT_TABLE_INDEX);
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const class = lself.getEntDef() orelse return "none";
                 if (id >= class.outputs.items.len) return "none";
                 const ind = class.outputs.items[id];
@@ -914,22 +933,19 @@ pub const InspectorWindow = struct {
     pub fn buildInputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
         const InputCombo = struct {
             fn commit(vtt: *CbHandle, id: usize, _: void) void {
-                const lself = vtt.cast(InspectorWindow, "cbhandle");
-                const lcons = lself.getConsPtr() orelse return;
-                if (lself.selected_io_index >= lcons.list.items.len) return;
-
-                //const list = lself.editor.fgd_ctx.all_inputs.items;
+                const lself = vtt.cast(IoWg, "cbhandle");
 
                 const list = lself.matched_input_set.keys();
                 if (id >= list.len) return;
 
                 const item = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
 
-                lcons.list.items[lself.selected_io_index].input = item;
+                const INPUT_TEXT_INDEX = 2;
+                ioTextboxCb(vtt, lself.win_ptr.gui_ptr, item, INPUT_TEXT_INDEX);
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
-                const lself = vtt.cast(InspectorWindow, "cbhandle");
+                const lself = vtt.cast(IoWg, "cbhandle");
                 const list = lself.matched_input_set.keys();
                 if (id >= list.len) return "none";
                 return lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
@@ -975,45 +991,97 @@ pub const InspectorWindow = struct {
         }, {});
     }
 
-    pub fn selectedTextureWidget(self: *Self, lay: *iArea, area: graph.Rect) void {
-        const ed = self.editor;
-        const sp = area.split(.vertical, area.w / 2);
-        if (ed.edit_state.selected_texture_vpk_id) |id| {
-            const tt = ed.vpkctx.entries.get(id) orelse return;
-            _ = ptext.PollingTexture.build(lay, sp[0], ed, id, "{s}/{s}", .{
-                tt.path, tt.name,
-            }, .{});
-        }
-        {
-            const max = 16;
-            var tly = guis.TableLayout{ .columns = 4, .item_height = sp[1].h / 4, .bounds = sp[1] };
-            const recent_list = ed.asset_browser.recent_mats.list.items;
-            for (recent_list[0..@min(max, recent_list.len)], 0..) |rec, id| {
-                _ = ptext.PollingTexture.build(lay, tly.getArea(), ed, rec, "", .{}, .{
-                    .cb_vt = &self.cbhandle,
-                    .cb_fn = recent_texture_btn_cb,
-                    .id = id,
-                });
-            }
-        }
-    }
-
-    pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *guis.iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        const asb = &self.editor.asset_browser;
-        if (id >= asb.recent_mats.list.items.len) return;
-        const missing = edit.missingTexture();
-        const vpk_id = asb.recent_mats.list.items[id];
-        const tex = self.editor.getTexture(vpk_id) catch return;
-        if (tex.id == missing.id) return;
-        self.editor.edit_state.selected_texture_vpk_id = vpk_id;
-        self.vt.needs_rebuild = true;
-    }
-
-    fn getSelectedIoItemPtr(self: *Self) ?*ecs.Connection {
+    fn getSelectedIoItemPtr(self: *IoWg) ?*ecs.Connection {
         if (self.getConsPtr()) |cons| {
             if (self.selected_io_index < cons.list.items.len)
                 return &cons.list.items[self.selected_io_index];
+        }
+        return null;
+    }
+
+    pub fn buildTab(self: *IoWg, vt: *iArea) void {
+        const gui = vt.win_ptr.gui_ptr;
+        const win = vt.win_ptr;
+        const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
+        var ly = gui.dstate.vlayout(sp[1]);
+        ly.padding.left = 10;
+        ly.padding.right = 10;
+        ly.padding.top = 10;
+
+        const names = [6][]const u8{ "Listen", "target", "input", "value", "delay", "fc" };
+        const BetterNames = [names.len][]const u8{
+            "My output named",
+            "Target entities named",
+            "Via this input",
+            "With a parameter of",
+            "After a delay is seconds of",
+            "Limit to this many fires",
+        };
+
+        _ = Wg.DynamicTable.build(vt, sp[0], win, .{
+            .column_positions = &self.io_columns_width,
+            .column_names = &names,
+            .build_cb = &IoWg.buildIo,
+            .build_vt = &self.cbhandle,
+        });
+
+        if (ly.getArea()) |btn_ar| {
+            var hy = gui.dstate.hlayout(btn_ar, 2);
+            _ = Wg.Button.build(vt, hy.getArea(), "new", .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.new) });
+            _ = Wg.Button.build(vt, hy.getArea(), "delete", .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.delete) });
+        }
+        const cons = self.getConsPtr() orelse return;
+        if (self.selected_io_index < cons.list.items.len) {
+            const li = &cons.list.items[self.selected_io_index];
+            for (BetterNames, 0..) |n, i| {
+                const ar = ly.getArea() orelse break;
+                const sp1 = ar.split(.vertical, ar.w / 2);
+
+                switch (i) {
+                    1 => {
+                        const count = self.editor.targetname_track.count(li.target.items, &self.editor.ecs);
+                        _ = Wg.Text.buildStatic(vt, sp1[0], self.editor.printArena("{s} ({d} in map)", .{ n, count }) catch n, null);
+                    },
+                    else => _ = Wg.Text.buildStatic(vt, sp1[0], n, null),
+                }
+                _ = switch (i) {
+                    0 => self.buildOutputCombo(vt, sp1[1]),
+                    1 => {
+                        _ = Wg.Textbox.buildOpts(vt, sp1[1], .{
+                            .init_string = li.target.items,
+                            .user_id = 1,
+                            .commit_vt = &self.cbhandle,
+                            .commit_cb = &ioTextboxCb,
+                        });
+                    },
+                    2 => self.buildInputCombo(vt, sp1[1]),
+                    3 => Wg.Textbox.buildOpts(vt, sp1[1], .{
+                        .init_string = li.value.items,
+                        .user_id = 3,
+                        .commit_vt = &self.cbhandle,
+                        .commit_cb = &ioTextboxCb,
+                    }),
+                    4 => Wg.TextboxNumber.build(vt, sp1[1], li.delay, .{
+                        .user_id = 4,
+                        .commit_vt = &self.cbhandle,
+                        .commit_cb = &ioTextboxCb,
+                    }),
+                    5 => Wg.TextboxNumber.build(vt, sp1[1], li.fire_count, .{
+                        .user_id = 5,
+                        .commit_vt = &self.cbhandle,
+                        .commit_cb = &ioTextboxCb,
+                    }),
+                    else => {},
+                };
+            }
+        }
+    }
+    pub fn getEntDef(self: *@This()) ?*fgd.EntClass {
+        const ed = self.editor;
+        if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
+            if (ed.ecs.getOptPtr(sel_id, .entity) catch null) |ent| {
+                return ed.fgd_ctx.getPtr(ent.class);
+            }
         }
         return null;
     }

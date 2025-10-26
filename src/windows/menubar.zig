@@ -29,6 +29,7 @@ const MenuBtn = enum(guis.Uid) {
     open_project_url,
     draw_sprite,
     draw_mod,
+    draw_debug,
     todo,
     _,
 };
@@ -166,6 +167,7 @@ pub const MenuBar = struct {
         switch (id) {
             btn_id(.draw_sprite) => self.ed.draw_state.tog.sprite = val,
             btn_id(.draw_mod) => self.ed.draw_state.tog.models = val,
+            btn_id(.draw_debug) => self.ed.draw_state.tog.debug_stats = val,
             else => {},
         }
     }
@@ -178,6 +180,7 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.draw_sprite), "Draw Sprites", .{ .checkbox = tog.sprite } },
                     .{ btn_id(.draw_mod), "Draw Models", .{ .checkbox = tog.models } },
+                    .{ btn_id(.draw_debug), "Draw debug stats", .{ .checkbox = tog.debug_stats } },
                 });
             },
             btn_strid("file") => {
