@@ -167,7 +167,7 @@ pub const FgdTokenizer = struct {
     //A multi-line string has the grammar:
     // <multi-line-str> ::= <quoted_string> <newline> | <multi-line-str-cont>
     // <multi-line-str-cont> ::= <plus> <newline> <multi-line-str>
-    pub fn expectMultilineString(self: *@This(), ret: *std.ArrayList(u8), alloc: std.mem.Allocator) !void { //TODO return string, requires alloc
+    pub fn expectMultilineString(self: *@This(), ret: *std.ArrayList(u8), alloc: std.mem.Allocator) !void {
         while (true) {
             const n1 = try self.next() orelse return error.multilineStringSyntax;
             if (n1.tag != .quoted_string) {
@@ -477,12 +477,6 @@ pub const EntCtx = struct {
             return self.real.getPtr(class_name);
         };
     }
-
-    pub fn nameFromIdOLD(self: *Self, id: usize) ?[]const u8 {
-        if (id < self.ents.items.len)
-            return self.ents.items[id].name;
-        return null;
-    }
 };
 
 pub const EntClass = struct {
@@ -546,7 +540,6 @@ pub const EntClass = struct {
     iconsprite: []const u8 = "",
     studio_model: []const u8 = "",
     has_hull: bool = false,
-    is_base: bool = false,
 
     pub fn init(alloc: Allocator) Self {
         return .{ .alloc = alloc };
@@ -579,8 +572,6 @@ pub const EntClass = struct {
     }
 
     pub fn inherit(self: *Self, parent: Self) !void {
-        //BUG, some fields are inherited twice, switch to a hash map
-        //This is because of multinheritance, the diamond problem
         var it = parent.fields.iterator();
         while (it.next()) |item| {
             if (self.fields.contains(item.key_ptr.*)) continue; //duplicate field
@@ -771,9 +762,6 @@ pub const ParseCtx = struct {
 
                 const class_name = try tkz.expectNext(.plain_string);
                 new_class.name = try ctx.dupeString(tkz.getSlice(class_name));
-                //std.debug.print("Decl {s}\n", .{tkz.getSlice(class_name)});
-
-                //@directive base1(arg) base2(arg) = class_name
 
                 try tkz.eatNewline();
                 const n = try tkz.peek() orelse return error.syntax;
