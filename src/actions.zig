@@ -260,6 +260,7 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
 
     const GroupId = ecs.Groups.GroupId;
     const aa = ed.frame_arena.allocator();
+    // This is needed otherwise when ignore_groups is false, group members are added/removed n times where n is the number of group members present in the bounds.
     var visited_groups = std.AutoHashMap(GroupId, void).init(aa);
     const track_groups = !ed.selection.ignore_groups;
 
@@ -279,6 +280,15 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
             } else {
                 _ = try ed.selection.put(it.i, ed);
             }
+        }
+    }
+
+    if (track_groups) {
+        // Ensure all group owners are put into the selection
+        var git = visited_groups.keyIterator();
+        while (git.next()) |gid| {
+            if (ed.groups.getOwner(gid.*)) |owner|
+                try ed.selection.list.add(owner, gid.*);
         }
     }
 }
@@ -482,6 +492,12 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
     const ustack = try ed.undoctx.pushNewFmt("{s} of {d} entities", .{ if (dupe) "Dupe" else "Translation", selected.len });
     for (selected) |id| {
         if (dupe) {
+            if (ed.groups.getGroup(id)) |_| {
+                // We do not ever duplicate owner entities as it isn't clear what should happen.
+                // When ignore_groups is false, new groups are created and their owners are
+                // explicitly duped below.
+                continue;
+            }
             const duped = try ed.dupeEntity(id);
 
             try ustack.append(.{ .create_destroy = try .create(ustack.alloc, duped, .create) });
@@ -517,6 +533,15 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
         while (it.next()) |item| {
             if (ed.groups.getOwner(item.key_ptr.*)) |owner| {
                 const duped = try ed.dupeEntity(owner);
+
+                Undo.UndoTranslate.applyTransRot(
+                    ed,
+                    duped,
+                    dist,
+                    angle_delta,
+                    origin,
+                    1,
+                );
 
                 try ustack.append(.{ .create_destroy = try .create(ustack.alloc, duped, .create) });
                 try ed.groups.setOwner(item.value_ptr.*, duped);

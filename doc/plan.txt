@@ -63,9 +63,7 @@ FGD / Custom game
     The format should be ECS based. Should be able to specify component relations, IE A requires B or A and B are mutually exclusive
 
 MISC
-    put connection changes in undo
     support multi entity inspector editing
-    in io editor, limit outputs to possible
 
 Remove the pause menu:
     Replace it with a menu bar 

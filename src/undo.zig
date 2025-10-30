@@ -252,49 +252,32 @@ pub const UndoTranslate = struct {
         return obj;
     }
 
-    //TODO translate entity about rot_origin;
     pub fn undo(self: *@This(), editor: *Editor) void {
-        const quat = if (self.angle_delta) |ad| util3d.extEulerToQuat(ad.scale(-1)) else null;
-        if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
-            solid.translate(self.id, self.vec.scale(-1), editor, self.rot_origin, quat) catch return;
-        }
-        if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
-            ent.setOrigin(editor, self.id, ent.origin.add(self.vec.scale(-1))) catch return;
-            if (self.angle_delta) |angd| {
-                ent.setAngle(editor, self.id, ent.angle.sub(angd)) catch return;
-                if (quat) |qq| {
-                    const pos_v = ent.origin.sub(self.rot_origin);
-                    const new_o = qq.rotateVec(pos_v).add(self.rot_origin);
-                    ent.setOrigin(editor, self.id, new_o) catch return;
-                }
-            }
-        }
-        if (editor.ecs.getOptPtr(self.id, .displacements) catch return) |disps| {
-            if (quat) |qq| {
-                for (disps.disps.items) |*disp| {
-                    disp.rotate(qq);
-                }
-            }
-        }
+        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, -1);
     }
+
     pub fn redo(self: *@This(), editor: *Editor) void {
-        const quat = if (self.angle_delta) |ad| util3d.extEulerToQuat(ad) else null;
-        if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
-            solid.translate(self.id, self.vec, editor, self.rot_origin, quat) catch return;
+        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, 1);
+    }
+
+    pub fn applyTransRot(editor: *Editor, id: Id, trans: Vec3, angle_delta: ?Vec3, origin: Vec3, scale: f32) void {
+        const quat = if (angle_delta) |ad| util3d.extEulerToQuat(ad.scale(scale)) else null;
+        if (editor.ecs.getOptPtr(id, .solid) catch return) |solid| {
+            solid.translate(id, trans.scale(scale), editor, origin, quat) catch return;
         }
-        if (editor.ecs.getOptPtr(self.id, .entity) catch return) |ent| {
-            ent.setOrigin(editor, self.id, ent.origin.add(self.vec)) catch return;
-            if (self.angle_delta) |angd| {
-                ent.setAngle(editor, self.id, ent.angle.add(angd)) catch return;
+        if (editor.ecs.getOptPtr(id, .entity) catch return) |ent| {
+            ent.setOrigin(editor, id, ent.origin.add(trans.scale(scale))) catch return;
+            if (angle_delta) |angd| {
+                ent.setAngle(editor, id, ent.angle.add(angd.scale(scale))) catch return;
 
                 if (quat) |qq| {
-                    const pos_v = ent.origin.sub(self.rot_origin);
-                    const new_o = qq.rotateVec(pos_v).add(self.rot_origin);
-                    ent.setOrigin(editor, self.id, new_o) catch return;
+                    const pos_v = ent.origin.sub(origin);
+                    const new_o = qq.rotateVec(pos_v).add(origin);
+                    ent.setOrigin(editor, id, new_o) catch return;
                 }
             }
         }
-        if (editor.ecs.getOptPtr(self.id, .displacements) catch return) |disps| {
+        if (editor.ecs.getOptPtr(id, .displacements) catch return) |disps| {
             if (quat) |qq| {
                 for (disps.disps.items) |*disp| {
                     disp.rotate(qq);

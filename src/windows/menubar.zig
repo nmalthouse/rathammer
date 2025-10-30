@@ -195,8 +195,8 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.save), "save", .btn },
                     .{ btn_id(.saveas), "save-as", .btn },
-                    .{ btn_id(.save_selection), "save-selection-as", .btn },
-                    .{ btn_id(.import_map), "import-map", .btn },
+                    //.{ btn_id(.save_selection), "save-selection-as", .btn },
+                    //.{ btn_id(.import_map), "import-map", .btn },
                     .{ btn_id(.build_map), "build", .btn },
                     .{ btn_id(.build_map_user), "build-user", .btn },
                     .{ btn_id(.quit), "quit", .btn },
