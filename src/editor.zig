@@ -1553,9 +1553,8 @@ pub const Context = struct {
 
         _ = self.frame_arena.reset(.retain_capacity);
         const aa = self.frame_arena.allocator();
-        //self.edit_state.last_frame_tool_index = self.edit_state.tool_index;
         const MAX_UPDATE_TIME = std.time.ns_per_ms * 16;
-        var timer = try std.time.Timer.start();
+        var update_timer = try std.time.Timer.start();
         //defer std.debug.print("UPDATE {d} ms\n", .{timer.read() / std.time.ns_per_ms});
         self.draw_state.init_asset_count = 0;
         var tcount: usize = 0;
@@ -1574,7 +1573,7 @@ pub const Context = struct {
                 }
 
                 num_rm_tex += 1;
-                const elapsed = timer.read();
+                const elapsed = update_timer.read();
                 if (elapsed > MAX_UPDATE_TIME)
                     break;
             }
@@ -1599,7 +1598,7 @@ pub const Context = struct {
                 completed.texture_ids.deinit(self.alloc);
                 num_removed += 1;
 
-                const elapsed = timer.read();
+                const elapsed = update_timer.read();
                 if (elapsed > MAX_UPDATE_TIME)
                     break;
             }
@@ -1621,8 +1620,22 @@ pub const Context = struct {
         }
 
         if (self.draw_state.meshes_dirty) {
+            var rebuild_time = try std.time.Timer.start();
             self.draw_state.meshes_dirty = false;
-            try self.rebuildMeshesIfDirty();
+
+            var count: usize = 0;
+            var it = self.meshmap.iterator();
+            while (it.next()) |mesh| {
+                if (mesh.value_ptr.*.is_dirty) {
+                    count += 1;
+                }
+                try mesh.value_ptr.*.rebuildIfDirty(self);
+            }
+
+            const took = rebuild_time.read();
+            if (took > std.time.ns_per_ms) {
+                //std.debug.print("{d} mesh build in {d} ms\n", .{ count, took / std.time.ns_per_ms });
+            }
         }
     }
 

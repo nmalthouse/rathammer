@@ -56,6 +56,8 @@ pub fn build(b: *std.Build) void {
     remote.root_module.addImport("graph", ratmod);
 
     const opts = b.addOptions();
+    opts.addOption(u32, "stack_trace_frames", b.option(u32, "stack_trace_frames", "number of stack frames for alloc to track in debug mode") orelse 0);
+
     opts.addOption(bool, "time_profile", b.option(bool, "profile", "profile the time loading takes") orelse false);
     opts.addOption(bool, "dump_vpk", b.option(bool, "dumpvpk", "dump all vpk entries to text file") orelse false);
     opts.addOption(bool, "http_version_check", b.option(bool, "http_version_check", "Enable support for http version check") orelse false);

@@ -241,7 +241,10 @@ pub const MeshBatch = struct {
                 }
             }
             if (editor.ecs.getOptPtr(id.key_ptr.*, .displacements) catch null) |disp| {
-                try disp.rebuild(id.key_ptr.*, editor);
+                for (disp.disps.items) |*di| {
+                    if (di.tex_id == self.tex_res_id)
+                        try di.rebuild(id.key_ptr.*, editor);
+                }
             }
         }
         self.mesh.setData();

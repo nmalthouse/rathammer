@@ -237,7 +237,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
         .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
-        .frame_sync = .adaptive_vsync,
+        .frame_sync = if (args.novsync != null) .immediate else .adaptive_vsync,
         .gl_major_version = 4,
         .gl_minor_version = 2,
         .enable_debug = IS_DEBUG,
@@ -380,7 +380,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                     } else |_| {}
                 }
             }
-        } else |_| {}
+        } else |_| {
+            log.err("failed to open recent_maps.txt", .{});
+        }
 
         recent_prof.end();
         recent_prof.log("recent build");
@@ -572,10 +574,9 @@ pub fn main() !void {
     total_app_profile.start();
     defer total_app_profile.log("app lifetime");
     defer total_app_profile.end();
-    var gpa = std.heap.GeneralPurposeAllocator(.{
-        .stack_trace_frames = if (IS_DEBUG) 0 else 0,
-    }){};
-    const alloc = gpa.allocator();
+    var gpa = std.heap.DebugAllocator(.{ .stack_trace_frames = build_config.stack_trace_frames }){};
+
+    const alloc = if (IS_DEBUG) gpa.allocator() else std.heap.smp_allocator;
     var arg_it = try std.process.argsWithAllocator(alloc);
     defer arg_it.deinit();
     var stdout_buf: [128]u8 = undefined;
