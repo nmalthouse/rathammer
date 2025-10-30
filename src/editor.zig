@@ -1515,35 +1515,7 @@ pub const Context = struct {
         const build_map = win.isBindState(self.config.keys.build_map.b, .rising);
         const build_map_user = win.isBindState(self.config.keys.build_map_user.b, .rising);
         if (build_map or build_map_user) {
-            const lm = try self.printArena("{s}.vmf", .{self.loaded_map_name orelse "dump"});
-            var build_arena = std.heap.ArenaAllocator.init(self.alloc);
-            defer build_arena.deinit();
-            if (jsontovmf(
-                build_arena.allocator(),
-                &self.ecs,
-                self.skybox.sky_name,
-                &self.vpkctx,
-                &self.groups,
-                lm,
-                .{ .check_solid = false },
-            )) {
-                try self.notify("Exported map to vmf", .{}, colors.good);
-
-                try async_util.MapCompile.spawn(self.alloc, &self.async_asset_load, .{
-                    .vmf = lm,
-                    .gamedir_pre = self.game_conf.mapbuilder.game_dir,
-                    .exedir_pre = self.game_conf.mapbuilder.exe_dir,
-                    .gamename = self.game_conf.mapbuilder.game_name,
-
-                    .outputdir = self.game_conf.mapbuilder.output_dir,
-                    .cwd_path = self.dirs.games_dir.path,
-                    .tmpdir = self.game_conf.mapbuilder.tmp_dir,
-
-                    .user_cmd = self.game_conf.mapbuilder.user_build_cmd,
-                }, if (build_map_user) .user_script else .builtin);
-            } else |err| {
-                try self.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
-            }
+            try action.buildMap(self, build_map_user);
         }
 
         _ = self.frame_arena.reset(.retain_capacity);

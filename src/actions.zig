@@ -101,6 +101,39 @@ pub fn trySave(ed: *Ed) !void {
     }
 }
 
+pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
+    const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
+    const lm = try ed.printArena("{s}.vmf", .{ed.loaded_map_name orelse "dump"});
+    var build_arena = std.heap.ArenaAllocator.init(ed.alloc);
+    defer build_arena.deinit();
+    if (jsontovmf(
+        build_arena.allocator(),
+        &ed.ecs,
+        ed.skybox.sky_name,
+        &ed.vpkctx,
+        &ed.groups,
+        lm,
+        .{ .check_solid = false },
+    )) {
+        try ed.notify("Exported map to vmf", .{}, colors.good);
+
+        try async_util.MapCompile.spawn(ed.alloc, &ed.async_asset_load, .{
+            .vmf = lm,
+            .gamedir_pre = ed.game_conf.mapbuilder.game_dir,
+            .exedir_pre = ed.game_conf.mapbuilder.exe_dir,
+            .gamename = ed.game_conf.mapbuilder.game_name,
+
+            .outputdir = ed.game_conf.mapbuilder.output_dir,
+            .cwd_path = ed.dirs.games_dir.path,
+            .tmpdir = ed.game_conf.mapbuilder.tmp_dir,
+
+            .user_cmd = ed.game_conf.mapbuilder.user_build_cmd,
+        }, if (do_user_script) .user_script else .builtin);
+    } else |err| {
+        try ed.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
+    }
+}
+
 pub fn selectRaycast(ed: *Ed, screen_area: graph.Rect, view: graph.za.Mat4) !void {
     const pot = ed.screenRay(screen_area, view);
     var starting_point: ?Vec3 = null;

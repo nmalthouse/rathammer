@@ -136,7 +136,7 @@ pub const GameEntry = struct {
         output_dir: []const u8 = "",
         tmp_dir: []const u8 = TMP_DIR,
 
-        user_build_cmd: []const u8 = "./myscript.sh",
+        user_build_cmd: []const u8 = "",
     };
     gameinfo: ArrayList(GameInfo) = .{},
 

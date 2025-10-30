@@ -22,6 +22,8 @@ const MenuBtn = enum(guis.Uid) {
     saveas,
     save_selection,
     import_map,
+    build_map,
+    build_map_user,
     quit,
     undo,
     redo,
@@ -161,6 +163,8 @@ pub const MenuBar = struct {
             .open_project_url => {
                 _ = graph.c.SDL_OpenURL(version.project_url);
             },
+            .build_map => action.buildMap(self.ed, false) catch {},
+            .build_map_user => action.buildMap(self.ed, true) catch {},
 
             else => self.ed.notify("TODO. item not implemented", .{}, colors.bad) catch {},
         }
@@ -193,6 +197,8 @@ pub const MenuBar = struct {
                     .{ btn_id(.saveas), "save-as", .btn },
                     .{ btn_id(.save_selection), "save-selection-as", .btn },
                     .{ btn_id(.import_map), "import-map", .btn },
+                    .{ btn_id(.build_map), "build", .btn },
+                    .{ btn_id(.build_map_user), "build-user", .btn },
                     .{ btn_id(.quit), "quit", .btn },
                 });
             },
