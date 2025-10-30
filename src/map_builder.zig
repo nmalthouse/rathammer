@@ -146,26 +146,38 @@ fn runCommand(alloc: std.mem.Allocator, argv: []const []const u8, working_dir: [
     child.stderr_behavior = .Pipe;
     try child.spawn();
 
-    {
+    const enable_stdout = true;
+
+    if (enable_stdout) {
         std.debug.assert(child.stdout_behavior == .Pipe);
         std.debug.assert(child.stderr_behavior == .Pipe);
 
-        //FUCK IT, fix this later
-        //var poller = std.io.poll(alloc, enum { stdout, stderr }, .{
-        //    .stdout = child.stdout.?,
-        //    .stderr = child.stderr.?,
-        //});
-        //defer poller.deinit();
+        var poller = std.Io.poll(alloc, enum {
+            stdout,
+            //, stderr
+        }, .{
+            .stdout = child.stdout.?,
+            //.stderr = child.stderr.?,
+        });
+        defer poller.deinit();
 
-        //var stdout_buf: [128]u8 = undefined;
+        //TODO this seems fishy...
+        // std.io.poll is not documented, inits all readers as failing. Does not specify if user is allowed to override these readers.
+        // It calls free() on each of the buffers
+        poller.readers[0] = .fixed(try alloc.alloc(u8, 128));
+        var out_r = poller.reader(.stdout);
 
-        //while (try poller.poll()) {
-        //    std.Thread.sleep(std.time.ns_per_ms * 16);
-        //    var count = poller.fifo(.stdout).read(&stdout_buf);
-        //    std.debug.print("{s}", .{stdout_buf[0..count]});
-        //    count = poller.fifo(.stderr).read(&stdout_buf);
-        //    std.debug.print("{s}", .{stdout_buf[0..count]});
-        //}
+        var stdout_buf: [256]u8 = undefined;
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+        const stdout = &stdout_writer.interface;
+
+        while (try poller.poll()) {
+            std.Thread.sleep(std.time.ns_per_ms * 16);
+
+            _ = try out_r.streamRemaining(stdout);
+            try stdout.flush();
+        }
+        try stdout.flush();
     }
     //try getAllTheStuff(child.stderr);
 
