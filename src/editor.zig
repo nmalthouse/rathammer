@@ -59,8 +59,6 @@ var WINDOW_TITLE_BUFFER: [256]u8 = undefined;
 
 const builtin = @import("builtin");
 const WINDOZE = builtin.target.os.tag == .windows;
-pub const TMP_DIR = if (WINDOZE) "C:/rathammer_tmp" else "/tmp/mapcompile";
-pub const MAP_OUT = "dump";
 
 const Model = struct {
     mesh: ?*vvd.MultiMesh = null,
@@ -1514,40 +1512,37 @@ pub const Context = struct {
         if (win.isBindState(self.config.keys.save_new.b, .rising)) {
             try async_util.SdlFileData.spawn(self.alloc, &self.async_asset_load, .save_map);
         }
-        if (win.isBindState(self.config.keys.build_map.b, .rising)) {
-            blk: {
-                const lp = self.loaded_map_path orelse break :blk;
-                const lm = self.loaded_map_name orelse break :blk;
-                if (self.saveAndNotify(lm, lp)) {
-                    var build_arena = std.heap.ArenaAllocator.init(self.alloc);
-                    defer build_arena.deinit();
-                    if (jsontovmf(
-                        build_arena.allocator(),
-                        &self.ecs,
-                        self.skybox.sky_name,
-                        &self.vpkctx,
-                        &self.groups,
-                        null,
-                        .{ .check_solid = false },
-                    )) {
-                        try self.notify("Exported map to vmf", .{}, colors.good);
+        const build_map = win.isBindState(self.config.keys.build_map.b, .rising);
+        const build_map_user = win.isBindState(self.config.keys.build_map_user.b, .rising);
+        if (build_map or build_map_user) {
+            const lm = try self.printArena("{s}.vmf", .{self.loaded_map_name orelse "dump"});
+            var build_arena = std.heap.ArenaAllocator.init(self.alloc);
+            defer build_arena.deinit();
+            if (jsontovmf(
+                build_arena.allocator(),
+                &self.ecs,
+                self.skybox.sky_name,
+                &self.vpkctx,
+                &self.groups,
+                lm,
+                .{ .check_solid = false },
+            )) {
+                try self.notify("Exported map to vmf", .{}, colors.good);
 
-                        try async_util.MapCompile.spawn(self.alloc, &self.async_asset_load, .{
-                            .vmf = "dump.vmf",
-                            .gamedir_pre = self.game_conf.mapbuilder.game_dir,
-                            .exedir_pre = self.game_conf.mapbuilder.exe_dir,
-                            .gamename = self.game_conf.mapbuilder.game_name,
+                try async_util.MapCompile.spawn(self.alloc, &self.async_asset_load, .{
+                    .vmf = lm,
+                    .gamedir_pre = self.game_conf.mapbuilder.game_dir,
+                    .exedir_pre = self.game_conf.mapbuilder.exe_dir,
+                    .gamename = self.game_conf.mapbuilder.game_name,
 
-                            .outputdir = self.game_conf.mapbuilder.output_dir,
-                            .cwd = self.dirs.games_dir.dir,
-                            .tmpdir = self.game_conf.mapbuilder.tmp_dir,
-                        });
-                    } else |err| {
-                        try self.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
-                    }
-                } else |err| {
-                    try self.notify("Failed saving map: {t}", .{err}, colors.bad);
-                }
+                    .outputdir = self.game_conf.mapbuilder.output_dir,
+                    .cwd_path = self.dirs.games_dir.path,
+                    .tmpdir = self.game_conf.mapbuilder.tmp_dir,
+
+                    .user_cmd = self.game_conf.mapbuilder.user_build_cmd,
+                }, if (build_map_user) .user_script else .builtin);
+            } else |err| {
+                try self.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
             }
         }
 

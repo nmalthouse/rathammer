@@ -140,6 +140,10 @@ pub const SdlFileData = struct {
 //This will a require mapbuild to have a mutex and callback in its 'runCommand' to kill it
 const map_builder = @import("map_builder.zig");
 pub const MapCompile = struct {
+    pub const Kind = enum {
+        builtin,
+        user_script,
+    };
     job: thread_pool.iJob,
     pool_ptr: *thread_pool.Context,
 
@@ -150,7 +154,9 @@ pub const MapCompile = struct {
 
     status: enum { failed, built, nothing } = .nothing,
 
-    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, paths: map_builder.Paths) !void {
+    map_name: []const u8,
+
+    pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, paths: map_builder.Paths, kind: Kind) !void {
         const self = try alloc.create(@This());
         self.* = .{
             .job = .{
@@ -161,17 +167,25 @@ pub const MapCompile = struct {
             .arena = std.heap.ArenaAllocator.init(alloc),
             .alloc = alloc,
             .pool_ptr = pool,
+            .map_name = "",
         };
         const aa = self.arena.allocator();
-        try pool.spawnJob(workFunc, .{ self, map_builder.Paths{
-            .cwd = paths.cwd,
-            .gamename = try aa.dupe(u8, paths.gamename),
-            .gamedir_pre = try aa.dupe(u8, paths.gamedir_pre),
-            .exedir_pre = try aa.dupe(u8, paths.exedir_pre),
-            .tmpdir = try aa.dupe(u8, paths.tmpdir),
-            .outputdir = try aa.dupe(u8, paths.outputdir),
-            .vmf = try aa.dupe(u8, paths.vmf),
-        } });
+        self.map_name = try aa.dupe(u8, paths.vmf);
+        switch (kind) {
+            inline else => |e| try pool.spawnJob(switch (e) {
+                .user_script => workFuncUser,
+                .builtin => workFunc,
+            }, .{ self, map_builder.Paths{
+                .cwd_path = try aa.dupe(u8, paths.cwd_path),
+                .gamename = try aa.dupe(u8, paths.gamename),
+                .gamedir_pre = try aa.dupe(u8, paths.gamedir_pre),
+                .exedir_pre = try aa.dupe(u8, paths.exedir_pre),
+                .tmpdir = try aa.dupe(u8, paths.tmpdir),
+                .outputdir = try aa.dupe(u8, paths.outputdir),
+                .vmf = try aa.dupe(u8, paths.vmf),
+                .user_cmd = try aa.dupe(u8, paths.user_cmd),
+            } }),
+        }
     }
 
     pub fn destroy(self: *@This()) void {
@@ -188,8 +202,20 @@ pub const MapCompile = struct {
             .failed => {
                 edit.notify("Error building Map", .{}, 0xff0000ff) catch {};
             },
-            .built => edit.notify("built map in {d} s", .{t / std.time.ns_per_s}, 0x00ff00ff) catch {},
+            .built => {
+                edit.notify("built {s} in {d} s", .{ self.map_name, t / std.time.ns_per_s }, 0x00ff00ff) catch {};
+            },
             .nothing => edit.notify("Something bad happend when building the map", .{}, 0xffff_00_ff) catch {},
+        }
+    }
+
+    pub fn workFuncUser(self: *@This(), args: map_builder.Paths) void {
+        defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
+        if (map_builder.runUserBuildCommand(self.arena.allocator(), args)) {
+            self.status = .built;
+        } else |err| {
+            log.err("Build map failed with : {t}", .{err});
+            self.status = .failed;
         }
     }
 

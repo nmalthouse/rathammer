@@ -65,6 +65,9 @@ keys {
     inspector_tab F4
 
     mouse_capture   scancode:left_shift
+
+    build_map       scancode:F9
+    build_map_user  scancode:F10
 }
 // Determines how the mouse cursor is captured in 3d view. key is keys.mouse_capture
 // valid values are: key_low, key_high, toggle
@@ -106,6 +109,8 @@ window {
 //The name of a game defined in "games"
 default_game  basic_hl2
 
+
+
 //All directory paths are relative to paths.steam_path or the default steam path on your platform
 games {
     mycustom {
@@ -145,6 +150,14 @@ games {
             exe_dir    "Half-Life 2/bin"
             game_name   "hl2_complete"
             output_dir  "hl2/maps"
+
+            //tmp_dir   "/tmp/mapbuild" -> defaults  to /tmp/mapcompile or C:\rathammer_tmp on linux and windows
+
+            // Uncomment the following line to run a custom build script when f10 is pressed.
+            //user_build_cmd  "./myscript.sh"
+            // "./myscript.sh" is the name of an executable relative to tmp_dir
+            // it is NOT evaluated in any way, IE, you can not pass arguments
+            //see scripts/user_script.sh for the environment vars passed in.
         }
 
         // A game can only specify one fgd

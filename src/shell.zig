@@ -286,7 +286,7 @@ pub const CommandCtx = struct {
                         pf1.verts.deinit();
                     pf.* = null;
 
-                    const path = if (args.next()) |p| p else try self.ed.printScratch("{s}/{s}", .{ edit.TMP_DIR, "dump.prt" });
+                    const path = if (args.next()) |p| p else try self.ed.printScratch("{s}/{s}", .{ self.ed.game_conf.mapbuilder.tmp_dir, "dump.prt" });
 
                     pf.* = try pointfile.loadPortalfile(self.ed.alloc, std.fs.cwd(), path);
                 },
@@ -295,7 +295,7 @@ pub const CommandCtx = struct {
                         pf.verts.deinit();
                     self.ed.draw_state.pointfile = null;
 
-                    const path = if (args.next()) |p| p else try self.ed.printScratch("{s}/{s}", .{ edit.TMP_DIR, "dump.lin" });
+                    const path = if (args.next()) |p| p else try self.ed.printScratch("{s}/{s}", .{ self.ed.game_conf.mapbuilder.tmp_dir, "dump.lin" });
 
                     self.ed.draw_state.pointfile = try pointfile.loadPointfile(self.ed.alloc, std.fs.cwd(), path);
                 },

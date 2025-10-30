@@ -60,6 +60,7 @@ pub const Config = struct {
         group_selection: Keybind = .{ .b = SC(.T, mask(&.{.CTRL})) },
 
         build_map: Keybind = .{ .b = SC(.F9, 0) },
+        build_map_user: Keybind = .{ .b = SC(.F10, 0) },
 
         duplicate: Keybind = .{ .b = SC(.Z, 0) },
 
@@ -134,6 +135,8 @@ pub const GameEntry = struct {
         game_name: []const u8 = "",
         output_dir: []const u8 = "",
         tmp_dir: []const u8 = TMP_DIR,
+
+        user_build_cmd: []const u8 = "./myscript.sh",
     };
     gameinfo: ArrayList(GameInfo) = .{},
 

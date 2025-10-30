@@ -54,10 +54,10 @@ pub fn jsontovmf(
     skyname: []const u8,
     vpkmapper: anytype,
     groups: *ecs.Groups,
-    filename: ?[]const u8,
+    filename: []const u8,
     opts: Opts,
 ) !void {
-    const outfile = try std.fs.cwd().createFile(filename orelse "dump.vmf", .{});
+    const outfile = try std.fs.cwd().createFile(filename, .{});
     defer outfile.close();
     var buffer: [4096]u8 = undefined;
     var wr = outfile.writer(&buffer);
@@ -253,7 +253,7 @@ pub fn main() !void {
         const jsonctx = json_map.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };
         const parsed = try json_map.loadJson(jsonctx, slice, &loadctx, &ecs_p, &vpkmapper, &groups);
 
-        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output, .{
+        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", .{
             .check_solid = !(args.@"no-check" orelse false),
             .pre_optimize_mesh = true,
         });

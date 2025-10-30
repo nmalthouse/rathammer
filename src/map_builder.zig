@@ -57,12 +57,13 @@ pub fn main() !void {
         Arg("tmpdir", .string, "directory for map artifacts, default is /tmp/mapcompile"),
     }, &arg_it);
     try buildmap(alloc, .{
-        .cwd = std.fs.cwd(),
+        .cwd_path = try std.process.getCwdAlloc(alloc),
         .exedir_pre = args.exedir orelse "Half-Life 2/bin",
         .gamename = args.gamename orelse "hl2_complete",
         .gamedir_pre = args.gamedir orelse "Half-Life 2",
         .tmpdir = args.tmpdir orelse "/tmp/mapcompile",
         .outputdir = args.outputdir orelse "hl2/maps",
+        .user_cmd = "",
         .vmf = args.vmf orelse {
             std.debug.print("Please specify vmf name with --vmf\n", .{});
             return;
@@ -70,44 +71,65 @@ pub fn main() !void {
     });
 }
 pub const Paths = struct {
-    cwd: std.fs.Dir,
+    cwd_path: []const u8,
     gamename: []const u8,
     gamedir_pre: []const u8,
     exedir_pre: []const u8,
     tmpdir: []const u8,
     outputdir: []const u8,
     vmf: []const u8,
+    user_cmd: []const u8,
 };
 const log = std.log.scoped(.map_builder);
 
-//Does not keep track of memory
-pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
-    const game_cwd = args.cwd;
-
-    const gamedir = game_cwd.realpathAlloc(alloc, args.gamedir_pre) catch |err| {
-        log.err("realpath failed of {s} {t}", .{ args.gamedir_pre, err });
-        return err;
-    };
-    std.debug.print("found gamedir: {s}\n", .{gamedir});
-
-    const exedir = game_cwd.realpathAlloc(alloc, args.exedir_pre) catch |err| {
-        log.err("realpath failed of {s} {t}", .{ args.exedir_pre, err });
-        return err;
-    };
+pub fn runUserBuildCommand(alloc: std.mem.Allocator, args: Paths) !void {
+    const cwd = std.fs.cwd();
 
     const working_dir = args.tmpdir;
-    const outputdir = try catString(alloc, &.{ gamedir, "/", args.outputdir });
+
+    const working = cwd.makeOpenPath(working_dir, .{}) catch |err| {
+        log.err("working dir failed {s} {t}", .{ working_dir, err });
+        return err;
+    };
+    const gamedir = try std.fs.path.resolve(alloc, &.{ args.cwd_path, args.gamedir_pre });
+
+    const exedir = try std.fs.path.resolve(alloc, &.{ args.cwd_path, args.exedir_pre });
+    const outputdir = try std.fs.path.resolve(alloc, &.{ gamedir, args.outputdir });
+
+    var env = std.process.EnvMap.init(alloc);
+    try env.put("rh_cwd_path", args.cwd_path);
+    try env.put("rh_gamename", args.gamename);
+    try env.put("rh_gamedir", gamedir);
+    try env.put("rh_exedir", exedir);
+    try env.put("rh_outputdir", outputdir);
+    try env.put("rh_vmf", args.vmf);
+
+    std.fs.cwd().copyFile(args.vmf, working, std.fs.path.basename(args.vmf), .{}) catch |err| {
+        log.err("failed to copy vmf {s} {t}", .{ args.vmf, err });
+        return err;
+    };
+
+    try runCommand(alloc, &.{args.user_cmd}, working_dir, &env);
+}
+
+//Does not keep track of memory
+pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
+    const cwd = std.fs.cwd();
+
+    const gamedir = try std.fs.path.resolve(alloc, &.{ args.cwd_path, args.gamedir_pre });
+    std.debug.print("found gamedir: {s}\n", .{gamedir});
+
+    const exedir = try std.fs.path.resolve(alloc, &.{ args.cwd_path, args.exedir_pre });
+
+    const working_dir = args.tmpdir;
+    const outputdir = try std.fs.path.resolve(alloc, &.{ gamedir, args.outputdir });
 
     const mapname = args.vmf;
 
     const stripped = splitPath(mapname);
     const map_no_extension = stripExtension(stripped[1]);
-    const working = game_cwd.makeOpenPath(working_dir, .{}) catch |err| {
+    const working = cwd.makeOpenPath(working_dir, .{}) catch |err| {
         log.err("working dir failed {s} {t}", .{ working_dir, err });
-        return err;
-    };
-    const working_abs = game_cwd.realpathAlloc(alloc, working_dir) catch |err| {
-        log.err("unable to realpath workingdir {s} {t}", .{ working_dir, err });
         return err;
     };
 
@@ -116,7 +138,7 @@ pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
         return err;
     };
 
-    const output_dir = game_cwd.openDir(outputdir, .{}) catch |err| {
+    const output_dir = cwd.openDir(outputdir, .{}) catch |err| {
         log.err("failed to open output dir {s}, with {t}", .{ outputdir, err });
         return err;
     };
@@ -126,31 +148,32 @@ pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
     const vbsp = [_][]const u8{ "wine", try catString(alloc, &.{ exedir, "/vbsp.exe" }), "-game", game_path, "-novconfig", map_no_extension };
     const vvis = [_][]const u8{ "wine", try catString(alloc, &.{ exedir, "/vvis.exe" }), "-game", game_path, "-novconfig", "-fast", map_no_extension };
     const vrad = [_][]const u8{ "wine", try catString(alloc, &.{ exedir, "/vrad.exe" }), "-game", game_path, "-novconfig", "-fast", map_no_extension };
-    try runCommand(alloc, vbsp[start_i..], working_abs);
-    try runCommand(alloc, vvis[start_i..], working_abs);
-    try runCommand(alloc, vrad[start_i..], working_abs);
+    try runCommand(alloc, vbsp[start_i..], working_dir, null);
+    try runCommand(alloc, vvis[start_i..], working_dir, null);
+    try runCommand(alloc, vrad[start_i..], working_dir, null);
 
     const bsp_name = try printString(alloc, "{s}.bsp", .{map_no_extension});
     try working.copyFile(bsp_name, output_dir, bsp_name, .{});
 }
 
-fn runCommand(alloc: std.mem.Allocator, argv: []const []const u8, working_dir: []const u8) !void {
-    std.debug.print("Running command in: {s} ", .{working_dir});
+fn runCommand(alloc: std.mem.Allocator, argv: []const []const u8, working_dir: []const u8, env: ?*std.process.EnvMap) !void {
+    std.debug.print("Running command  {s} ", .{working_dir});
     for (argv) |arg|
         std.debug.print("{s} ", .{arg});
     std.debug.print("\n", .{});
+
     var child = std.process.Child.init(argv, alloc);
+    child.env_map = env;
     child.cwd = working_dir;
     child.stdout_behavior = .Pipe;
     child.stdin_behavior = .Ignore;
-    child.stderr_behavior = .Pipe;
+    //child.stderr_behavior = .Pipe;
     try child.spawn();
 
     const enable_stdout = true;
 
     if (enable_stdout) {
         std.debug.assert(child.stdout_behavior == .Pipe);
-        std.debug.assert(child.stderr_behavior == .Pipe);
 
         var poller = std.Io.poll(alloc, enum {
             stdout,
