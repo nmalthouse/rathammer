@@ -401,7 +401,12 @@ pub const Context = struct {
         self.asset_atlas = try graph.AssetBake.AssetMap.initTextureFromManifest(self.alloc, self.dirs.pref, "packed");
 
         //try gameinfo.loadGameinfo(self.alloc, base_dir, game_dir, &self.vpkctx, loadctx);
-        try fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd, args.fgd orelse game_conf.fgd);
+        fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd, args.fgd orelse game_conf.fgd) catch |err| {
+            std.debug.print("--------------\n", .{});
+            std.debug.print("If this is an fgd of an existing game,  Please open a bug report containing the fgd you are trying to load and I will fix the parser\n", .{});
+            std.debug.print("--------------\n", .{});
+            return err;
+        };
 
         //The order in which these are registered maps to the order 'tool' keybinds are specified in config.vdf
         try self.tools.registerCustom("translate", tool_def.Translate, try tool_def.Translate.create(self.alloc, self));

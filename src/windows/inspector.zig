@@ -247,7 +247,11 @@ pub const InspectorWindow = struct {
                 .cb_fn = &misc_btn_cb,
                 .id = @intFromEnum(MiscBtn.ungroup),
             });
-            _ = Wg.Checkbox.build(lay, hy.getArea(), "show help", .{ .bool_ptr = &self.show_help }, null);
+            _ = Wg.Checkbox.build(lay, hy.getArea(), "show help", .{
+                .bool_ptr = &self.show_help,
+                .cb_fn = generic_checkbox_rebuild_cb,
+                .cb_vt = &self.cbhandle,
+            }, null);
         }
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
@@ -370,6 +374,7 @@ pub const InspectorWindow = struct {
                             .cb_fn = &cb_commitCheckbox,
                             .cb_vt = &self.cbhandle,
                             .user_id = packed_id,
+                            .style = .check,
                         }, is_set);
                     }
                 },
@@ -471,6 +476,7 @@ pub const InspectorWindow = struct {
                                     .cb_fn = &cb_commitCheckbox,
                                     .cb_vt = &self.cbhandle,
                                     .user_id = cb_id,
+                                    .style = .check,
                                 }, checked);
                             } else {
                                 var found: usize = 0;
@@ -625,6 +631,7 @@ pub const InspectorWindow = struct {
         } else {
             self.setKvStr(id, if (val) "1" else "0");
         }
+        self.vt.needs_rebuild = true;
     }
 
     pub fn cb_commitTextbox(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
@@ -637,6 +644,11 @@ pub const InspectorWindow = struct {
         win.needs_rebuild = true;
         self.selected_kv_index = id;
         //We need to rebuild buttons to show the selected mark
+    }
+
+    fn generic_checkbox_rebuild_cb(cb: *CbHandle, _: *Gui, _: bool, _: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.vt.needs_rebuild = true;
     }
 
     pub fn buildChoice(self: *@This(), info: anytype, area: ?Rect, vt: *iArea) void {

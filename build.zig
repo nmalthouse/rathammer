@@ -1,4 +1,5 @@
 const std = @import("std");
+const zon = @import("build.zig.zon");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -60,7 +61,13 @@ pub fn build(b: *std.Build) void {
     opts.addOption(bool, "http_version_check", b.option(bool, "http_version_check", "Enable support for http version check") orelse false);
     opts.addOption(?[]const u8, "http_version_check_url", b.option([]const u8, "http_version_check_url", "override url for version check") orelse null);
     opts.addOption([]const u8, "commit_hash", b.option([]const u8, "commit_hash", "Embed git hash in build") orelse "unspecified");
+
+    const version_opt = b.addOptions();
+    version_opt.addOption([]const u8, "version", zon.version);
+
     hammer_exe.root_module.addOptions("config", opts);
+    hammer_exe.root_module.addOptions("version", version_opt);
+    jsonToVmf.root_module.addOptions("version", version_opt);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
