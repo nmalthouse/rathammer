@@ -3,6 +3,7 @@ const vpk = @import("../vpk.zig");
 const LoadCtx = @import("../util.zig").LoadCtxDummy;
 
 test {
+    //This leaks because of a bug in 0.15.2 std reader.appendRemaining
     const alloc = std.testing.allocator;
     var ctx = try vpk.Context.init(alloc);
     defer ctx.deinit();
@@ -23,6 +24,6 @@ test {
     _ = loose_img;
 
     const id = try ctx.getResourceIdString("extra/vmf_ex.vdf", false) orelse return error.notId;
-    const loose_unindexed = try ctx.getFileFromRes(id, &ctx.filebuf) orelse return error.notFound;
+    const loose_unindexed = try ctx.getFileFromRes(id, .{ .list = &ctx.filebuf, .alloc = ctx.alloc }) orelse return error.notFound;
     _ = loose_unindexed;
 }

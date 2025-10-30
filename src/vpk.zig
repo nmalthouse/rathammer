@@ -427,7 +427,6 @@ pub const Context = struct {
 
     pub fn getFileTempFmtBuf(self: *Self, extension: []const u8, comptime fmt: []const u8, args: anytype, buf: ManagedBuf, sanitize: bool) !?[]const u8 {
         const res_id = try self.getResourceIdFmt(extension, fmt, args, sanitize) orelse return null;
-        buf.list.clearRetainingCapacity();
         return try self.getFileFromRes(res_id, buf);
     }
 

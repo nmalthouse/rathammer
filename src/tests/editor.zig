@@ -50,7 +50,7 @@ pub const EditorTestCtx = struct {
             .gl_minor_version = 2,
             .enable_debug = IS_DEBUG,
             .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
-        });
+        }, alloc);
 
         ret.* = .{
             .conf = conf,
@@ -63,7 +63,7 @@ pub const EditorTestCtx = struct {
         var arg_it = std.mem.tokenizeScalar(u8, "rathammer", ' ');
         const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
 
-        const editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &ret.loadctx, dirs);
+        const editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &ret.win, &ret.loadctx, dirs);
         ret.editor = editor;
         win.pumpEvents(.poll);
         return ret;

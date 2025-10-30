@@ -1,14 +1,16 @@
 const std = @import("std");
 const vdf_serial = @import("../vdf_serial.zig");
 const vdf = @import("../vdf.zig");
-const WriteVdf = vdf_serial.WriteVdf;
+const util = @import("../util.zig");
+const VdfWriter = vdf_serial.VdfWriter;
 
 test {
     const alloc = std.testing.allocator;
-    var out = std.ArrayListUnmanaged(u8){};
-    defer out.deinit(alloc);
-    const wr = out.writer(alloc);
-    var s = WriteVdf(@TypeOf(wr)).init(alloc, wr);
+
+    var out = std.Io.Writer.Allocating.init(alloc);
+    defer out.deinit();
+
+    var s = VdfWriter.init(alloc, &out.writer);
     defer s.deinit();
     try s.writeKey("hello");
     try s.beginObject();
@@ -61,10 +63,10 @@ test {
 
     if (false) {
         std.debug.print("\n", .{});
-        std.debug.print("{s}\n", .{out.items});
+        std.debug.print("{s}\n", .{out.written()});
         std.debug.print("{s}\n", .{expected});
     }
-    try std.testing.expectEqualDeep(expected, out.items);
+    try std.testing.expectEqualDeep(expected, out.written());
 }
 
 const parse = vdf.parse;
@@ -255,10 +257,8 @@ test "parse errors" {
 
 fn testLoadVdf(dir: std.fs.Dir, filename: []const u8, opts: Parsed.Opts) !Parsed {
     const alloc = std.testing.allocator;
-    const conf = try dir.openFile(filename, .{});
-    defer conf.close();
 
-    const slice = try conf.reader().readAllAlloc(alloc, std.math.maxInt(usize));
+    const slice = try util.readFile(alloc, dir, filename);
     defer alloc.free(slice);
 
     var einfo = ErrorInfo{};
@@ -286,9 +286,7 @@ test "parse vdf" {}
 
 test "test_vmf" {
     const alloc = std.testing.allocator;
-    const sl = try std.fs.cwd().openFile("extra/vmf_ex.vdf", .{});
-    const slice = try sl.reader().readAllAlloc(alloc, std.math.maxInt(usize));
-    sl.close();
+    const slice = try util.readFile(alloc, std.fs.cwd(), "extra/vmf_ex.vdf");
     defer alloc.free(slice);
     var ct = TestCtx{ .tok = Tokenizer{ .slice = slice } };
 
