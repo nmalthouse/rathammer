@@ -394,9 +394,9 @@ pub const CheckVersionHttp = struct {
 
             if (try resp_read.takeDelimiter(0)) |answer| {
                 log.info("Version check {s}", .{answer});
-                const server_version = try version.parseSemver(answer);
-                const client_version = try version.parseSemver(version.version);
-                if (version.gtSemver(server_version, client_version)) {
+                const server_version = try std.SemanticVersion.parse(answer);
+                const client_version = try std.SemanticVersion.parse(version.version);
+                if (std.SemanticVersion.order(server_version, client_version) == .gt) {
                     self.new_version = try self.alloc.dupe(u8, answer);
                 }
             }

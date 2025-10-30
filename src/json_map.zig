@@ -130,9 +130,9 @@ pub fn loadJson(
     const parsed = try std.json.parseFromSlice(JsonMap, ctx.alloc, slice, .{ .ignore_unknown_fields = true });
     loadctx.cb("json parsed");
 
-    const cv = try version.parseSemver(CURRENT_MAP_VERSION);
-    const this_v = try version.parseSemver(parsed.value.editor.map_json_version);
-    if (cv[0] != this_v[0]) {
+    const cv = try std.SemanticVersion.parse(CURRENT_MAP_VERSION);
+    const this_v = try std.SemanticVersion.parse(parsed.value.editor.map_json_version);
+    if (cv.major != this_v.major) {
         log.err("Incompatible map json major version current: {s} map: {s}", .{
             CURRENT_MAP_VERSION, parsed.value.editor.map_json_version,
         });
