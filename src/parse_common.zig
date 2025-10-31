@@ -1,6 +1,18 @@
 const std = @import("std");
+const graph = @import("graph");
 pub fn parseStruct(comptime T: type, endian: std.builtin.Endian, r: anytype) !T {
     const info = @typeInfo(T);
+    if (T == graph.za.Vec3) {
+        var buf: [4 * 3]u8 = undefined;
+
+        try r.readNoEof(&buf);
+
+        return graph.za.Vec3.new(
+            @bitCast(std.mem.readInt(u32, buf[0..4], endian)),
+            @bitCast(std.mem.readInt(u32, buf[4..8], endian)),
+            @bitCast(std.mem.readInt(u32, buf[8..12], endian)),
+        );
+    }
     switch (info) {
         .@"enum" => |e| {
             //const int = try parseStruct(e.tag_type, endian, r);

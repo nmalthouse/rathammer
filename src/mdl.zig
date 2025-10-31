@@ -3,9 +3,12 @@ const com = @import("parse_common.zig");
 const parseStruct = com.parseStruct;
 const graph = @import("graph");
 const Vec3 = graph.za.Vec3;
+const Quat = graph.za.Quat;
 const vpk = @import("vpk.zig");
 const util = @import("util.zig");
 
+// mdl are little endian
+const endian = std.builtin.Endian.little;
 const MdlVector = struct {
     x: f32,
     y: f32,
@@ -63,6 +66,47 @@ const AnimDesc = struct {
     frame_offset: u32,
 
     frame_stalltime: f32,
+};
+
+const AnimMovement = struct {
+    endframe: i32,
+    motion_flags: i32,
+    v0: f32,
+    v1: f32,
+    angle: f32,
+    vec: [3]f32,
+    pos: [3]f32,
+};
+
+const AnimFlag = enum(u8) {
+    vec48 = 0x01,
+    quat48 = 0x02,
+
+    animpos = 0x04,
+    animrot = 0x08,
+
+    delta = 0x10,
+    quat64 = 0x20,
+};
+
+const Quat48 = struct {
+    x: u16,
+    y: u16,
+    z_wneg: u16,
+
+    pub fn toQuat(s: @This()) Quat {
+        const bias = 32768;
+        const zbias = 16384;
+        const neg: f32 = if (s.z_wneg & 0x1 == 0x1) -1 else 1;
+        var new = Quat.new(
+            0,
+            @as(f32, @floatFromInt(@as(i32, @intCast(s.x)) - bias)) * (1.0 / @as(f32, bias)),
+            @as(f32, @floatFromInt(@as(i32, @intCast(s.y)) - bias)) * (1.0 / @as(f32, bias)),
+            @as(f32, @floatFromInt(@as(i32, @intCast(s.z_wneg >> 1)) - zbias)) * (1.0 / @as(f32, zbias)),
+        );
+        new.w = std.math.sqrt(1 - new.x * new.x - new.y * new.y - new.z * new.z) * neg;
+        return new;
+    }
 };
 
 const Anim = struct {
@@ -243,6 +287,7 @@ pub const ModelInfo = struct {
     texture_names: std.ArrayList([]const u8) = .{},
     hull_min: Vec3,
     hull_max: Vec3,
+    quat: ?Quat = null,
 };
 
 fn setFbs(fbs: *std.io.FixedBufferStream([]const u8), pos: usize) !void {
@@ -254,7 +299,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     const log = std.log.scoped(.mdl);
     var fbs = std.io.FixedBufferStream([]const u8){ .buffer = slice, .pos = 0 };
     const r = fbs.reader();
-    const o1 = try parseStruct(Studiohdr_01, .little, r);
+    const o1 = try parseStruct(Studiohdr_01, endian, r);
     if (!std.mem.eql(u8, &o1.id, MDL_MAGIC_STRING))
         return error.notMdl;
     const supported = [_]u32{
@@ -270,10 +315,10 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
         log.warn("Unsupported mdl version {d} , attempting to parse", .{o1.version});
     }
 
-    const h2 = try parseStruct(Studiohdr_02, .little, r);
+    const h2 = try parseStruct(Studiohdr_02, endian, r);
     print("Name: {s} {d}\n", .{ h2.name, h2.data_length });
     print("{}\n", .{h2});
-    const h3 = try parseStruct(Studiohdr_03, .little, r);
+    const h3 = try parseStruct(Studiohdr_03, endian, r);
     print("{}\n", .{h3});
 
     var info = ModelInfo{
@@ -294,7 +339,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     try setFbs(&fbs, h3.texture_offset);
     for (0..h3.texture_count) |_| {
         const start = fbs.pos;
-        const tex = try parseStruct(StudioTexture, .little, r);
+        const tex = try parseStruct(StudioTexture, endian, r);
         const name: [*c]const u8 = &slice[start + tex.name_offset];
 
         const name_fixed = util.ensurePathRelative(std.mem.span(name), true);
@@ -308,7 +353,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
 
     try setFbs(&fbs, h3.texturedir_offset);
     for (0..h3.texturedir_count) |_| {
-        const int = try r.readInt(u32, .little);
+        const int = try r.readInt(u32, endian);
         const name: [*c]const u8 = &slice[int];
         const name_fixed = util.ensurePathRelative(std.mem.span(name), true);
         const duped_name = try alloc.dupe(u8, name_fixed);
@@ -319,34 +364,40 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
 
     try setFbs(&fbs, h3.skinreference_index);
     for (0..h3.skinreference_count) |_| {
-        print("crass {d}\n", .{try r.readInt(i16, .little)});
+        print("crass {d}\n", .{try r.readInt(i16, endian)});
     }
 
-    if (false) {
-        std.debug.print("NUMBER OF ANIMDESC {d}\n", .{h3.localanim_count});
+    if (true) {
+        //std.debug.print("NUMBER OF ANIMDESC {d}\n", .{h3.localanim_count});
         try setFbs(&fbs, h3.localanim_offset);
         for (0..h3.localanim_count) |_| {
             const start = fbs.pos;
-            const animdesc = try parseStruct(AnimDesc, .little, r);
-            const name: [*c]const u8 = &slice[start + animdesc.name_offset];
-            std.debug.print("ANIM_NAME {s} and index: {d}\n", .{ name, animdesc.anim_offset });
-            std.debug.print("NUM MOVEMENT {d}, {d}\n", .{ animdesc.num_movement, animdesc.movement_offset });
+            const animdesc = try parseStruct(AnimDesc, endian, r);
+            //std.debug.print("{any}\n", .{animdesc});
+            //const name: [*c]const u8 = &slice[start + animdesc.name_offset];
+            //std.debug.print("ANIM_NAME {s} and index: {d}\n", .{ name, animdesc.anim_offset });
+            //std.debug.print("NUM MOVEMENT {d}, {d}\n", .{ animdesc.num_movement, animdesc.movement_offset });
             const st = fbs.pos;
             defer fbs.pos = st;
 
-            //TODO support other methods of anim storage
-            if (animdesc.anim_offset != 0) {
-                try setFbs(&fbs, animdesc.anim_offset);
-                const anim = try parseStruct(Anim, .little, r);
-                try setFbs(&fbs, @sizeOf(Anim)); //fbs is now at pData
-                const V = struct {
-                    x: f32,
-                    y: f32,
-                    z: f32,
-                };
-                std.debug.print("FLAGS {b}\n", .{anim.flags});
-                const a = try parseStruct(V, .little, r);
-                std.debug.print("vec {any}\n", .{a});
+            {
+                if (animdesc.anim_block == 0) {
+                    try setFbs(&fbs, start + animdesc.anim_offset);
+                    const anim = try parseStruct(Anim, endian, r);
+                    //std.debug.print("{any}\n", .{anim});
+                    //fbs is at pdata
+
+                    //TODO this is not actually extracting animation data.
+                    //It is correct for most models though.
+                    //hacky fix to issue #1
+                    if (anim.flags & @intFromEnum(AnimFlag.quat48) != 0) {
+                        //const b = try parseStruct(Quat48, endian, r);
+                        info.quat = .fromEulerAngles(.new(0, 0, 90));
+                        //info.quat = b.toQuat();
+                        //std.debug.print("QUAT {any}\n", .{b.toQuat().extractEulerAngles()});
+                        break;
+                    }
+                }
             }
         }
     }
@@ -354,22 +405,22 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     try setFbs(&fbs, h3.bodypart_offset);
     for (0..h3.bodypart_count) |_| {
         const o2 = fbs.pos;
-        const bp = try parseStruct(BodyPart, .little, r);
+        const bp = try parseStruct(BodyPart, endian, r);
         const st = fbs.pos;
         defer fbs.pos = st;
         print("{}\n", .{bp});
         try setFbs(&fbs, bp.model_index + o2);
         for (0..bp.num_model) |_| {
             const o3 = fbs.pos;
-            const mm = try parseStruct(Model, .little, r);
+            const mm = try parseStruct(Model, endian, r);
             print("{}\n", .{mm});
             print("{s}\n", .{@as([*c]const u8, @ptrCast(&mm.name[0]))});
             const stt = fbs.pos;
             defer fbs.pos = stt;
             try setFbs(&fbs, mm.mesh_index + o3);
             for (0..mm.num_mesh) |_| {
-                const mesh = try parseStruct(Mesh, .little, r);
-                print("BIG DOG {d}\n", .{mesh.num_vert});
+                const mesh = try parseStruct(Mesh, endian, r);
+                print("num vert {d}\n", .{mesh.num_vert});
                 if (mesh.num_vert > std.math.maxInt(u16)) {
                     std.debug.print("holy hell thats a lot of verticies {d}\n", .{mesh.num_vert});
                     return error.TooManyVerts;

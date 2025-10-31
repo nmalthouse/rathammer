@@ -35,7 +35,7 @@ const V2 = struct { x: f32, y: f32 };
 const BoneWeightLen = 16;
 const Vertex = struct {
     boneweight: [BoneWeightLen]u8,
-    pos: V3,
+    pos: Vec3,
     norm: V3,
     uv: V2,
 };
@@ -243,7 +243,10 @@ pub fn loadModelCrappy(
         defer verts.deinit(alloc);
         fbs_vvd.pos = h1.vertexDataStart;
         for (0..h1.numLODVertexes[0]) |_| {
-            const vert = try parseStruct(Vertex, .little, r);
+            var vert = try parseStruct(Vertex, .little, r);
+            if (info.quat) |q| {
+                vert.pos = q.rotateVec(vert.pos);
+            }
             try verts.append(alloc, vert);
         }
         var total: usize = 0;
@@ -251,9 +254,9 @@ pub fn loadModelCrappy(
             for (fixups.items) |fu| {
                 for (verts.items[fu.source_vertex_id .. fu.source_vertex_id + fu.num_vertex]) |v| {
                     try mmesh.vertices.append(mmesh.alloc, .{
-                        .x = v.pos.x,
-                        .y = v.pos.y,
-                        .z = v.pos.z,
+                        .x = v.pos.x(),
+                        .y = v.pos.y(),
+                        .z = v.pos.z(),
                         .u = v.uv.x,
                         .v = v.uv.y,
                         .nx = v.norm.x,
@@ -261,18 +264,18 @@ pub fn loadModelCrappy(
                         .nz = v.norm.z,
                         .color = 0xff_ff_ff_ff,
                     });
-                    try w.print("v {d} {d} {d}\n", .{ v.pos.x, v.pos.y, v.pos.z });
+                    try w.print("v {d} {d} {d}\n", .{ v.pos.x(), v.pos.y(), v.pos.z() });
                 }
                 total += fu.num_vertex;
             }
             print("TOTAL VERCTS FIXED {d}\n", .{total});
         } else {
             for (verts.items) |v| {
-                try w.print("v {d} {d} {d}\n", .{ v.pos.x, v.pos.y, v.pos.z });
+                try w.print("v {d} {d} {d}\n", .{ v.pos.x(), v.pos.y(), v.pos.z() });
                 try mmesh.vertices.append(mmesh.alloc, .{
-                    .x = v.pos.x,
-                    .y = v.pos.y,
-                    .z = v.pos.z,
+                    .x = v.pos.x(),
+                    .y = v.pos.y(),
+                    .z = v.pos.z(),
                     .u = v.uv.x,
                     .v = v.uv.y,
                     .nx = 0,

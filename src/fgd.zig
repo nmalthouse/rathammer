@@ -784,14 +784,20 @@ pub const ParseCtx = struct {
                 try pctx.parseFields(ctx, &new_class);
 
                 if (directive == .BaseClass) {
+                    if (ctx.base.getPtr(new_class.name)) |old| {
+                        old.deinit();
+                    }
                     try ctx.base.put(ctx.alloc, new_class.name, new_class);
                 } else {
+                    if (ctx.real.getPtr(new_class.name)) |old| {
+                        old.deinit();
+                    }
                     try ctx.real.put(ctx.alloc, new_class.name, new_class);
                 }
             },
         }
     }
-    pub fn parseFields(self: *Self, ctx: *EntCtx, new_class: anytype) !void {
+    pub fn parseFields(self: *Self, ctx: *EntCtx, new_class: *EntClass) !void {
         const tkz = &self.tkz;
         while (try tkz.nextEatNewline()) |first| {
             if (first.tag == .r_bracket) break; //this class in done
