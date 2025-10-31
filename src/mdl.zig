@@ -30,8 +30,8 @@ const Studiohdr_02 = struct {
     data_length: u32, //Size of entire mdl file in bytes, should match slice.len from vpkctx
     eye_pos: MdlVector,
     illumposition: MdlVector,
-    hull_min: MdlVector,
-    hull_max: MdlVector,
+    hull_min: Vec3,
+    hull_max: Vec3,
     view_bb_min: MdlVector,
     view_bb_max: MdlVector,
 
@@ -114,6 +114,23 @@ const Anim = struct {
     flags: u8,
 
     next_offset: u16,
+};
+
+const Bone = struct {
+    name_index: i32,
+    parent: i32,
+    bone_controller: [6]i32,
+
+    pos: Vec3,
+    quat: Quat,
+    rot: Vec3,
+
+    posscale: Vec3,
+    rotscale: Vec3,
+
+    crapmat: [3 * 4]f32,
+
+    q_align: Quat,
 };
 
 const Studiohdr_03 = struct {
@@ -323,8 +340,8 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
 
     var info = ModelInfo{
         .alloc = alloc,
-        .hull_min = h2.hull_min.toZa(),
-        .hull_max = h2.hull_max.toZa(),
+        .hull_min = h2.hull_min,
+        .hull_max = h2.hull_max,
     };
     errdefer {
         info.vert_offsets.deinit(info.alloc);
@@ -368,34 +385,48 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
     }
 
     if (true) {
+        for (0..h3.bone_count) |boneindex| {
+            try setFbs(&fbs, h3.bone_offset + @sizeOf(Bone) * boneindex);
+            break; //Bone is broken
+        }
+    }
+
+    if (true) {
         //std.debug.print("NUMBER OF ANIMDESC {d}\n", .{h3.localanim_count});
         try setFbs(&fbs, h3.localanim_offset);
-        for (0..h3.localanim_count) |_| {
+        for (0..h3.localanim_count) |i| {
+            try setFbs(&fbs, h3.localanim_offset + @sizeOf(AnimDesc) * i);
             const start = fbs.pos;
             const animdesc = try parseStruct(AnimDesc, endian, r);
             //std.debug.print("{any}\n", .{animdesc});
             //const name: [*c]const u8 = &slice[start + animdesc.name_offset];
-            //std.debug.print("ANIM_NAME {s} and index: {d}\n", .{ name, animdesc.anim_offset });
+            //std.debug.print("{d} ANIM {s} \n", .{ i, name });
             //std.debug.print("NUM MOVEMENT {d}, {d}\n", .{ animdesc.num_movement, animdesc.movement_offset });
             const st = fbs.pos;
             defer fbs.pos = st;
 
             {
+                var offset: usize = animdesc.anim_offset;
                 if (animdesc.anim_block == 0) {
-                    try setFbs(&fbs, start + animdesc.anim_offset);
-                    const anim = try parseStruct(Anim, endian, r);
-                    //std.debug.print("{any}\n", .{anim});
-                    //fbs is at pdata
+                    try setFbs(&fbs, start + offset);
+                    var count: usize = 0;
+                    while (true) {
+                        const rs = fbs.pos;
+                        const anim = try parseStruct(Anim, endian, r);
 
-                    //TODO this is not actually extracting animation data.
-                    //It is correct for most models though.
-                    //hacky fix to issue #1
-                    if (anim.flags & @intFromEnum(AnimFlag.quat48) != 0) {
-                        //const b = try parseStruct(Quat48, endian, r);
-                        info.quat = .fromEulerAngles(.new(0, 0, 90));
-                        //info.quat = b.toQuat();
-                        //std.debug.print("QUAT {any}\n", .{b.toQuat().extractEulerAngles()});
-                        break;
+                        //TODO this is not actually extracting animation data.
+                        //It is correct for most models though.
+                        //hacky fix to issue #1
+                        if (anim.flags & @intFromEnum(AnimFlag.quat48) != 0) {
+                            info.quat = .fromEulerAngles(.new(0, 0, 90));
+                            break;
+                        }
+                        count += 1;
+                        if (anim.next_offset > 0) {
+                            offset = rs + anim.next_offset;
+                        } else {
+                            break;
+                        }
                     }
                 }
             }
