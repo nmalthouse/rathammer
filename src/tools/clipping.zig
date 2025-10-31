@@ -243,14 +243,17 @@ pub const Clipping = struct {
                 }
                 const rm = ed.edit_state.rmouse;
                 if (rm == .rising)
-                    try self.commitClip(ed);
+                    try self.tryCommitClip(ed);
             },
         }
     }
 
-    fn commitClip(self: *@This(), ed: *Editor) !void {
+    fn tryCommitClip(self: *@This(), ed: *Editor) !void {
+        const r1 = self.points[0].sub(self.points[1]);
+        const r2 = self.points[0].sub(self.points[2]);
+        if (r1.length() < 0.001 or r2.length() < 0.001)
+            return;
         self.state = .init;
-
         try action.clipSelected(ed, self.points);
     }
 };
