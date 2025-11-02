@@ -257,6 +257,9 @@ pub const Context = struct {
     /// This is always relative to cwd
     loaded_map_path: ?[]const u8 = null,
 
+    last_exported_obj_name: ?[]const u8 = null,
+    last_exported_obj_path: ?[]const u8 = null,
+
     pub fn setWindowTitle(self: *Self, map_fmt_args: anytype) void {
         var fbs = std.io.FixedBufferStream([]u8){ .buffer = &WINDOW_TITLE_BUFFER, .pos = 0 };
         fbs.writer().print(MAPFMT, map_fmt_args) catch {
@@ -289,6 +292,17 @@ pub const Context = struct {
 
         self.loaded_map_name = try self.storeString(split[1]);
         self.loaded_map_path = try self.storeString(split[0]);
+    }
+
+    pub fn setObjName(self: *Self, filename: []const u8) !void {
+        const path = std.fs.path.dirname(filename) orelse "";
+        const base = std.fs.path.basename(filename);
+
+        const ext = std.fs.path.extension(base);
+        const real_base = if (std.mem.eql(u8, ext, "obj")) base else try self.printScratch("{s}.obj", .{base[0 .. base.len - ext.len]});
+
+        self.last_exported_obj_name = try self.storeString(real_base);
+        self.last_exported_obj_path = try self.storeString(path);
     }
 
     pub fn init(
@@ -1407,7 +1421,7 @@ pub const Context = struct {
         var timer = try std.time.Timer.start();
 
         const name = try std.fs.path.join(self.frame_arena.allocator(), &.{ path, try self.printScratch("{s}.ratmap", .{basename}) });
-        try self.notify("saving: {s}", .{name}, colors.tentative);
+        self.notify("saving: {s}", .{name}, colors.tentative);
 
         var jwriter = std.Io.Writer.Allocating.init(self.alloc);
 
@@ -1420,7 +1434,7 @@ pub const Context = struct {
         }
 
         if (self.writeToJson(&jwriter.writer)) {
-            try self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
+            self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
 
@@ -1467,13 +1481,15 @@ pub const Context = struct {
             jwriter.deinit();
             //out_file.close();
             log.err("writeToJson failed ! {}", .{err});
-            try self.notify("save failed!: {}", .{err}, colors.bad);
+            self.notify("save failed!: {}", .{err}, colors.bad);
         }
     }
 
-    pub fn notify(self: *Self, comptime fmt: []const u8, args: anytype, color: u32) !void {
+    pub fn notify(self: *Self, comptime fmt: []const u8, args: anytype, color: u32) void {
         log.info(fmt, args);
-        try self.notifier.submitNotify(fmt, args, color);
+        self.notifier.submitNotify(fmt, args, color) catch {
+            std.debug.print("NOTIFY FAILED\n", .{});
+        };
     }
 
     pub fn update(self: *Self, win: *graph.SDL.Window) !void {
@@ -1497,14 +1513,14 @@ pub const Context = struct {
                 var wr = out_file.writer(&write_buf);
                 self.writeToJson(&wr.interface) catch |err| {
                     log.err("writeToJson failed ! {}", .{err});
-                    try self.notify("Autosave failed!: {}", .{err}, colors.bad);
+                    self.notify("Autosave failed!: {}", .{err}, colors.bad);
                 };
                 try wr.interface.flush();
             } else |err| {
                 log.err("Autosave failed with error {}", .{err});
-                try self.notify("Autosave failed!: {}", .{err}, colors.bad);
+                self.notify("Autosave failed!: {}", .{err}, colors.bad);
             }
-            try self.notify("Autosaved: {s}", .{basename}, colors.good);
+            self.notify("Autosaved: {s}", .{basename}, colors.good);
         }
         if (win.isBindState(self.config.keys.save.b, .rising)) {
             try action.trySave(self);

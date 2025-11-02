@@ -33,6 +33,7 @@ const MenuBtn = enum(guis.Uid) {
     draw_mod,
     draw_debug,
     export_obj,
+    export_obj_as,
     todo,
     _,
 };
@@ -166,10 +167,13 @@ pub const MenuBar = struct {
             },
             .build_map => action.buildMap(self.ed, false) catch {},
             .build_map_user => action.buildMap(self.ed, true) catch {},
+            .export_obj_as => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .export_obj) catch return,
             .export_obj => {
-                action.exportToObj(self.ed, std.fs.cwd(), "dump.obj") catch {};
+                const path = self.ed.last_exported_obj_path orelse return;
+                const name = self.ed.last_exported_obj_name orelse return;
+                action.exportToObj(self.ed, path, name) catch {};
             },
-            else => self.ed.notify("TODO. item not implemented", .{}, colors.bad) catch {},
+            else => self.ed.notify("TODO. item not implemented", .{}, colors.bad),
         }
     }
 
@@ -195,6 +199,7 @@ pub const MenuBar = struct {
                 });
             },
             btn_strid("file") => {
+                const has_obj = self.ed.last_exported_obj_path != null;
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.save), "save", .btn },
                     .{ btn_id(.saveas), "save-as", .btn },
@@ -202,7 +207,8 @@ pub const MenuBar = struct {
                     //.{ btn_id(.import_map), "import-map", .btn },
                     .{ btn_id(.build_map), "build", .btn },
                     .{ btn_id(.build_map_user), "build-user", .btn },
-                    .{ btn_id(.export_obj), "export-obj", .btn },
+                    .{ btn_id(.export_obj), "export-obj", if (has_obj) .btn else .blank },
+                    .{ btn_id(.export_obj_as), "export-obj-as", .btn },
                     .{ btn_id(.quit), "quit", .btn },
                 });
             },

@@ -4,6 +4,7 @@ const Context = @import("editor.zig").Context;
 const graph = @import("graph");
 const compile_conf = @import("config");
 const vpk = @import("vpk.zig");
+const actions = @import("actions.zig");
 
 pub const JobTemplate = struct {
     //Jobs must implement iJob vtable
@@ -46,6 +47,7 @@ pub const SdlFileData = struct {
     pub const Action = enum {
         save_map,
         pick_map,
+        export_obj,
     };
     const map_filters = [_]graph.c.SDL_DialogFileFilter{
         .{ .name = "maps", .pattern = "json;vmf;ratmap" },
@@ -88,6 +90,13 @@ pub const SdlFileData = struct {
         defer self.destroy();
         if (self.has_file != .has) return;
         switch (self.action) {
+            .export_obj => {
+                edit.setObjName(self.name_buffer.items) catch return;
+
+                if (edit.last_exported_obj_name) |basename| {
+                    actions.exportToObj(edit, edit.last_exported_obj_path orelse ".", basename) catch {};
+                }
+            },
             .save_map => {
                 edit.setMapName(self.name_buffer.items) catch return;
                 if (edit.loaded_map_name) |basename| {
@@ -107,7 +116,7 @@ pub const SdlFileData = struct {
 
     pub fn workFunc(self: *@This()) void {
         switch (self.action) {
-            .save_map => graph.c.SDL_ShowSaveFileDialog(&saveFileCallback2, self, null, null, 0, null),
+            .save_map, .export_obj => graph.c.SDL_ShowSaveFileDialog(&saveFileCallback2, self, null, null, 0, null),
             .pick_map => graph.c.SDL_ShowOpenFileDialog(&saveFileCallback2, self, null, &map_filters, map_filters.len, null, false),
         }
     }
@@ -200,12 +209,12 @@ pub const MapCompile = struct {
         const t = self.build_time.read();
         switch (self.status) {
             .failed => {
-                edit.notify("Error building Map", .{}, 0xff0000ff) catch {};
+                edit.notify("Error building Map", .{}, 0xff0000ff);
             },
             .built => {
-                edit.notify("built {s} in {d} s", .{ self.map_name, t / std.time.ns_per_s }, 0x00ff00ff) catch {};
+                edit.notify("built {s} in {d} s", .{ self.map_name, t / std.time.ns_per_s }, 0x00ff00ff);
             },
-            .nothing => edit.notify("Something bad happend when building the map", .{}, 0xffff_00_ff) catch {},
+            .nothing => edit.notify("Something bad happend when building the map", .{}, 0xffff_00_ff),
         }
     }
 
@@ -281,9 +290,9 @@ pub const CompressAndSave = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
         defer self.destroy();
         switch (self.status) {
-            .nothing, .failed => edit.notify("Unable to compress map nothing written", .{}, 0xff0000ff) catch {},
+            .nothing, .failed => edit.notify("Unable to compress map nothing written", .{}, 0xff0000ff),
             .built => {
-                edit.notify("Compressed map", .{}, 0x00ff00ff) catch {};
+                edit.notify("Compressed map", .{}, 0x00ff00ff);
                 if (edit.getMapFullPath()) |full_path| {
                     edit.addRecentMap(full_path) catch |err| {
                         std.debug.print("Failed to write recent maps {t}\n", .{err});
@@ -436,8 +445,8 @@ pub const CheckVersionHttp = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
         defer self.destroy();
         if (self.new_version) |nv| {
-            edit.notify("New version available: {s}", .{nv}, 0x00ff00ff) catch {};
-            edit.notify("Current version: {s}", .{version.version}, 0xfca73fff) catch {};
+            edit.notify("New version available: {s}", .{nv}, 0x00ff00ff);
+            edit.notify("Current version: {s}", .{version.version}, 0xfca73fff);
         }
     }
 };

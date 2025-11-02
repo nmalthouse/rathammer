@@ -161,7 +161,7 @@ pub const UndoContext = struct {
         while (i > 0) : (i -= 1) {
             ar.items.items[i - 1].undo(editor);
         }
-        editor.notify("undo: {s}", .{ar.description}, 0xFF8C00ff) catch return;
+        editor.notify("undo: {s}", .{ar.description}, 0xFF8C00ff);
         self.markDelta();
     }
 
@@ -171,7 +171,7 @@ pub const UndoContext = struct {
 
         const th = self.stack.items[self.stack_pointer];
         applyRedo(th.items.items, editor);
-        editor.notify("redo: {s}", .{th.description}, 0x8FBC_8F_ff) catch return;
+        editor.notify("redo: {s}", .{th.description}, 0x8FBC_8F_ff);
         self.markDelta();
     }
 

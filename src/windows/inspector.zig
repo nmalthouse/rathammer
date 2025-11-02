@@ -230,7 +230,7 @@ pub const InspectorWindow = struct {
                         });
                     }
                     ustack.apply(self.editor);
-                    try self.editor.notify("ungrouped {d} objects", .{selection.len}, 0x00ff00ff);
+                    self.editor.notify("ungrouped {d} objects", .{selection.len}, 0x00ff00ff);
                 }
             },
         }
@@ -844,7 +844,7 @@ const IoWg = struct {
                         } else |_| {}
                     }
                 } else |err| {
-                    self.editor.notify("invalid io csv: {t}", .{err}, color.bad) catch {};
+                    self.editor.notify("invalid io csv: {t}", .{err}, color.bad);
                 }
             },
             else => {},

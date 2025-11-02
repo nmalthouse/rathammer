@@ -94,14 +94,18 @@ pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
 pub fn trySave(ed: *Ed) !void {
     if (ed.loaded_map_name) |basename| {
         ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
-            try ed.notify("Failed saving map: {t}", .{err}, colors.bad);
+            ed.notify("Failed saving map: {t}", .{err}, colors.bad);
         };
     } else {
         try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);
     }
 }
 
-pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
+//TODO this is a quick and dirty implementation.
+//Remove duplicate v and vt lines
+//Write displacements
+pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
+    const full_name = try std.fs.path.join(ed.frame_arena.allocator(), &.{ path, name });
     const header =
         \\# Obj exported from rathammer {[version]s}
         \\# map_name {[map_name]s}
@@ -110,7 +114,7 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
         \\
     ;
     var write_buf: [4096]u8 = undefined;
-    var output = try dir.createFile(path, .{});
+    var output = try std.fs.cwd().createFile(full_name, .{});
     defer output.close();
     var writer = output.writer(&write_buf);
     const wr = &writer.interface;
@@ -130,7 +134,10 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
         if (ent.isSet(@intFromEnum(ecs.EcsT.Components.deleted)))
             continue;
 
-        if (try ed.ecs.getOptPtr(@intCast(id), .solid)) |solid| {
+        if (try ed.ecs.getOptPtr(@intCast(id), .displacements)) |disps| { //disp has higher priority, so dispsolid is omitted
+            //TODO write the disp
+            _ = disps;
+        } else if (try ed.ecs.getOptPtr(@intCast(id), .solid)) |solid| {
             try wr.print("o solid_{d}\n", .{id});
             const v_offset = vi;
             for (solid.verts.items) |item| {
@@ -143,6 +150,7 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
                     if (try ed.vpkctx.resolveId(.{ .id = side.tex_id }, false)) |tex| {
                         try wr.print("usemtl {s}\n", .{tex.name});
                     } else {
+                        //Fallback
                         try wr.print("usemtl {s}\n", .{side.material});
                     }
                 }
@@ -169,6 +177,7 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
     }
 
     try wr.flush();
+    ed.notify("Exported obj {s}/{s}", .{ path, name }, colors.good);
 }
 
 pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
@@ -185,7 +194,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
         lm,
         .{ .check_solid = false },
     )) {
-        try ed.notify("Exported map to vmf", .{}, colors.good);
+        ed.notify("Exported map to vmf", .{}, colors.good);
 
         try async_util.MapCompile.spawn(ed.alloc, &ed.async_asset_load, .{
             .vmf = lm,
@@ -200,7 +209,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
             .user_cmd = ed.game_conf.mapbuilder.user_build_cmd,
         }, if (do_user_script) .user_script else .builtin);
     } else |err| {
-        try ed.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
+        ed.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
     }
 }
 
@@ -234,7 +243,7 @@ pub fn groupSelection(ed: *Ed) !void {
     const last_owner = ed.groups.getOwner(ed.selection.list.getGroup(last) orelse return) orelse null;
 
     if (owner_count > 1)
-        try ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
+        ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
 
     const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
     const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
@@ -270,7 +279,7 @@ pub fn groupSelection(ed: *Ed) !void {
         });
     }
     ustack.apply(ed);
-    try ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
+    ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
 }
 
 const pgen = @import("primitive_gen.zig");
