@@ -32,6 +32,7 @@ const MenuBtn = enum(guis.Uid) {
     draw_sprite,
     draw_mod,
     draw_debug,
+    export_obj,
     todo,
     _,
 };
@@ -165,7 +166,9 @@ pub const MenuBar = struct {
             },
             .build_map => action.buildMap(self.ed, false) catch {},
             .build_map_user => action.buildMap(self.ed, true) catch {},
-
+            .export_obj => {
+                action.exportToObj(self.ed, std.fs.cwd(), "dump.obj") catch {};
+            },
             else => self.ed.notify("TODO. item not implemented", .{}, colors.bad) catch {},
         }
     }
@@ -199,6 +202,7 @@ pub const MenuBar = struct {
                     //.{ btn_id(.import_map), "import-map", .btn },
                     .{ btn_id(.build_map), "build", .btn },
                     .{ btn_id(.build_map_user), "build-user", .btn },
+                    .{ btn_id(.export_obj), "export-obj", .btn },
                     .{ btn_id(.quit), "quit", .btn },
                 });
             },

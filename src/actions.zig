@@ -101,6 +101,66 @@ pub fn trySave(ed: *Ed) !void {
     }
 }
 
+pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
+    const header =
+        \\# Obj exported from rathammer
+        \\# map_name {[map_name]s}
+        \\# map_version {[map_version]d}
+        \\# map_uuid {[uuid]x}
+        \\
+    ;
+    var write_buf: [4096]u8 = undefined;
+    var output = try dir.createFile(path, .{});
+    defer output.close();
+    var writer = output.writer(&write_buf);
+    const wr = &writer.interface;
+
+    try wr.print(header, .{
+        .map_name = ed.loaded_map_name orelse "unnamed",
+        .map_version = ed.edit_state.map_version,
+        .uuid = ed.edit_state.map_uuid,
+    });
+
+    var vi: usize = 1;
+    var vt_i: usize = 1;
+    for (ed.ecs.entities.items, 0..) |ent, id| {
+        if (ent.isSet(ecs.EcsT.Types.tombstone_bit))
+            continue;
+        if (ent.isSet(@intFromEnum(ecs.EcsT.Components.deleted)))
+            continue;
+
+        if (try ed.ecs.getOptPtr(@intCast(id), .solid)) |solid| {
+            try wr.print("o [{d}]\n", .{id});
+            const v_offset = vi;
+            for (solid.verts.items) |item| {
+                vi += 1;
+                try wr.print("v {d} {d} {d}\n", .{ item.x(), item.y(), item.z() });
+            }
+            for (solid.sides.items) |side| {
+                const tw: f32 = @floatFromInt(side.tw);
+                const th: f32 = @floatFromInt(side.th);
+                const vt_offset = vt_i;
+                vt_i += side.index.items.len;
+                for (side.index.items) |index| {
+                    const upos = solid.verts.items[index];
+
+                    const u = @as(f32, @floatCast(upos.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw));
+                    const v = @as(f32, @floatCast(upos.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th));
+                    try wr.print("vt {d} {d} \n", .{ u, v });
+                }
+
+                try wr.writeByte('f');
+                for (side.index.items, 0..) |index, i| {
+                    try wr.print(" {d}/{d}", .{ index + v_offset, vt_offset + i });
+                }
+                try wr.writeByte('\n');
+            }
+        }
+    }
+
+    try wr.flush();
+}
+
 pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
     const jsontovmf = @import("jsonToVmf.zig").jsontovmf;
     const lm = try ed.printArena("{s}.vmf", .{ed.loaded_map_name orelse "dump"});
