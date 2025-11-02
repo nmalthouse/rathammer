@@ -103,7 +103,7 @@ pub fn trySave(ed: *Ed) !void {
 
 pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
     const header =
-        \\# Obj exported from rathammer
+        \\# Obj exported from rathammer {[version]s}
         \\# map_name {[map_name]s}
         \\# map_version {[map_version]d}
         \\# map_uuid {[uuid]x}
@@ -116,6 +116,7 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
     const wr = &writer.interface;
 
     try wr.print(header, .{
+        .version = @import("version.zig").version_string,
         .map_name = ed.loaded_map_name orelse "unnamed",
         .map_version = ed.edit_state.map_version,
         .uuid = ed.edit_state.map_uuid,
@@ -130,13 +131,22 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
             continue;
 
         if (try ed.ecs.getOptPtr(@intCast(id), .solid)) |solid| {
-            try wr.print("o [{d}]\n", .{id});
+            try wr.print("o solid_{d}\n", .{id});
             const v_offset = vi;
             for (solid.verts.items) |item| {
                 vi += 1;
                 try wr.print("v {d} {d} {d}\n", .{ item.x(), item.y(), item.z() });
             }
             for (solid.sides.items) |side| {
+                { //face
+
+                    if (try ed.vpkctx.resolveId(.{ .id = side.tex_id }, false)) |tex| {
+                        try wr.print("usemtl {s}\n", .{tex.name});
+                    } else {
+                        try wr.print("usemtl {s}\n", .{side.material});
+                    }
+                }
+
                 const tw: f32 = @floatFromInt(side.tw);
                 const th: f32 = @floatFromInt(side.th);
                 const vt_offset = vt_i;
@@ -146,7 +156,7 @@ pub fn exportToObj(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
 
                     const u = @as(f32, @floatCast(upos.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw));
                     const v = @as(f32, @floatCast(upos.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th));
-                    try wr.print("vt {d} {d} \n", .{ u, v });
+                    try wr.print("vt {d} {d} \n", .{ @mod(u, 1.0), @mod(v, 1.0) });
                 }
 
                 try wr.writeByte('f');
