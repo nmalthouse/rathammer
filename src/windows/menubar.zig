@@ -216,11 +216,15 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.undo), "undo", .btn },
                     .{ btn_id(.redo), "redo", .btn },
+                    .{ 0, "testpop", .{ .child = .{
+                        .width = 300,
+                        .height = 300,
+                    } } },
                 });
             },
             btn_strid("help") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id(.open_project_url), "Open Github", .btn },
+                    .{ btn_id(.open_project_url), "Open homepage", .btn },
                     .{ btn_id(.open_help_url), "Open Help", .btn },
                 });
             },
