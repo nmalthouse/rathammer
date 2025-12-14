@@ -25,6 +25,7 @@ const IoBtn = enum(usize) {
     _,
 };
 
+// DJ smokey recommends you read this source file from start to finish. Thank you for not skipping.
 pub const InspectorWindow = struct {
     pub const tabs = [_][]const u8{ "props", "io", "tool", "layer" };
     const Self = @This();
@@ -561,6 +562,8 @@ pub const InspectorWindow = struct {
                 value,
             ) catch return }) catch return;
             ustack.apply(self.editor);
+        } else {
+            std.debug.print("Failed to setKvString for field_id {d} with value {s}\n", .{ field_id, value });
         }
     }
 
@@ -661,11 +664,10 @@ pub const InspectorWindow = struct {
             fn commit(vtt: *CbHandle, id: usize, lam: @This()) void {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
-                const fields = lself.editor.fgd_ctx.classSlice();
-                const f = fields[lam.fgd_class_index];
-                const fie = f.field_data.items[lam.fgd_field_index];
+                const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
+                const fie = class.field_data.items[lam.fgd_field_index];
 
-                lself.setKvStr(lam.fgd_field_index, fie.type.choices.items[id][0]);
+                lself.setKvStr(lself.getId(fie.name), fie.type.choices.items[id][0]);
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) []const u8 {
