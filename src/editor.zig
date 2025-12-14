@@ -50,9 +50,9 @@ const action = @import("actions.zig");
 const rpc = @import("rpc/server.zig");
 
 const async_util = @import("async.zig");
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 const pointfile = @import("pointfile.zig");
-const def_render = @import("def_render.zig");
+const def_render = graph.def_render;
 
 const MAPFMT = " {s}{s} - RatHammer";
 var WINDOW_TITLE_BUFFER: [256]u8 = undefined;
@@ -316,7 +316,7 @@ pub const Context = struct {
     ) !*Self {
         app.EventCtx.SdlEventId = try win_ptr.addUserEventCb(app.EventCtx.graph_event_cb);
         shell.RpcEventId = try win_ptr.addUserEventCb(shell.rpc_cb);
-        const shader_dir = try dirs.app_cwd.dir.openDir("ratasset/shader", .{});
+        const shader_dir = try dirs.app_cwd.dir.openDir("ratgraph/asset/shader", .{});
         var ret = try alloc.create(Context);
         ret.* = .{
             //These are initilized in editor.postInit

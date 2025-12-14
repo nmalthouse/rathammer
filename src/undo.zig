@@ -6,7 +6,7 @@ const graph = @import("graph");
 const vpk = @import("vpk.zig");
 const Vec3 = graph.za.Vec3;
 const ecs = @import("ecs.zig");
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 const Lay = @import("layer.zig");
 const LayerId = Lay.Id;
 

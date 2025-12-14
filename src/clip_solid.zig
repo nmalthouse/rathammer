@@ -6,7 +6,7 @@ const csg = @import("csg.zig");
 const Vec3 = graph.za.Vec3;
 const Side = ecs.Side;
 const vpk = @import("vpk.zig");
-const util_3d = @import("util_3d.zig");
+const util_3d = graph.util_3d;
 //
 // planes intersect if n1 cross n2 != 0
 

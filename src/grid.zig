@@ -3,7 +3,7 @@ const graph = @import("graph");
 const Vec3 = graph.za.Vec3;
 const limits = @import("limits.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 //Get on the grid
 
 pub const Snap = struct {

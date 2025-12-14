@@ -1,5 +1,5 @@
 const tools = @import("../tools.zig");
-const util3d = @import("../util_3d.zig");
+const util3d = graph.util_3d;
 const edit = @import("../editor.zig");
 const Editor = edit.Context;
 const std = @import("std");

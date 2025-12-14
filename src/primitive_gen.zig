@@ -2,7 +2,7 @@ const std = @import("std");
 const graph = @import("graph");
 const _Vec = struct { x: f32, y: f32, z: f32 };
 const Vec3 = graph.za.Vec3;
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 const gridutil = @import("grid.zig");
 
 //Ideally we use the same functions to generate the solids and immediate draw.

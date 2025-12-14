@@ -1,7 +1,7 @@
 const std = @import("std");
 const graph = @import("graph");
 const Vec3 = graph.za.Vec3;
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 const BtnState = graph.SDL.ButtonState;
 const Editor = @import("editor.zig").Context;
 

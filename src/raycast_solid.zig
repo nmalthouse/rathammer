@@ -1,5 +1,5 @@
 const std = @import("std");
-const util3d = @import("util_3d.zig");
+const util3d = graph.util_3d;
 const graph = @import("graph");
 const edit = @import("editor.zig");
 const Vec3 = graph.za.Vec3;
