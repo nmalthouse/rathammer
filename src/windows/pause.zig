@@ -379,7 +379,7 @@ pub const PauseWindow = struct {
         const str = self.editor.storeString(string) catch return;
         switch (@as(Textboxes, @enumFromInt(id))) {
             .set_skyname => {
-                self.editor.skybox.loadSky(str, &self.editor.vpkctx) catch return;
+                self.editor.loadSkybox(str) catch return;
             },
             .set_import_visgroup => {
                 self.editor.hacky_extra_vmf.override_vis_group = str;

@@ -18,7 +18,6 @@ const gameinfo = @import("gameinfo.zig");
 const profile = @import("profile.zig");
 const Gui = graph.Gui;
 const StringStorage = @import("string.zig").StringStorage;
-const Skybox = @import("skybox.zig").Skybox;
 const Gizmo = @import("gizmo.zig").Gizmo;
 const raycast = @import("raycast_solid.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
@@ -128,8 +127,6 @@ pub const Context = struct {
     textures: std.AutoHashMap(vpk.VpkResId, graph.Texture),
     models: std.AutoHashMap(vpk.VpkResId, Model),
 
-    skybox: Skybox,
-
     /// Draw colored text messages to the screen for a short time
     notifier: NotifyCtx,
 
@@ -161,6 +158,7 @@ pub const Context = struct {
     has_loaded_map: bool = false,
 
     draw_state: struct {
+        skybox_textures: ?[6]graph.glID = null,
         frame_time_ms: f32 = 16,
         init_asset_count: usize = 0, //Used to indicate we are loading things
 
@@ -262,6 +260,9 @@ pub const Context = struct {
     /// This is always relative to cwd
     loaded_map_path: ?[]const u8 = null,
 
+    /// static string
+    loaded_skybox_name: []const u8 = "",
+
     last_exported_obj_name: ?[]const u8 = null,
     last_exported_obj_path: ?[]const u8 = null,
 
@@ -356,7 +357,6 @@ pub const Context = struct {
             .models = std.AutoHashMap(vpk.VpkResId, Model).init(alloc),
             .async_asset_load = try thread_pool.Context.init(alloc, num_threads),
             .textures = std.AutoHashMap(vpk.VpkResId, graph.Texture).init(alloc),
-            .skybox = try Skybox.init(alloc, shader_dir),
             .tool_res_map = std.AutoHashMap(vpk.VpkResId, void).init(alloc),
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
@@ -467,7 +467,6 @@ pub const Context = struct {
         self.csgctx.deinit();
         self.clipctx.deinit();
         self.vpkctx.deinit();
-        self.skybox.deinit();
         self.frame_arena.deinit();
         self.groups.deinit();
         self.renderer.deinit();
@@ -796,7 +795,7 @@ pub const Context = struct {
             }
 
             try jwr.objectField("sky_name");
-            try jwr.write(self.skybox.sky_name);
+            try jwr.write(self.loaded_skybox_name);
             try jwr.objectField("objects");
             try jwr.beginArray();
             {
@@ -1078,7 +1077,7 @@ pub const Context = struct {
 
     pub fn initNewMap(self: *Self, sky_name: []const u8) !void {
         if (sky_name.len > 0)
-            try self.skybox.loadSky(try self.storeString(sky_name), &self.vpkctx);
+            try self.loadSkybox(sky_name);
         self.has_loaded_map = true;
     }
 
@@ -1180,7 +1179,7 @@ pub const Context = struct {
 
         if (!self.has_loaded_map) {
             try self.setMapName(filename);
-            try self.skybox.loadSky(try self.storeString(parsed.value.sky_name), &self.vpkctx);
+            try self.loadSkybox(parsed.value.sky_name);
             parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
             self.edit_state.map_version = parsed.value.editor.map_version;
             self.edit_state.map_uuid = parsed.value.editor.uuid;
@@ -1229,7 +1228,7 @@ pub const Context = struct {
 
         if (!self.has_loaded_map) {
             try self.setMapName(filename);
-            try self.skybox.loadSky(try self.storeString(vmf_.world.skyname), &self.vpkctx);
+            try self.loadSkybox(vmf_.world.skyname);
         }
         {
             loadctx.addExpected(vmf_.world.solid.len + vmf_.entity.len + 10);
@@ -1491,6 +1490,24 @@ pub const Context = struct {
         self.notifier.submitNotify(fmt, args, color) catch {
             std.debug.print("NOTIFY FAILED\n", .{});
         };
+    }
+
+    pub fn loadSkybox(self: *Self, sky_name: []const u8) !void {
+        const name = try self.storeString(sky_name);
+        self.loaded_skybox_name = name;
+        self.draw_state.skybox_textures = [_]graph.glID{0} ** 6;
+        const txt = &(self.draw_state.skybox_textures.?);
+        for (def_render.Skybox_name_endings, 0..) |end, i| {
+            const vtf_buf = try self.vpkctx.getFileTempFmt("vtf", "materials/skybox/{s}{s}", .{ name, end }, true) orelse {
+                std.debug.print("Cant find sky {s}{s}\n", .{ name, end });
+                continue;
+            };
+            const tex = vtf.loadTexture(vtf_buf, self.alloc) catch |err| {
+                std.debug.print("Had an oopis {t}\n", .{err});
+                continue;
+            };
+            txt[i] = tex.id;
+        }
     }
 
     pub fn update(self: *Self, win: *graph.SDL.Window) !void {

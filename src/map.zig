@@ -10,6 +10,9 @@ pub const Map = struct {
     ecs: EcsT,
     groups: ecs.Groups,
 
+    /// Stores all the mesh data for solids.
+    meshmap: ecs.MeshMap,
+
     /// Stores undo state, most changes to world state (ecs) should be done through a undo vtable
     undoctx: undo.UndoContext,
 
@@ -60,6 +63,45 @@ pub const Map = struct {
 
     last_exported_obj_name: ?[]const u8 = null,
     last_exported_obj_path: ?[]const u8 = null,
+
+    alloc: std.mem.Allocator,
+
+    pub fn init(alloc: std.mem.Allocator, config: Conf.Config) !Map {
+        return .{
+            .classtrack = .init(alloc),
+            .targetname_track = .init(alloc),
+            .notifier = NotifyCtx.init(alloc, 4000),
+            .autosaver = try Autosaver.init(config.autosave.interval_min * std.time.ms_per_min, config.autosave.max, config.autosave.enable, alloc),
+            .selection = Selection.init(alloc),
+            .groups = ecs.Groups.init(alloc),
+            .undoctx = undo.UndoContext.init(alloc),
+            .autovis = autovis.VisContext.init(alloc),
+            .layers = try Layer.Context.init(alloc),
+            .meshmap = ecs.MeshMap.init(alloc),
+            .ecs = try EcsT.init(alloc),
+            .skybox = try Skybox.init(alloc, shader_dir),
+        };
+    }
+
+    pub fn deinit(self: *Map) void {
+        self.classtrack.deinit();
+        self.targetname_track.deinit();
+        self.autovis.deinit();
+        self.layers.deinit();
+        self.undoctx.deinit();
+        self.ecs.deinit();
+        self.notifier.deinit();
+        self.selection.deinit();
+        self.skybox.deinit();
+        self.groups.deinit();
+
+        var it = self.meshmap.iterator();
+        while (it.next()) |item| {
+            item.value_ptr.*.deinit();
+            self.alloc.destroy(item.value_ptr.*);
+        }
+        self.meshmap.deinit();
+    }
 };
 
 const Autosaver = @import("autosave.zig").Autosaver;
@@ -77,3 +119,4 @@ const ButtonState = graph.SDL.ButtonState;
 const vpk = @import("vpk.zig");
 const grid_stuff = @import("grid.zig");
 const Vec3 = graph.za.Vec3;
+const Conf = @import("config.zig");

@@ -188,7 +188,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
     if (jsontovmf(
         build_arena.allocator(),
         &ed.ecs,
-        ed.skybox.sky_name,
+        ed.loaded_skybox_name,
         &ed.vpkctx,
         &ed.groups,
         lm,

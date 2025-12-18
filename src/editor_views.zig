@@ -397,22 +397,9 @@ pub fn draw3Dview(
         }
         try vt.runTool_fn(vt, td, self);
     }
-    if (self.draw_state.tog.skybox) { //sky stuff
-        const c = graph.c;
-        c.glDisable(c.GL_BLEND);
-        c.glDepthMask(c.GL_FALSE);
-        c.glDepthFunc(c.GL_LEQUAL);
-        defer c.glDepthFunc(c.GL_LESS);
-        defer c.glDepthMask(c.GL_TRUE);
 
-        const c3d = self.draw_state.cam3d;
-        const za = graph.za;
-        const la = za.lookAt(Vec3.zero(), c3d.front, c3d.getUp());
-        const perp = za.perspective(c3d.fov, screen_area.w / screen_area.h, 0, 1);
-
-        for (self.skybox.meshes.items, 0..) |*sk, i| {
-            sk.draw(.{ .texture = self.skybox.textures.items[i].id, .shader = self.skybox.shader }, perp.mul(la), graph.za.Mat4.identity());
-        }
+    if (self.draw_state.skybox_textures) |txt| {
+        self.renderer.drawSkybox(self.draw_state.cam3d, screen_area, txt);
     }
     if (self.draw_state.pointfile) |pf| {
         const sl = pf.verts.items;
