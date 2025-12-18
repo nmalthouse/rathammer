@@ -1,7 +1,6 @@
 const std = @import("std");
 const edit = @import("editor.zig");
 const Editor = edit.Context;
-const Id = edit.EcsT.Id;
 const graph = @import("graph");
 const vpk = @import("vpk.zig");
 const Vec3 = graph.za.Vec3;
@@ -9,6 +8,12 @@ const ecs = @import("ecs.zig");
 const util3d = graph.util_3d;
 const Lay = @import("layer.zig");
 const LayerId = Lay.Id;
+const EntId = edit.EcsT.Id;
+
+pub const UndoId = enum(u64) {
+    none,
+    _,
+};
 
 //Stack based undo,
 //we push operations onto the stack.
@@ -25,6 +30,14 @@ const LayerId = Lay.Id;
 //
 //  each undo item is given unique id
 // function findPreviousDependant
+
+//How dependency tracking works.
+//
+// Every undo item we push onto the stack can optionally depend on a previous undo item.
+// Layer creation and manipulation is omitted from this dependency tracking as otherwise all undo items will depend on the layer creation.
+//
+// The vtable fn depId() returns the entity id which an undo item depends on.
+//
 
 pub const UndoGroup = struct {
     description: []const u8,
@@ -50,26 +63,28 @@ pub const GroupBuilder = struct {
         var complete = UndoAmal{
             .d = item,
             .undo_id = self.ctx.getId(),
-            .dep = 0,
+            .dep = .none,
         };
         //If slowdowns become an issue (n^2), stick dep_id in a hash_map
-        if (complete.depId()) |dep_id| {
-            // search through undo stack for one with matching id
-            var found: u64 = 0; //0 indicates no dep
+        if (complete.depId()) |dep_ent_id| {
+            try self.ctx.updateDependantList(dep_ent_id, &complete);
 
-            var i: usize = self.ctx.stack.items.len;
-            outer: while (i > 0) : (i -= 1) {
-                const g = self.ctx.stack.items[i - 1];
-                for (g.items.items) |substack| {
-                    if (substack.depId()) |did| {
-                        if (did == dep_id) {
-                            found = substack.undo_id;
-                            break :outer;
-                        }
-                    }
-                }
-            }
-            complete.dep = found;
+            //// search through undo stack for one with matching id
+            //var found: UndoId = .none;
+
+            //var i: usize = self.ctx.stack.items.len;
+            //outer: while (i > 0) : (i -= 1) {
+            //    const g = self.ctx.stack.items[i - 1];
+            //    for (g.items.items) |substack| {
+            //        if (substack.depId()) |did| {
+            //            if (did == dep_id) {
+            //                found = substack.undo_id;
+            //                break :outer;
+            //            }
+            //        }
+            //    }
+            //}
+            //complete.dep = found;
         }
 
         try self.items.append(self.ctx.alloc, complete);
@@ -89,6 +104,12 @@ pub const PushOpts = struct {
 pub const UndoContext = struct {
     const Self = @This();
 
+    /// maps entity ids to the last undo item pushed which depends on that entity.
+    /// Care must be taken when adding or removing undo items to update this map.
+    /// makes creation of undo items O(1) instead of O(n)
+    last_dependant_map: std.AutoHashMapUnmanaged(EntId, UndoId),
+    last_dependant_map_inv: std.AutoHashMapUnmanaged(UndoId, EntId),
+
     stack: std.ArrayList(UndoGroup),
     stack_pointer: usize,
 
@@ -101,15 +122,26 @@ pub const UndoContext = struct {
 
     pub fn init(alloc: std.mem.Allocator) Self {
         return .{
+            .last_dependant_map = .{},
+            .last_dependant_map_inv = .{},
             .stack_pointer = 0,
             .stack = .{},
             .alloc = alloc,
         };
     }
 
-    fn getId(self: *Self) u64 {
+    pub fn deinit(self: *Self) void {
+        for (self.stack.items) |*item| {
+            item.deinit(self.alloc);
+        }
+        self.stack.deinit(self.alloc);
+        self.last_dependant_map.deinit(self.alloc);
+        self.last_dependant_map_inv.deinit(self.alloc);
+    }
+
+    fn getId(self: *Self) UndoId {
         self.item_counter += 1;
-        return self.item_counter;
+        return @enumFromInt(self.item_counter);
     }
 
     pub fn markDelta(self: *Self) void {
@@ -137,8 +169,17 @@ pub const UndoContext = struct {
         if (self.stack_pointer > self.stack.items.len)
             self.stack_pointer = self.stack.items.len; // Sanity
 
-        for (self.stack.items[self.stack_pointer..]) |*item| {
-            item.deinit(self.alloc);
+        {
+            // we must deinit in reverse as there may be internal dependencies.
+            var i: usize = self.stack.items.len;
+            while (i > self.stack_pointer) : (i -= 1) {
+                const item = &self.stack.items[i - 1];
+                var j: usize = item.items.items.len;
+                while (j > 0) : (j -= 1) {
+                    try self.removeItemFromDependantList(&item.items.items[j - 1]);
+                }
+                item.deinit(self.alloc);
+            }
         }
         try self.stack.resize(self.alloc, self.stack_pointer); //Discard any
         self.stack_pointer += 1;
@@ -175,15 +216,33 @@ pub const UndoContext = struct {
         self.markDelta();
     }
 
-    pub fn deinit(self: *Self) void {
-        for (self.stack.items) |*item| {
-            item.deinit(self.alloc);
-        }
-        self.stack.deinit(self.alloc);
-    }
-
     pub fn writeToJson(self: *Self, writer: anytype) !void {
         try std.json.stringify(self.stack.items, .{}, writer);
+    }
+
+    fn updateDependantList(self: *Self, ent_id: EntId, undo_item: *UndoAmal) !void {
+        const res = try self.last_dependant_map.getOrPut(self.alloc, ent_id);
+        if (res.found_existing) {
+            undo_item.dep = res.value_ptr.*; //Build the linked list
+        }
+
+        res.value_ptr.* = undo_item.undo_id;
+        try self.last_dependant_map_inv.put(self.alloc, undo_item.undo_id, ent_id);
+    }
+
+    fn removeItemFromDependantList(self: *Self, undo_item: *UndoAmal) !void {
+        if (self.last_dependant_map_inv.get(undo_item.undo_id)) |ent_id| {
+            const prev_item = undo_item.dep;
+            if (prev_item == .none) { //This is the creation/initial item
+                _ = self.last_dependant_map_inv.remove(undo_item.undo_id);
+                _ = self.last_dependant_map.remove(ent_id);
+            } else {
+                try self.last_dependant_map.put(self.alloc, ent_id, prev_item);
+                try self.last_dependant_map_inv.put(self.alloc, prev_item, ent_id);
+            }
+        } else {
+            std.debug.print("warning, removing undo with no entity dependant\n", .{});
+        }
     }
 };
 ///Rather than manually applying the operations when pushing a undo item,
@@ -224,7 +283,7 @@ pub const SelectionUndo = struct {
         alloc.destroy(self);
     }
 
-    pub fn depId(_: *const @This()) ?Id {
+    pub fn depId(_: *const @This()) ?EntId {
         return null;
     }
 };
@@ -235,13 +294,13 @@ pub const UndoTranslate = struct {
     vec: Vec3,
     angle_delta: ?Vec3,
     rot_origin: Vec3,
-    id: Id,
+    id: EntId,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: Id, rot_origin: Vec3) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: EntId, rot_origin: Vec3) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .vec = vec,
@@ -260,7 +319,7 @@ pub const UndoTranslate = struct {
         applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, 1);
     }
 
-    pub fn applyTransRot(editor: *Editor, id: Id, trans: Vec3, angle_delta: ?Vec3, origin: Vec3, scale: f32) void {
+    pub fn applyTransRot(editor: *Editor, id: EntId, trans: Vec3, angle_delta: ?Vec3, origin: Vec3, scale: f32) void {
         const quat = if (angle_delta) |ad| util3d.extEulerToQuat(ad.scale(scale)) else null;
         if (editor.ecs.getOptPtr(id, .solid) catch return) |solid| {
             solid.translate(id, trans.scale(scale), editor, origin, quat) catch return;
@@ -292,16 +351,16 @@ pub const UndoTranslate = struct {
 };
 
 pub const UndoVertexTranslate = struct {
-    id: Id,
+    id: EntId,
     offset: Vec3,
     vert_indicies: []const u32,
     many: ?[]const Vec3,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
     //If many is set, it should be parallel to vert_index slice and offset applies globally
-    pub fn create(alloc: std.mem.Allocator, id: Id, offset: Vec3, vert_index: []const u32, many: ?[]const Vec3) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, offset: Vec3, vert_index: []const u32, many: ?[]const Vec3) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
@@ -333,14 +392,14 @@ pub const UndoVertexTranslate = struct {
 
 //TODO deprecate, use UndoVertexTranslate
 pub const UndoSolidFaceTranslate = struct {
-    id: Id,
+    id: EntId,
     side_id: usize,
     offset: Vec3,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
-    pub fn create(alloc: std.mem.Allocator, id: Id, side_id: usize, offset: Vec3) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, side_id: usize, offset: Vec3) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
@@ -372,15 +431,15 @@ pub const UndoSolidFaceTranslate = struct {
 pub const UndoCreateDestroy = struct {
     pub const Kind = enum { create, destroy };
 
-    id: Id,
+    id: EntId,
     /// are we undoing a creation, or a destruction
     kind: Kind,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         if (self.kind == .create) return null;
         return self.id;
     }
-    pub fn create(alloc: std.mem.Allocator, id: Id, kind: Kind) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, kind: Kind) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
@@ -437,16 +496,16 @@ pub const UndoTextureManip = struct {
         }
     };
 
-    id: Id,
+    id: EntId,
     face_id: u32,
     old: State,
     new: State,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, old: State, new: State, id: Id, face_id: u32) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, old: State, new: State, id: EntId, face_id: u32) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .old = old,
@@ -490,13 +549,13 @@ pub const UndoChangeGroup = struct {
 
     old: GroupId,
     new: GroupId,
-    id: Id,
+    id: EntId,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, old: GroupId, new: GroupId, id: Id) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, old: GroupId, new: GroupId, id: EntId) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .old = old,
@@ -510,7 +569,7 @@ pub const UndoChangeGroup = struct {
         setGroup(editor, self.id, self.old) catch return;
     }
 
-    fn setGroup(editor: *Editor, id: Id, new_group: GroupId) !void {
+    fn setGroup(editor: *Editor, id: EntId, new_group: GroupId) !void {
         if (try editor.ecs.getOptPtr(id, .group)) |group| {
             group.id = new_group;
         } else {
@@ -534,13 +593,13 @@ pub const UndoSetKeyValue = struct {
     old_value: []const u8, //Both allocated
     new_value: []const u8,
 
-    ent_id: Id,
+    ent_id: EntId,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.ent_id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, new_value: []const u8) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, key: []const u8, old_value: []const u8, new_value: []const u8) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .key = key,
@@ -551,7 +610,7 @@ pub const UndoSetKeyValue = struct {
         return obj;
     }
 
-    pub fn createFloats(alloc: std.mem.Allocator, id: Id, key: []const u8, old_value: []const u8, comptime count: usize, floats: [count]f32) !*@This() {
+    pub fn createFloats(alloc: std.mem.Allocator, id: EntId, key: []const u8, old_value: []const u8, comptime count: usize, floats: [count]f32) !*@This() {
         var printer = std.ArrayList(u8){};
         defer printer.deinit(alloc);
         for (floats, 0..) |f, i| {
@@ -579,16 +638,16 @@ pub const UndoSetKeyValue = struct {
 };
 
 pub const UndoDisplacmentModify = struct {
-    id: Id,
+    id: EntId,
     disp_id: u32,
     offset_offset: []const Vec3, //Added to disp.offsets on redo. Subtracted on undo
     offset_index: []const u32, //parallel to offset_offset indexes into disp.offset
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, disp_id: u32, offset: []const Vec3, index: []const u32) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, disp_id: u32, offset: []const Vec3, index: []const u32) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .offset_offset = try alloc.dupe(Vec3, offset),
@@ -629,15 +688,15 @@ pub const UndoDisplacmentModify = struct {
 };
 
 pub const UndoSetLayer = struct {
-    id: Id,
+    id: EntId,
     old: LayerId,
     new: LayerId,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, old: LayerId, new: LayerId) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, old: LayerId, new: LayerId) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
@@ -647,7 +706,7 @@ pub const UndoSetLayer = struct {
         return obj;
     }
 
-    fn set(editor: *Editor, id: Id, lay: LayerId) void {
+    fn set(editor: *Editor, id: EntId, lay: LayerId) void {
         const ent = editor.ecs.getEntity(id) catch return;
         if (!ent.isSet(@intFromEnum(ecs.EcsT.Components.layer))) {
             editor.ecs.attach(id, .layer, .{ .id = lay }) catch {};
@@ -681,7 +740,7 @@ pub const UndoAttachLayer = struct {
     parent: LayerId,
     child_index: usize,
 
-    pub fn depId(_: *const @This()) ?Id {
+    pub fn depId(_: *const @This()) ?EntId {
         return null;
     }
 
@@ -739,16 +798,16 @@ pub const UndoAttachLayer = struct {
 };
 
 pub const UndoSetClass = struct {
-    id: Id,
+    id: EntId,
 
     old_class: []const u8,
     new_class: []const u8,
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, id: Id, old: []const u8, new: []const u8) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, old: []const u8, new: []const u8) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
@@ -789,11 +848,11 @@ pub const UndoConnectDelta = struct {
     };
 
     delta: Delta,
-    id: Id,
+    id: EntId,
     index: usize,
 
     /// delta memory is duped
-    pub fn create(alloc: std.mem.Allocator, delta: Delta, id: Id, index: usize) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, delta: Delta, id: EntId, index: usize) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .delta = switch (delta) {
@@ -807,7 +866,7 @@ pub const UndoConnectDelta = struct {
         return obj;
     }
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
@@ -854,7 +913,7 @@ pub const UndoConnectDelta = struct {
 pub const UndoConnectionManip = struct {
     old: ?ecs.Connection,
     new: ?ecs.Connection,
-    id: Id,
+    id: EntId,
     index: usize,
 
     /// takes ownership of passed in Connection's, be sure to dupe any currently living
@@ -864,7 +923,7 @@ pub const UndoConnectionManip = struct {
         return obj;
     }
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
@@ -876,7 +935,7 @@ pub const UndoConnectionManip = struct {
         undoArgs(self.new, self.old, self.index, self.id, editor) catch {};
     }
 
-    fn undoArgs(old: ?ecs.Connection, new: ?ecs.Connection, index: usize, id: Id, ed: *Editor) !void {
+    fn undoArgs(old: ?ecs.Connection, new: ?ecs.Connection, index: usize, id: EntId, ed: *Editor) !void {
         if (try ed.ecs.getOptPtr(id, .connections)) |cons| {
             if (old) |*old_| {
                 // we can't insert past end of list, it would create uninit items
@@ -915,7 +974,7 @@ pub const UndoTemplate = struct {
         return obj;
     }
 
-    pub fn depId(self: *const @This()) ?Id {
+    pub fn depId(self: *const @This()) ?EntId {
         _ = self;
         return null;
     }
@@ -991,8 +1050,10 @@ pub const UndoAmal = struct {
     const Self = @This();
 
     d: tt.UnionT,
-    undo_id: u64,
-    dep: u64 = 0, // The id of the first undo item this depends on
+    undo_id: UndoId,
+    /// The id of the most recent undo item this depends on
+    /// forms a singly linked list
+    dep: UndoId = .none,
 
     pub fn deinit(self: *const Self, alloc: std.mem.Allocator) void {
         switch (self.d) {
@@ -1012,7 +1073,7 @@ pub const UndoAmal = struct {
         }
     }
 
-    pub fn depId(self: *const Self) ?Id {
+    pub fn depId(self: *const Self) ?EntId {
         switch (self.d) {
             inline else => |w| return w.depId(),
         }
