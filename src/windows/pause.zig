@@ -16,6 +16,7 @@ const async_util = @import("../async.zig");
 const Config = @import("../config.zig");
 const Layer = @import("../layer.zig");
 const CbHandle = guis.CbHandle;
+const version = @import("../version.zig");
 
 pub const PauseWindow = struct {
     const Buttons = enum {
@@ -25,6 +26,7 @@ pub const PauseWindow = struct {
         new_map,
         pick_map,
         save_as,
+        open_help,
 
         pub fn id(self: @This()) usize {
             return @intFromEnum(self);
@@ -130,6 +132,9 @@ pub const PauseWindow = struct {
             .pick_map => {
                 self.vt.needs_rebuild = true;
                 async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, .pick_map) catch return;
+            },
+            .open_help => {
+                _ = graph.c.SDL_OpenURL(version.help_url);
             },
         }
     }
@@ -297,6 +302,12 @@ pub const PauseWindow = struct {
                 _ = Wg.Slider.build(vt, hy.getArea(), &ds.cam_near_plane, 1, 512, .{ .nudge = 1 });
                 _ = Wg.Slider.build(vt, hy.getArea(), &ds.cam_far_plane, 512 * 64, 512 * 512, .{ .nudge = 1 });
             }
+
+            _ = Wg.Button.build(vt, ly.getArea(), "Open help in browser", .{
+                .cb_vt = &self.cbhandle,
+                .cb_fn = btnCb,
+                .id = Buttons.id(.open_help),
+            });
 
             //ly.pushHeight(Wg.TextView.heightForN(gui, 4));
             ly.pushRemaining();

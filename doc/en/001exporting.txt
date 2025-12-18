@@ -1,8 +1,0 @@
-Exporting.
-
-RatHammer saves maps to a json file. There are a few ways to export the map to vbsp for compilation.
-The command line tool jsonmaptovmf --json mymap.json will export a vmf file.
-
-The command line tool mapbuilder --vmf dump.vmf launch vbsp, vvis, and vrad using wine and then copy the built bsp to the games map folder.
-
-Pressing F9 in the editor will export the map and attempt to build it with mapbuilder

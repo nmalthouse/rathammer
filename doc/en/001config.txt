@@ -1,9 +1,0 @@
-Configuration is done through editing a the file 'config.vdf'
-
-This file uses the Valve's vdf key value format.
-The default config file contains many comments documenting what each key does.
-
-Configuring what gameinfo.txt RatHammer looks for is also done in config.vdf, under the section 'games'
-The key 'default_game' sets which game configuration RatHammer will use 
-
-All keybindings can be configured in config.vdf

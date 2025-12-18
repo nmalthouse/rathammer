@@ -274,7 +274,7 @@ In the directory where rathammer stores the config (see the first few lines of o
 
 This file contains a list of absolute paths to ratmaps separated by newlines
 
-### Troubleshooting
+### Troubleshooting / Tips
 #### On Linux, after pressing F9 to build nothing seems to happen.
 There is some bug with wine, where the first time you run vbsp it will hang indefinitely. Hit f9 again to spin up some new build threads. 
 
@@ -289,3 +289,45 @@ In the future I plan on adding a list view of potential errors.
 
 Problematic solids can often be fixed by selecting them and running the command `optimize`
 
+#### Convert a ratmap to vmf
+You can convert a .ratmap or .json to vmf via the command line tool `jsonmaptovmf`.
+```
+./jsonmaptovmf --map my_map.ratmap --output my_output.vmf
+```
+
+#### Some of my custom assets don't show up!
+Official Valve tools are case insensitive when it comes to asset names.
+
+Any resource paths specified in vpk's vmf's, vmt's, and mdl's are lowercased and backslashes are converted to forward slashes.
+
+All resource paths in rathammer .json maps are case sensitive.
+
+This means that if you have a vmt file in a loose directory which specifies a vtf "MYVTF.vtf", rathammer will search for 
+a file named myvtf.vtf and thus not find it.
+
+In short, if you are having trouble with loose content not getting found, lowercase all of it and remove any '\' characters.
+
+If you have a file named MyCoolTexture.png, rathammer will write MyCoolTexture.png to the map.json and everything will work!
+
+The same is true for gameinfo.txt. Rathammer will only search for the lowercase "gameinfo.txt". Either rename your GaMeInfO.TXT or specify the proper case in config.vdf.
+
+### Credits
+```
+The zig programming language
+https://github.com/ziglang/zig
+
+LibEpoxy for OpenGL loading
+https://github.com/anholt/libepoxy
+
+STB single header c-libs
+https://github.com/nothings/stb
+
+SDL3 for window and input
+https://wiki.libsdl.org/SDL3/FrontPage
+
+Freetype2
+Miniz
+
+Libspng
+https://libspng.org/
+```

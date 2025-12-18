@@ -1,8 +1,0 @@
-Undo.
-
-Whenever the user modifies the state of the world a undo is created.
-
-Pressing ctrl+z will undo the last operation.
-Pressing ctrl+shift+z will redo the last operation.
-
-If you create a new undo event after undoing something, those old undo events cannot be redone anymore.
