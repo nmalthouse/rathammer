@@ -422,7 +422,7 @@ pub const PlaceEntity = struct {
             //zyx
             //const mat3 = mat1.mul(y1.mul(x1.mul(z)));
             if (mod) |m|
-                m.drawSimple(td.view_3d.*, mat1, self.draw_state.basic_shader);
+                m.drawSimple(td.view_3d.*, mat1, self.renderer.shader.forward);
             //Draw the model at
             var bb = ecs.AABB{ .a = Vec3.new(0, 0, 0), .b = Vec3.new(16, 16, 16), .origin_offset = Vec3.new(8, 8, 8) };
             if (mod) |m| {

@@ -139,7 +139,7 @@ pub fn draw3Dview(
 
     //const mat = graph.za.Mat4.identity();
 
-    const view_3d = self.draw_state.cam3d.getMatrix(screen_area.w / screen_area.h, self.draw_state.cam_near_plane, self.draw_state.cam_far_plane);
+    const view_3d = self.draw_state.cam3d.getMatrix(screen_area.w / screen_area.h);
     self.renderer.beginFrame();
     self.renderer.clearLights();
     self.draw_state.active_lights = 0;
@@ -259,8 +259,6 @@ pub fn draw3Dview(
 
     try self.renderer.draw(self.draw_state.cam3d, screen_area, old_dim, .{
         .fac = self.draw_state.factor,
-        .near = self.draw_state.cam_near_plane,
-        .far = self.draw_state.cam_far_plane,
         .pad = self.draw_state.pad,
         .index = self.draw_state.index,
     }, draw, self.draw_state.planes);
@@ -315,7 +313,7 @@ pub fn draw3Dview(
         var tool_it = self.tool_res_map.iterator();
         while (tool_it.next()) |item| {
             const mesh = self.meshmap.get(item.key_ptr.*) orelse continue;
-            mesh.mesh.drawSimple(view_3d, mat, self.draw_state.basic_shader);
+            mesh.mesh.drawSimple(view_3d, mat, self.renderer.shader.forward);
             self.renderer.countDCall();
         }
     }

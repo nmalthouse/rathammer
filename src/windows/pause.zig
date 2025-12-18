@@ -15,8 +15,10 @@ const util = @import("../util.zig");
 const async_util = @import("../async.zig");
 const Config = @import("../config.zig");
 const Layer = @import("../layer.zig");
+const vpk = @import("../vpk.zig");
 const CbHandle = guis.CbHandle;
 const version = @import("../version.zig");
+const ptext = @import("widget_texture.zig");
 
 pub const PauseWindow = struct {
     const Buttons = enum {
@@ -31,6 +33,11 @@ pub const PauseWindow = struct {
         pub fn id(self: @This()) usize {
             return @intFromEnum(self);
         }
+    };
+
+    pub const Recent = struct {
+        name: []const u8,
+        tex: vpk.VpkResId,
     };
 
     const Textboxes = enum {
@@ -57,6 +64,9 @@ pub const PauseWindow = struct {
 
     layer_widget: Layer.GuiWidget,
 
+    alloc: std.mem.Allocator,
+    recents: std.ArrayList(Recent),
+
     pub fn create(gui: *Gui, editor: *Context, app_cwd: std.fs.Dir) !*PauseWindow {
         const self = gui.create(@This());
         self.* = .{
@@ -64,6 +74,8 @@ pub const PauseWindow = struct {
             .editor = editor,
             .layer_widget = Layer.GuiWidget.init(&editor.layers, &editor.edit_state.selected_layer, editor, &self.vt),
             .texts = .{},
+            .alloc = editor.alloc,
+            .recents = .{},
         };
 
         if (app_cwd.openDir("doc/en", .{ .iterate = true })) |doc_dir| {
@@ -95,6 +107,10 @@ pub const PauseWindow = struct {
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        for (self.recents.items) |*rec| {
+            self.alloc.free(rec.name);
+        }
+        self.recents.deinit(self.alloc);
         //self.layout.deinit(gui, vt);
         vt.deinit(gui);
         for (self.texts.items) |*text| {
@@ -153,6 +169,7 @@ pub const PauseWindow = struct {
         _ = vt.area.addEmpty(graph.Rec(0, 0, 0, 0));
 
         _ = Wg.Tabs.build(&vt.area, inset, &.{
+            "recent",
             "main",
             "keybinds",
             "graphics",
@@ -177,6 +194,25 @@ pub const PauseWindow = struct {
                     });
                 }
             }
+        }
+        if (eql(u8, tab, "recent")) {
+            //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
+            var ly = gui.dstate.vlayout(vt.area);
+            const Btn = Wg.Button.build;
+            const ar = &win.area;
+            _ = Wg.Text.buildStatic(ar, ly.getArea(), "Welcome ", null);
+            _ = Btn(ar, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+            _ = Btn(ar, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
+
+            ly.pushRemaining();
+            const SZ = 5;
+            _ = Wg.VScroll.build(ar, ly.getArea(), .{
+                .count = self.recents.items.len,
+                .item_h = gui.dstate.style.config.default_item_h * SZ,
+                .build_cb = buildRecentScroll,
+                .build_vt = &self.cbhandle,
+                .win = win,
+            });
         }
         if (eql(u8, tab, "mapprops")) {
             var ly = gui.dstate.vlayout(vt.area);
@@ -247,9 +283,9 @@ pub const PauseWindow = struct {
             _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw outline", .{ .bool_ptr = &ed.draw_state.draw_outlines }, null);
             _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw displacement solid", .{ .bool_ptr = &ed.draw_state.draw_displacment_solid }, null);
             if (guis.label(vt, ly.getArea(), "far clip", .{})) |ar|
-                _ = St(vt, ar, &ed.draw_state.cam_far_plane, .{ .min = 512 * 64, .max = 512 * 512, .default = 512 * 64, .slide = .{ .snap = 64 } });
+                _ = St(vt, ar, &ed.draw_state.cam3d.far, .{ .min = 512 * 64, .max = 512 * 512, .default = 512 * 64, .slide = .{ .snap = 64 } });
             if (guis.label(vt, ly.getArea(), "near clip", .{})) |ar|
-                _ = St(vt, ar, &ed.draw_state.cam_near_plane, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } });
+                _ = St(vt, ar, &ed.draw_state.cam3d.near, .{ .min = 1, .max = 512, .default = 1, .slide = .{ .snap = 1 } });
         }
         if (eql(u8, tab, "main")) {
             var ly = gui.dstate.vlayout(vt.area);
@@ -377,6 +413,40 @@ pub const PauseWindow = struct {
         if (id >= self.editor.autovis.enabled.items.len) return;
         self.editor.autovis.enabled.items[id] = val;
         self.editor.rebuildAutoVis() catch return;
+    }
+
+    pub fn buildRecentScroll(cb: *CbHandle, area: *iArea, index: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const gui = area.win_ptr.gui_ptr;
+        var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.style.config.default_item_h * 5, .bounds = area.area };
+        if (index >= self.recents.items.len) return;
+        const text_bound = gui.dstate.font.textBounds("_Load_", gui.dstate.style.config.text_h);
+        for (self.recents.items[index..], 0..) |rec, i| {
+            const ar = scrly.getArea() orelse return;
+            const sp = ar.split(.vertical, ar.h);
+
+            var ly = gui.dstate.vlayout(sp[1]);
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, null);
+            //_ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
+            _ = ptext.PollingTexture.build(area, sp[0], self.editor, rec.tex, "", .{}, .{});
+            const ld_btn = ly.getArea() orelse return;
+            const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
+
+            _ = Wg.Button.build(area, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
+        }
+    }
+
+    pub fn loadBtn(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        if (id >= self.recents.items.len) return;
+
+        const mname = self.recents.items[id].name;
+        const name = self.editor.printScratch("{s}.ratmap", .{mname}) catch return;
+        self.editor.loadMap(self.editor.dirs.app_cwd.dir, name, self.editor.loadctx) catch |err| {
+            std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
+            return;
+        };
+        self.editor.paused = false;
     }
 };
 

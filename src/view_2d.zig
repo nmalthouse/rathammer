@@ -117,11 +117,11 @@ pub const Ctx2dView = struct {
         const c = graph.c;
         const model = graph.za.Mat4.identity();
         while (it.next()) |mesh| {
-            graph.c.glUseProgram(ed.draw_state.basic_shader);
-            graph.GL.passUniform(ed.draw_state.basic_shader, "view", view_3d);
-            graph.GL.passUniform(ed.draw_state.basic_shader, "model", model);
+            graph.c.glUseProgram(ed.renderer.shader.forward);
+            graph.GL.passUniform(ed.renderer.shader.forward, "view", view_3d);
+            graph.GL.passUniform(ed.renderer.shader.forward, "model", model);
             graph.c.glBindVertexArray(mesh.value_ptr.*.lines_vao);
-            const diffuse_loc = c.glGetUniformLocation(ed.draw_state.basic_shader, "diffuse_texture");
+            const diffuse_loc = c.glGetUniformLocation(ed.renderer.shader.forward, "diffuse_texture");
 
             c.glUniform1i(diffuse_loc, 0);
             c.glBindTextureUnit(0, mesh.value_ptr.*.mesh.diffuse_texture);

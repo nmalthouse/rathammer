@@ -487,7 +487,7 @@ pub const Entity = struct {
                         const mat1 = Mat4.fromTranslate(ent.origin);
                         const quat = util3d.extEulerToQuat(ent.angle);
                         const mat3 = mat1.mul(quat.toMat4());
-                        mod.drawSimple(view_3d, mat3, editor.draw_state.basic_shader);
+                        mod.drawSimple(view_3d, mat3, editor.renderer.shader.forward);
                         editor.renderer.countDCall();
                         if (param.draw_model_bb) {
                             const rot = quat.toMat3();

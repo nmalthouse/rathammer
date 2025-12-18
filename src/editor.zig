@@ -198,10 +198,15 @@ pub const Context = struct {
             model_render_dist: f32 = 512 * 2,
         } = .{},
 
-        basic_shader: graph.glID,
-        cam3d: graph.Camera3D = .{ .up = .z, .move_speed = 10, .max_move_speed = 100, .fwd_back_kind = .planar },
-        cam_far_plane: f32 = 512 * 64,
-        cam_near_plane: f32 = 1,
+        cam3d: graph.Camera3D = .{
+            .up = .z,
+            .move_speed = 10,
+            .max_move_speed = 100,
+            .fwd_back_kind = .planar,
+
+            .near = 1,
+            .far = 512 * 64,
+        },
 
         /// we keep our own so that we can do some draw calls with depth some without.
         ctx: graph.ImmediateDrawingContext,
@@ -363,10 +368,6 @@ pub const Context = struct {
             .draw_state = .{
                 .ctx = graph.ImmediateDrawingContext.init(alloc),
                 .screen_space_text_ctx = DrawCtx.init(alloc),
-                .basic_shader = try graph.Shader.loadFromFilesystem(alloc, shader_dir, &.{
-                    .{ .path = "basic.vert", .t = .vert },
-                    .{ .path = "basic.frag", .t = .frag },
-                }),
             },
         };
         //If an error occurs during initilization it is fatal so there is no reason to clean up resources.

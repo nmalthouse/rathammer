@@ -439,7 +439,7 @@ pub const ModelPreview = struct {
 
     drawctx: *graph.ImmediateDrawingContext,
     ed: *Context,
-    model_cam: graph.Camera3D = .{ .pos = Vec3.new(0, -100, 0), .up = .z, .move_speed = 20 },
+    model_cam: graph.Camera3D = .{ .pos = Vec3.new(0, -100, 0), .up = .z, .move_speed = 20, .near = 1, .far = 64 * 512 },
 
     pub fn create(ed: *Context, gui: *Gui, drawctx: *graph.ImmediateDrawingContext) !*iWindow {
         var self = try gui.alloc.create(@This());
@@ -479,9 +479,9 @@ pub const ModelPreview = struct {
 
         if (self.ed.models.get(selected_mod)) |mod| {
             if (mod.mesh) |mm| {
-                const view = self.model_cam.getMatrix(sp.w / sp.h, 1, 64 * 512);
+                const view = self.model_cam.getMatrix(sp.w / sp.h);
                 const mat = graph.za.Mat4.identity();
-                mm.drawSimple(view, mat, self.ed.draw_state.basic_shader);
+                mm.drawSimple(view, mat, self.ed.renderer.shader.forward);
             }
         } else {
             if (self.ed.vpkctx.entries.get(selected_mod)) |tt| {

@@ -17,7 +17,6 @@ const Gui = graph.Gui;
 const Split = @import("splitter.zig");
 const editor_view = @import("editor_views.zig");
 const G = graph.RGui;
-const LaunchWindow = @import("windows/launch.zig").LaunchWindow;
 const NagWindow = @import("windows/savenag.zig").NagWindow;
 const PauseWindow = @import("windows/pause.zig").PauseWindow;
 const ConsoleWindow = @import("windows/console.zig").Console;
@@ -341,7 +340,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const main_2d_id2 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .x), .Empty, .{ .put_fbo = false });
     const main_2d_id3 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .z), .Empty, .{ .put_fbo = false });
 
-    const launch_win = try LaunchWindow.create(&gui, editor);
     gui_prof.end();
     gui_prof.log("gui init");
 
@@ -371,12 +369,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                             continue;
                         };
 
-                        const rec = LaunchWindow.Recent{
+                        const rec = PauseWindow.Recent{
                             .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
                             .tex = vpk_id,
                         };
 
-                        try launch_win.recents.append(launch_win.alloc, rec);
+                        try pause_win.recents.append(pause_win.alloc, rec);
                     } else |_| {}
                 }
             }
@@ -387,7 +385,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         recent_prof.end();
         recent_prof.log("recent build");
     }
-    _ = try gui.addWindow(&launch_win.vt, Rec(0, 300, 1000, 1000), .{});
 
     const main_3d_id = try gui.addWindow(try editor_view.Main3DView.create(editor, &gui, &draw), .Empty, .{ .put_fbo = false });
 
@@ -409,7 +406,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
             while (!win.should_exit) {
-                switch (try pauseLoop(&win, &draw, &launch_win.vt, &gui, &loadctx, editor, launch_win.should_exit)) {
+                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit)) {
                     .exit => break,
                     .unpause => break,
                     .cont => continue,
