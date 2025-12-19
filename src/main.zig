@@ -17,6 +17,7 @@ const Gui = graph.Gui;
 const Split = @import("splitter.zig");
 const editor_view = @import("editor_views.zig");
 const G = graph.RGui;
+const ConfigCheckWindow = @import("windows/config_check.zig").ConfigCheck;
 const NagWindow = @import("windows/savenag.zig").NagWindow;
 const PauseWindow = @import("windows/pause.zig").PauseWindow;
 const ConsoleWindow = @import("windows/console.zig").Console;
@@ -46,7 +47,7 @@ pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
     return sc;
 }
 
-pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool) !enum { cont, exit, unpause } {
+pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool, other_pane: ?*G.iWindow) !enum { cont, exit, unpause } {
     if (!editor.paused)
         return .unpause;
     if (win.isBindState(editor.config.keys.quit.b, .rising) or should_exit)
@@ -62,11 +63,17 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         const area = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
         const w = @min(max_w, area.w);
         const side_l = (area.w - w);
-        const winrect = area.replace(side_l, null, w, null);
+        const sp = area.split(.vertical, side_l);
+        const win_rect = sp[1];
+        const other_rect = sp[0];
         gui.active_windows.clearRetainingCapacity();
         try gui.active_windows.append(gui.alloc, win_vt);
+        if (other_pane) |op| {
+            try gui.active_windows.append(gui.alloc, op);
+            try gui.updateWindowSize(op, other_rect);
+        }
         try gui.pre_update();
-        try gui.updateWindowSize(win_vt, winrect);
+        try gui.updateWindowSize(win_vt, win_rect);
         try gui.update();
         try gui.draw(false);
         gui.drawFbos();
@@ -321,20 +328,25 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     gui.dstate.scale = gui_scale;
     gui.dstate.tint = config.gui_tint;
     //gui.dstate.nstyle.color = G.DarkColorscheme;
+    const default_rect = Rec(0, 0, 1000, 1000);
     const inspector_win = InspectorWindow.create(&gui, editor);
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
-    _ = try gui.addWindow(&pause_win.vt, Rec(0, 300, 1000, 1000), .{});
-    const inspector_pane = try gui.addWindow(&inspector_win.vt, Rec(0, 300, 1000, 1000), .{});
+    _ = try gui.addWindow(&pause_win.vt, default_rect, .{});
+
+    const conf_check_win = try ConfigCheckWindow.create(&gui, editor);
+    _ = try gui.addWindow(&conf_check_win.vt, default_rect, .{});
+
+    const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
     const nag_win = try NagWindow.create(&gui, editor);
-    _ = try gui.addWindow(&nag_win.vt, Rec(0, 300, 1000, 1000), .{});
+    _ = try gui.addWindow(&nag_win.vt, default_rect, .{});
     const asset_win = try AssetBrowser.AssetBrowser.create(&gui, editor);
-    const asset_pane = try gui.addWindow(&asset_win.vt, Rec(0, 0, 100, 1000), .{});
+    const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_browse = try AssetBrowser.ModelBrowser.create(&gui, editor);
-    const model_win = try gui.addWindow(&model_browse.vt, Rec(0, 0, 100, 100), .{});
-    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, &gui, &draw), Rec(0, 0, 100, 100), .{});
+    const model_win = try gui.addWindow(&model_browse.vt, default_rect, .{});
+    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, &gui, &draw), default_rect, .{});
     try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
 
-    const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), Rec(0, 0, 1, 1), .{});
+    const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), default_rect, .{});
 
     const main_2d_id = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .y), .Empty, .{ .put_fbo = false });
     const main_2d_id2 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .x), .Empty, .{ .put_fbo = false });
@@ -406,7 +418,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
             while (!win.should_exit) {
-                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit)) {
+                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, &conf_check_win.vt)) {
                     .exit => break,
                     .unpause => break,
                     .cont => continue,
@@ -483,7 +495,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
 
         if (editor.paused) {
-            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit)) {
+            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, null)) {
                 .cont => continue :main_loop,
                 .exit => break :main_loop,
                 .unpause => editor.paused = false,
@@ -554,7 +566,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
                 break; //The map has been saved async
             }
-            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit)) {
+            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, null)) {
                 .exit => break,
                 .unpause => break,
                 .cont => continue,

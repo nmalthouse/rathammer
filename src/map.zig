@@ -1,6 +1,10 @@
 const std = @import("std");
 // Stores all the state for a single map file being edited
 // not implemented yet
+//
+// Before this can be implemented:
+// Tools can't be singleton
+// Determine how maps will be stored (sparse set of map inside editor)
 
 pub const Map = struct {
     /// Only real state is a timer, has helper functions for naming and pruning autosaves.
@@ -79,7 +83,6 @@ pub const Map = struct {
             .layers = try Layer.Context.init(alloc),
             .meshmap = ecs.MeshMap.init(alloc),
             .ecs = try EcsT.init(alloc),
-            .skybox = try Skybox.init(alloc, shader_dir),
         };
     }
 

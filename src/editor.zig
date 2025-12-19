@@ -230,7 +230,7 @@ pub const Context = struct {
 
         manual_hidden_count: usize = 0,
         default_group_entity: enum { none, func_detail } = .func_detail,
-        __tool_index: usize = 0,
+        __tool_index: u16 = 0,
 
         lmouse: ButtonState = .low,
         rmouse: ButtonState = .low,
@@ -422,14 +422,14 @@ pub const Context = struct {
         };
 
         //The order in which these are registered maps to the order 'tool' keybinds are specified in config.vdf
-        try self.tools.registerCustom("translate", tool_def.Translate, try tool_def.Translate.create(self.alloc, self));
-        try self.tools.register("translate_face", tool_def.TranslateFace);
-        try self.tools.register("place_model", tool_def.PlaceEntity);
-        try self.tools.register("cube_draw", tool_def.CubeDraw);
-        try self.tools.register("fast_face", tool_def.FastFaceManip);
-        try self.tools.registerCustom("texture", tool_def.TextureTool, try tool_def.TextureTool.create(self.alloc, self));
-        try self.tools.registerCustom("vertex", tool_def.VertexTranslate, try tool_def.VertexTranslate.create(self.alloc, self));
-        try self.tools.register("clip", tool_def.Clipping);
+        try self.tools.register(tool_def.Translate, try tool_def.Translate.create(self.alloc, self));
+        try self.tools.register(tool_def.TranslateFace, try tool_def.TranslateFace.create(self.alloc));
+        try self.tools.register(tool_def.PlaceEntity, try tool_def.PlaceEntity.create(self.alloc));
+        try self.tools.register(tool_def.CubeDraw, try tool_def.CubeDraw.create(self.alloc));
+        try self.tools.register(tool_def.FastFaceManip, try tool_def.FastFaceManip.create(self.alloc));
+        try self.tools.register(tool_def.TextureTool, try tool_def.TextureTool.create(self.alloc, self));
+        try self.tools.register(tool_def.VertexTranslate, try tool_def.VertexTranslate.create(self.alloc, self));
+        try self.tools.register(tool_def.Clipping, try tool_def.Clipping.create(self.alloc));
 
         try self.autovis.add(.{ .name = "props", .filter = "prop_", .kind = .class, .match = .startsWith });
         try self.autovis.add(.{ .name = "trigger", .filter = "trigger_", .kind = .class, .match = .startsWith });
@@ -1043,13 +1043,11 @@ pub const Context = struct {
     }
 
     pub fn getCurrentTool(self: *Self) ?*tool_def.i3DTool {
-        if (self.edit_state.__tool_index >= self.tools.vtables.items.len)
-            return null;
-        return self.tools.vtables.items[self.edit_state.__tool_index];
+        return self.tools.vtables.getOpt(self.edit_state.__tool_index);
     }
 
-    pub fn setTool(self: *Self, new_tool: usize) void {
-        if (new_tool >= self.tools.vtables.items.len) {
+    pub fn setTool(self: *Self, new_tool: u16) void {
+        if (self.tools.vtables.getOpt(new_tool) == null) {
             log.warn("tring to set invalid tool, ignoring", .{});
             return;
         }
@@ -1314,7 +1312,7 @@ pub const Context = struct {
         const start = area.pos();
         const w = fh * 5;
         const tool_index = self.edit_state.__tool_index;
-        for (self.tools.vtables.items, 0..) |tool, i| {
+        for (self.tools.vtables.dense.items, 0..) |tool, i| {
             const fi: f32 = @floatFromInt(i);
             const rec = graph.Rec(start.x + fi * w, start.y, w, w);
             tool.tool_icon_fn(tool, draw, self, rec);
@@ -1668,7 +1666,7 @@ pub const Context = struct {
             {
                 for (config.keys.tool.items, 0..) |b, i| {
                     if (ed.isBindState(b.b, .rising)) {
-                        ed.setTool(i);
+                        ed.setTool(@intCast(i));
                     }
                 }
             }
