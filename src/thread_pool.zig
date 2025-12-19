@@ -7,6 +7,8 @@ const vvd = @import("vvd.zig");
 const edit = @import("editor.zig");
 const graph = @import("graph");
 const DEBUG_PRINT = false;
+const ecs = @import("ecs.zig");
+const eql = std.mem.eql;
 
 pub const ThreadState = struct {
     alloc: std.mem.Allocator,
@@ -39,9 +41,26 @@ pub const iJob = struct {
 };
 
 pub const CompletedVtfItem = struct {
-    data: vtf.VtfBuf,
+    data: [ecs.Material.num_slots]?vtf.VtfBuf,
     vpk_res_id: vpk.VpkResId,
     kind: enum { none, tool },
+
+    pub fn deinitToMaterial(self: *CompletedVtfItem, alloc: std.mem.Allocator) !ecs.Material {
+        var ret: ecs.Material = .default();
+        for (&self.data, 0..) |*dat, i| {
+            if (dat.*) |*dd| {
+                ret.set(i, try dd.deinitToTexture(alloc));
+            }
+        }
+        return ret;
+    }
+
+    pub fn deinit(self: *CompletedVtfItem) void {
+        for (&self.data) |*dat| {
+            if (dat.*) |*dd|
+                dd.deinit();
+        }
+    }
 };
 const log = std.log.scoped(.vtf);
 
@@ -168,7 +187,7 @@ pub const Context = struct {
         self.completed_models.deinit(self.alloc);
 
         for (self.completed.items) |*item|
-            item.data.deinit();
+            item.deinit();
         self.completed.deinit(
             self.alloc,
         );
@@ -205,11 +224,16 @@ pub const Context = struct {
     }
 
     pub fn workFuncErr(self: *@This(), vpk_res_id: vpk.VpkResId, vpkctx: *vpk.Context) !void {
+        var comp: CompletedVtfItem = .{
+            .data = [_]?vtf.VtfBuf{null} ** ecs.Material.num_slots,
+            .vpk_res_id = vpk_res_id,
+            .kind = .none,
+        };
         const thread_state = try self.getState();
         //const slash = std.mem.lastIndexOfScalar(u8, sl, '/') orelse break :in error.noSlash;
         if (try vpkctx.getFileFromRes(vpk_res_id, .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc })) |tt| {
             const names = vpkctx.namesFromId(vpk_res_id) orelse return error.noNames;
-            if (std.mem.eql(u8, names.ext, "png")) {
+            if (eql(u8, names.ext, "png")) {
                 //TODO is spng thread safe?
 
                 var bmp = graph.Bitmap.initFromPngBuffer(self.alloc, tt) catch |err| {
@@ -222,65 +246,63 @@ pub const Context = struct {
                     .w = bmp.w,
                     .h = bmp.h,
                 });
+                comp.data[@intFromEnum(ecs.Material.Kind.albedo)] = .{
+                    .alloc = self.alloc,
+                    .buffers = mipLevels,
+                    .width = bmp.w,
+                    .height = bmp.h,
+                    .pixel_format = bmp.format.toGLFormat(),
+                    .pixel_type = bmp.format.toGLType(),
+                    .compressed = false,
+                };
 
-                try self.insertCompleted(.{
-                    .data = .{
-                        .alloc = self.alloc,
-                        .buffers = mipLevels,
-                        .width = bmp.w,
-                        .height = bmp.h,
-                        .pixel_format = bmp.format.toGLFormat(),
-                        .pixel_type = bmp.format.toGLType(),
-                        .compressed = false,
-                    },
-                    .vpk_res_id = vpk_res_id,
-                    .kind = .none,
-                });
-            } else if (std.mem.eql(u8, names.ext, "vmt")) {
+                try self.insertCompleted(comp);
+            } else if (eql(u8, names.ext, "vmt")) {
+                const Help = struct {
+                    fn getVtfBuf(vpkc: *vpk.Context, tstate: *ThreadState, value: []const u8, alloc: std.mem.Allocator) !?vtf.VtfBuf {
+                        const base_name = sanitizeVtfName(value);
+                        const buf = try vtf.loadBuffer(
+                            try vpkc.getFileTempFmtBuf(
+                                "vtf",
+                                "{s}/{s}",
+                                .{ "materials", base_name },
+                                .{ .list = &tstate.vtf_file_buffer, .alloc = tstate.alloc },
+                                true,
+                            ) orelse {
+                                return null;
+                            },
+                            alloc,
+                        );
+                        return buf;
+                    }
+                };
                 var obj = try vdf.parse(self.alloc, tt, null, .{});
                 defer obj.deinit();
                 //All vmt are a single root object with a shader name as key
                 var was_found = false;
-                var had_match = false;
                 if (obj.value.list.items.len > 0) {
-                    const extensions = [_][]const u8{
-                        "materials",
-                    };
                     const fallback_keys = [_][]const u8{
                         "$basetexture", "%tooltexture", "$bumpmap", "$normalmap", "$bottommaterial", "$iris",
                     };
-                    outer: for (obj.value.list.items) |obj_val| {
-                        switch (obj_val.val) {
+                    _ = fallback_keys;
+                    for (obj.value.list.items) |shader| {
+                        switch (shader.val) {
                             .obj => |o| {
-                                for (extensions) |exten| {
-                                    fallback_loop: for (fallback_keys) |fbkey| {
-                                        const id = try obj.stringId(fbkey);
-                                        if (o.getFirst(id)) |base| {
-                                            had_match = true;
-                                            if (base == .literal) {
-                                                const base_name = sanitizeVtfName(base.literal);
-                                                const buf = try vtf.loadBuffer(
-                                                    try vpkctx.getFileTempFmtBuf(
-                                                        "vtf",
-                                                        "{s}/{s}",
-                                                        .{ exten, base_name },
-                                                        .{ .list = &thread_state.vtf_file_buffer, .alloc = thread_state.alloc },
-                                                        true,
-                                                    ) orelse {
-                                                        continue :fallback_loop;
-                                                    },
-                                                    self.alloc,
-                                                );
-                                                was_found = true;
-                                                try self.insertCompleted(.{
-                                                    .data = buf,
-                                                    .vpk_res_id = vpk_res_id,
-                                                    .kind = if (std.mem.eql(u8, fbkey, "%tooltexture")) .tool else .none,
-                                                });
-                                                break :outer;
-                                            }
-                                        } else {
-                                            //std.debug.print("!{s}\n", .{fbkey});
+                                for (o.list.items) |kv| {
+                                    const key = obj.stringFromId(kv.key) orelse "";
+                                    const val: []const u8 = if (kv.val == .literal) kv.val.literal else continue;
+                                    var kind: ?ecs.Material.Kind = null;
+
+                                    if (eql(u8, key, "$basetexture") or eql(u8, key, "%tooltexture")) {
+                                        kind = .albedo;
+                                    } else if (eql(u8, key, "$basetexture2")) {
+                                        kind = .alphablend;
+                                    } else {}
+
+                                    if (kind) |k| {
+                                        if (comp.data[@intFromEnum(k)] == null) {
+                                            comp.data[@intFromEnum(k)] = (try Help.getVtfBuf(vpkctx, thread_state, val, self.alloc)) orelse continue;
+                                            was_found = true;
                                         }
                                     }
                                 }
@@ -290,13 +312,13 @@ pub const Context = struct {
                     }
                     if (!was_found and DEBUG_PRINT) {
                         std.debug.print("Vmt found but no keys found: ", .{});
-                        std.debug.print("had match {any}\n", .{had_match});
                         //std.debug.print("{s}\n", .{tt});
                         std.debug.print("{s}/{s}\n", .{ names.path, names.name });
 
                         obj.print();
                         //std.debug.print("{s}\n", .{tt});
                     }
+                    try self.insertCompleted(comp);
                 }
             }
         } else {

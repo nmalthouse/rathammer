@@ -20,13 +20,13 @@ pub const ConfigCheck = struct {
     cbhandle: CbHandle = .{},
     vt: iWindow,
 
-    editor: *Context,
+    ed: *Context,
 
     pub fn create(gui: *Gui, editor: *Context) !*ConfigCheck {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
-            .editor = editor,
+            .ed = editor,
         };
 
         return self;
@@ -44,14 +44,19 @@ pub const ConfigCheck = struct {
         GuiHelp.drawWindowFrame(d, vt.area);
     }
 
-    pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
+    pub fn build(vt: *iWindow, gui: *Gui, new_area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        vt.area.area = area;
+        vt.area.area = new_area;
         vt.area.clearChildren(gui, vt);
         vt.area.dirty();
+        const area = &vt.area;
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
-        _ = vt.area.addEmpty(graph.Rec(0, 0, 0, 0));
-        _ = inset;
-        _ = self;
+        var ly = gui.dstate.vlayout(inset);
+        _ = Wg.Text.build(
+            area,
+            ly.getArea(),
+            "{s}",
+            .{self.ed.dirs.games_dir.path},
+        );
     }
 };

@@ -12,6 +12,7 @@ const vmf = @import("vmf.zig");
 const util3d = graph.util_3d;
 const meshutil = graph.meshutil;
 const thread_pool = @import("thread_pool.zig");
+const edit = @import("editor.zig");
 const Editor = @import("editor.zig").Context;
 const DrawCtx = graph.ImmediateDrawingContext;
 const layer = @import("layer.zig");
@@ -149,6 +150,43 @@ pub const Groups = struct {
     }
 };
 
+pub const Material = struct {
+    pub const Kind = enum(u32) {
+        albedo = 0,
+        alphablend = 1,
+    };
+    pub const num_slots = @typeInfo(Kind).@"enum".fields.len;
+
+    slots: [num_slots]graph.Texture,
+
+    active: std.StaticBitSet(num_slots),
+
+    pub fn default() @This() {
+        return .{
+            .active = .initEmpty(),
+            .slots = [_]graph.Texture{edit.missingTexture()} ** num_slots,
+        };
+    }
+
+    pub fn albedo(tex: graph.Texture) @This() {
+        var ret: @This() = .default();
+        ret.set(@intFromEnum(Kind.albedo), tex);
+        return ret;
+    }
+
+    pub fn set(self: *@This(), slot_i: usize, tex: graph.Texture) void {
+        if (slot_i >= num_slots) return;
+        self.active.set(slot_i);
+        self.slots[slot_i] = tex;
+    }
+
+    pub fn id(self: @This(), k: Kind) graph.glID {
+        if (self.active.isSet(@intFromEnum(k)))
+            return self.slots[@intFromEnum(k)].id;
+        return 0;
+    }
+};
+
 pub const MeshMap = std.AutoHashMap(vpk.VpkResId, *MeshBatch);
 pub threadlocal var mesh_build_time = profile.BasicProfiler.init();
 
@@ -165,7 +203,7 @@ pub threadlocal var mesh_build_time = profile.BasicProfiler.init();
 /// Every MeshBatch has a hashset 'contains' which stores the ecs ids of all solids it contains
 pub const MeshBatch = struct {
     const Self = @This();
-    tex: graph.Texture,
+    mat: Material,
     tex_res_id: vpk.VpkResId,
     mesh: meshutil.Mesh,
     contains: std.AutoHashMap(EcsT.Id, void),
@@ -178,11 +216,11 @@ pub const MeshBatch = struct {
     lines_ebo: c_uint,
     lines_index: std.array_list.Managed(u32),
 
-    pub fn init(alloc: std.mem.Allocator, tex_id: vpk.VpkResId, tex: graph.Texture) Self {
+    pub fn init(alloc: std.mem.Allocator, tex_id: vpk.VpkResId, mat: Material) Self {
         var ret = MeshBatch{
-            .mesh = meshutil.Mesh.init(alloc, tex.id),
+            .mesh = meshutil.Mesh.init(alloc, mat.slots[0].id),
             .tex_res_id = tex_id,
-            .tex = tex,
+            .mat = mat,
             .contains = std.AutoHashMap(EcsT.Id, void).init(alloc),
             .notify_vt = .{ .notify_fn = &notify },
             .lines_vao = 0,
@@ -217,8 +255,8 @@ pub const MeshBatch = struct {
     pub fn notify(vt: *thread_pool.DeferredNotifyVtable, id: vpk.VpkResId, editor: *Editor) void {
         const self: *@This() = @alignCast(@fieldParentPtr("notify_vt", vt));
         if (id == self.tex_res_id) {
-            self.tex = (editor.textures.get(id) orelse return);
-            self.mesh.diffuse_texture = self.tex.id;
+            self.mat = editor.textures.get(id) orelse return;
+            self.mesh.diffuse_texture = self.mat.slots[0].id;
             self.is_dirty = true;
         }
     }
@@ -593,8 +631,8 @@ pub const Side = struct {
         if (side.omit_from_batch)
             return;
         side.tex_id = batch.tex_res_id;
-        side.tw = batch.tex.w;
-        side.th = batch.tex.h;
+        side.tw = batch.mat.slots[0].w;
+        side.th = batch.mat.slots[0].h;
         const mesh = &batch.mesh;
 
         try mesh.vertices.ensureUnusedCapacity(mesh.alloc, side.index.items.len);
@@ -605,8 +643,8 @@ pub const Side = struct {
             solid.verts.items,
             side.index.items,
             side.*,
-            @intCast(batch.tex.w),
-            @intCast(batch.tex.h),
+            @intCast(side.tw),
+            @intCast(side.th),
             Vec3.zero(),
         );
         const offset = mesh.vertices.items.len;
@@ -1648,8 +1686,8 @@ pub const Displacement = struct {
             solid.verts.items,
             side.index.items,
             side.*,
-            @intCast(batch.tex.w),
-            @intCast(batch.tex.h),
+            @intCast(batch.mat.slots[0].w),
+            @intCast(batch.mat.slots[0].h),
             Vec3.zero(),
         );
         const vper_row = std.math.pow(u32, 2, self.power) + 1;
@@ -1671,6 +1709,7 @@ pub const Displacement = struct {
             const inter1 = uv3.lerp(uv2, ri * t);
             const uv = inter0.lerp(inter1, ci * t);
             const norm = self.normals.items[i];
+            const blend = self.alphas.items[i] / 255.0;
 
             try mesh.vertices.append(mesh.alloc, .{
                 .x = v.x(),
@@ -1682,6 +1721,7 @@ pub const Displacement = struct {
                 .ny = norm.y(),
                 .nz = norm.z(),
                 .color = 0xffffffff,
+                .blend = blend,
             });
         }
         for (self._index.items) |ind| {

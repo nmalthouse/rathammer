@@ -502,7 +502,7 @@ pub const MultiMesh = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("notify_vt", vt));
         for (self.meshes.items) |*mesh| {
             if (mesh.tex_res_id == id) {
-                mesh.texture_id = (editor.textures.get(id) orelse continue).id;
+                mesh.texture_id = (editor.textures.get(id) orelse continue).slots[0].id;
             }
         }
     }

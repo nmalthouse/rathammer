@@ -361,7 +361,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (util.readFile(alloc, config_dir.dir, "recent_maps.txt")) |slice| {
             defer alloc.free(slice);
             var it = std.mem.tokenizeScalar(u8, slice, '\n');
-            const missing_tex = edit.missingTexture();
             while (it.next()) |filename| {
                 const EXT = ".ratmap";
                 if (std.mem.endsWith(u8, filename, EXT)) {
@@ -374,7 +373,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                             continue;
                         };
 
-                        try editor.textures.put(vpk_id, missing_tex);
+                        try editor.textures.put(vpk_id, .default());
 
                         async.QoiDecode.spawn(alloc, &editor.async_asset_load, qoi_data, vpk_id) catch {
                             alloc.free(qoi_data);

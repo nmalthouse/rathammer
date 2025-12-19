@@ -124,7 +124,7 @@ pub const Context = struct {
     /// These maps map vpkids to their respective resource,
     /// when fetching a resource with getTexture, etc. Something is always returned. If an entry does not exist,
     /// a job is submitted to the load thread pool and a placeholder is inserted into the map and returned
-    textures: std.AutoHashMap(vpk.VpkResId, graph.Texture),
+    textures: std.AutoHashMap(vpk.VpkResId, ecs.Material),
     models: std.AutoHashMap(vpk.VpkResId, Model),
 
     /// Draw colored text messages to the screen for a short time
@@ -356,7 +356,7 @@ pub const Context = struct {
             .ecs = try EcsT.init(alloc),
             .models = std.AutoHashMap(vpk.VpkResId, Model).init(alloc),
             .async_asset_load = try thread_pool.Context.init(alloc, num_threads),
-            .textures = std.AutoHashMap(vpk.VpkResId, graph.Texture).init(alloc),
+            .textures = .init(alloc),
             .tool_res_map = std.AutoHashMap(vpk.VpkResId, void).init(alloc),
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
@@ -945,7 +945,7 @@ pub const Context = struct {
     pub fn getOrPutMeshBatch(self: *Self, res_id: vpk.VpkResId) !*MeshBatch {
         const res = try self.meshmap.getOrPut(res_id);
         if (!res.found_existing) {
-            const tex = try self.getTexture(res_id);
+            const tex = try self.getMaterial(res_id);
             res.value_ptr.* = try self.alloc.create(MeshBatch);
             res.value_ptr.*.* = MeshBatch.init(self.alloc, res_id, tex);
             try self.async_asset_load.addNotify(res_id, &res.value_ptr.*.notify_vt);
@@ -1358,8 +1358,16 @@ pub const Context = struct {
         return try self.string_storage.store(string);
     }
 
-    pub fn getTexture(self: *Self, res_id: vpk.VpkResId) !graph.Texture {
+    pub fn getMaterial(self: *Self, res_id: vpk.VpkResId) !ecs.Material {
         if (self.textures.get(res_id)) |tex| return tex;
+
+        try self.loadTexture(res_id);
+
+        return .default();
+    }
+
+    pub fn getTexture(self: *Self, res_id: vpk.VpkResId) !graph.Texture {
+        if (self.textures.get(res_id)) |tex| return tex.slots[0];
 
         try self.loadTexture(res_id);
 
@@ -1377,13 +1385,13 @@ pub const Context = struct {
             }
         }
 
-        try self.textures.put(res_id, missingTexture());
+        try self.textures.put(res_id, .default());
         try self.async_asset_load.loadTexture(res_id, &self.vpkctx);
     }
 
     pub fn loadTextureFromVpk(self: *Self, material: []const u8) !struct { tex: graph.Texture, res_id: vpk.VpkResId } {
         const res_id = try self.vpkctx.getResourceIdFmt("vmt", "materials/{s}", .{material}, true) orelse return .{ .tex = missingTexture(), .res_id = 0 };
-        if (self.textures.get(res_id)) |tex| return .{ .tex = tex, .res_id = res_id };
+        if (self.textures.get(res_id)) |tex| return .{ .tex = tex.slots[0], .res_id = res_id };
 
         try self.loadTexture(res_id);
 
@@ -1564,7 +1572,7 @@ pub const Context = struct {
             tcount = self.async_asset_load.completed.items.len;
             var num_rm_tex: usize = 0;
             for (self.async_asset_load.completed.items) |*completed| {
-                if (completed.data.deinitToTexture(self.async_asset_load.alloc)) |texture| {
+                if (completed.deinitToMaterial(self.async_asset_load.alloc)) |texture| {
                     try self.textures.put(completed.vpk_res_id, texture);
                     self.async_asset_load.notifyTexture(completed.vpk_res_id, self);
                 } else |err| {
@@ -1814,8 +1822,8 @@ pub fn missingTexture() graph.Texture {
                 .mag_filter = graph.c.GL_NEAREST,
             },
         );
-        static.texture.?.w = 400; //Zoom the texture out
-        static.texture.?.h = 400;
+        static.texture.?.w = 32; //Zoom the texture out
+        static.texture.?.h = 32;
     }
     return static.texture.?;
 }
