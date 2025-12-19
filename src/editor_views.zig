@@ -158,7 +158,7 @@ pub fn draw3Dview(
     while (it.next()) |mesh| {
         if (self.tool_res_map.contains(mesh.key_ptr.*))
             continue;
-        const blend = mesh.value_ptr.*.mat.id(.alphablend);
+        const blend = mesh.value_ptr.*.mat.id(.blend);
         try self.renderer.submitDrawCall(.{
             .prim = .triangles,
             .num_elements = @intCast(mesh.value_ptr.*.mesh.indicies.items.len),

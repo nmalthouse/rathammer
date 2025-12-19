@@ -251,6 +251,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }, alloc);
     defer win.destroyWindow();
 
+    var tex_unit: c_int = 0;
+    graph.c.glGetIntegerv(graph.c.GL_MAX_TEXTURE_IMAGE_UNITS, &tex_unit);
+    std.debug.print("NUM TEX {d}\n", .{tex_unit});
+
     _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
 
     const Preset = struct {

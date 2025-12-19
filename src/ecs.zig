@@ -153,7 +153,8 @@ pub const Groups = struct {
 pub const Material = struct {
     pub const Kind = enum(u32) {
         albedo = 0,
-        alphablend = 1,
+        blend = 1,
+        bump = 2,
     };
     pub const num_slots = @typeInfo(Kind).@"enum".fields.len;
 

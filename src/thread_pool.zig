@@ -296,7 +296,9 @@ pub const Context = struct {
                                     if (eql(u8, key, "$basetexture") or eql(u8, key, "%tooltexture")) {
                                         kind = .albedo;
                                     } else if (eql(u8, key, "$basetexture2")) {
-                                        kind = .alphablend;
+                                        kind = .blend;
+                                    } else if (eql(u8, key, "$bumpmap")) {
+                                        kind = .bump;
                                     } else {}
 
                                     if (kind) |k| {
