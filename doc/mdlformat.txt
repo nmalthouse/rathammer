@@ -1,0 +1,35 @@
+studiohdr_t
+    hull
+    texture_names
+
+    numbodyparts
+    bodypartindex (relative to this) -> [] mstudiobodyparts_t
+
+    numlocalanim
+    localanimindex -> [] mstudioanimdesc_t
+
+
+
+
+mstudiobodyparts_t
+    nummodel
+    modelindex (relative to this)  -> [] mstudiomodel_t
+    
+
+mstudiomodel_t
+    nummesh
+    meshindex (relative to this) -> [] mstudiomesh_t
+
+
+mstudiomesh_t
+
+    numvertices -> used as offset for vvd
+    vertexoffset
+    
+    TODO this might contain vertex data, idk
+
+
+
+mstudioanimdesc_t
+    numframes
+    

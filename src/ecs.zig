@@ -1518,20 +1518,20 @@ pub const Displacement = struct {
         const vper_row = vertsPerRow(ret.power);
         const vcount = vper_row * vper_row;
         const H = struct {
-            pub fn correctCount(count: usize, array: anytype, default: anytype, _alloc: std.mem.Allocator) !void {
+            pub fn correctCount(debug_kind: []const u8, count: usize, array: anytype, default: anytype, _alloc: std.mem.Allocator) !void {
                 if (array.items.len != count) {
-                    std.debug.print("Displacment has invalid length, replacing\n", .{});
+                    std.debug.print("Displacment {s} has invalid length, replacing, expected {d} found {d}\n", .{ debug_kind, count, array.items.len });
                     array.clearRetainingCapacity();
                     try array.appendNTimes(_alloc, default, count);
                 }
             }
         };
 
-        try H.correctCount(vcount, &ret.normals, Vec3.new(0, 0, 1), alloc);
-        try H.correctCount(vcount, &ret.offsets, Vec3.new(0, 0, 0), alloc);
-        try H.correctCount(vcount, &ret.normal_offsets, Vec3.new(0, 0, 0), alloc);
-        try H.correctCount(vcount, &ret.dists, 0, alloc);
-        try H.correctCount(vcount, &ret.alphas, 0, alloc);
+        try H.correctCount("norm", vcount, &ret.normals, Vec3.new(0, 0, 1), alloc);
+        try H.correctCount("offset", vcount, &ret.offsets, Vec3.new(0, 0, 0), alloc);
+        try H.correctCount("norm_off", vcount, &ret.normal_offsets, Vec3.new(0, 0, 0), alloc);
+        try H.correctCount("dists", vcount, &ret.dists, 0, alloc);
+        try H.correctCount("alphas", vcount, &ret.alphas, 0, alloc);
 
         return ret;
     }
