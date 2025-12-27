@@ -70,7 +70,8 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
                                     }
                                 }
                                 var cmd_response = std.array_list.Managed(u8).init(aa);
-                                cmd.execErr(args.items, &cmd_response) catch return;
+                                var arg_it = SliceIt{ .slices = args.items };
+                                cmd.execErr(&arg_it, &cmd_response) catch return;
 
                                 ed.rpcserv.respond(&wr.interface, .{
                                     .id = msg.id,
@@ -103,6 +104,8 @@ pub const CommandCtx = struct {
     env: std.StringHashMap([]const u8),
     arena: std.heap.ArenaAllocator,
 
+    iconsole: Console.ConsoleCb,
+
     pub fn create(alloc: std.mem.Allocator, editor: *Editor) !*@This() {
         const self = try alloc.create(@This());
 
@@ -110,6 +113,9 @@ pub const CommandCtx = struct {
             .ed = editor,
             .env = std.StringHashMap([]const u8).init(alloc),
             .arena = std.heap.ArenaAllocator.init(alloc),
+            .iconsole = .{
+                .exec = execConsole,
+            },
         };
 
         return self;
@@ -130,8 +136,15 @@ pub const CommandCtx = struct {
         }
     }
 
-    pub fn execErr(self: *@This(), argv: []const []const u8, wr: *std.array_list.Managed(u8)) anyerror!void {
-        var args = SliceIt{ .slices = argv };
+    pub fn execConsole(vt: *Console.ConsoleCb, string: []const u8, wr: *std.array_list.Managed(u8)) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("iconsole", vt));
+        var args = std.mem.tokenizeScalar(u8, string, ' ');
+        self.execErr(&args, wr) catch return;
+    }
+
+    /// args must be a container pointer with a pub fn next() ?[] const u8
+    pub fn execErr(self: *@This(), args: anytype, wr: *std.array_list.Managed(u8)) anyerror!void {
+        //var args = SliceIt{ .slices = argv };
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
@@ -273,7 +286,7 @@ pub const CommandCtx = struct {
                     }
                 },
                 .tp => {
-                    if (parseVec(&args)) |vec| {
+                    if (parseVec(args)) |vec| {
                         try wr.print("Teleporting to {d} {d} {d}\n", .{ vec.x(), vec.y(), vec.z() });
                         self.ed.draw_state.cam3d.pos = vec;
                     } else {
@@ -312,7 +325,7 @@ pub const CommandCtx = struct {
             }
         } else {
             try wr.print("Unknown command\n", .{});
-            try printCommand(argv, wr);
+            //try printCommand(argv, wr);
             try wr.print("\n", .{});
         }
     }

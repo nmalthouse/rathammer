@@ -66,18 +66,24 @@ pub const Console = struct {
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
 
+    fn layout(gui: *Gui, area: Rect) struct { text: Rect, cmdline: Rect } {
+        const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
+        const item_height = gui.dstate.style.config.default_item_h;
+        const sp = inset.split(.horizontal, inset.h - item_height);
+        return .{
+            .text = sp[0],
+            .cmdline = sp[1],
+        };
+    }
+
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
         vt.area.dirty();
-        const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
-        const item_height = gui.dstate.style.config.default_item_h;
-        const sp = inset.split(.horizontal, inset.h - item_height);
-        const text_area = sp[0];
-        const command = sp[1];
+        const sp = layout(gui, area);
 
-        _ = Wg.Textbox.buildOpts(&vt.area, command, .{
+        _ = Wg.Textbox.buildOpts(&vt.area, sp.cmdline, .{
             .init_string = "",
             .commit_cb = &textbox_cb,
             .commit_vt = &self.cbhandle,
@@ -90,9 +96,10 @@ pub const Console = struct {
             gui.grabFocus(vt.area.children.items[0], vt);
         }
 
-        _ = Wg.TextView.build(&vt.area, text_area, self.lines.items, vt, .{
+        _ = Wg.TextView.build(&vt.area, sp.text, self.lines.items, vt, .{
             .mode = .split_on_space,
             .force_scroll = true,
+            //.bg_col = 0x222222ff,
         });
     }
 
@@ -120,5 +127,7 @@ pub const Console = struct {
 
     pub fn draw(vt: *iArea, d: DrawState) void {
         GuiHelp.drawWindowFrame(d, vt.area);
+        const sp = layout(d.gui, vt.area);
+        d.ctx.rect(sp.text, d.nstyle.color.text_bg);
     }
 };

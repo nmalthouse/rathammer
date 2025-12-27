@@ -47,7 +47,7 @@ pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
     return sc;
 }
 
-pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool, other_pane: ?*G.iWindow) !enum { cont, exit, unpause } {
+pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool, console: *ConsoleWindow, rising: bool) !enum { cont, exit, unpause } {
     if (!editor.paused)
         return .unpause;
     if (win.isBindState(editor.config.keys.quit.b, .rising) or should_exit)
@@ -66,13 +66,14 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         const sp = area.split(.vertical, side_l);
         const win_rect = sp[1];
         const other_rect = sp[0];
+        try gui.pre_update();
         gui.active_windows.clearRetainingCapacity();
         try gui.active_windows.append(gui.alloc, win_vt);
-        if (other_pane) |op| {
-            try gui.active_windows.append(gui.alloc, op);
-            try gui.updateWindowSize(op, other_rect);
+        try gui.active_windows.append(gui.alloc, &console.vt);
+        if (rising) {
+            console.focus(gui);
         }
-        try gui.pre_update();
+        try gui.updateWindowSize(&console.vt, other_rect);
         try gui.updateWindowSize(win_vt, win_rect);
         try gui.update();
         try gui.draw(false);
@@ -331,14 +332,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     gui.dstate.style.config.text_h = scaled_text_height;
     gui.dstate.scale = gui_scale;
     gui.dstate.tint = config.gui_tint;
-    //gui.dstate.nstyle.color = G.DarkColorscheme;
+    gui.dstate.nstyle.color = G.DarkColorscheme;
     const default_rect = Rec(0, 0, 1000, 1000);
     const inspector_win = InspectorWindow.create(&gui, editor);
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
     _ = try gui.addWindow(&pause_win.vt, default_rect, .{});
 
-    const conf_check_win = try ConfigCheckWindow.create(&gui, editor);
-    _ = try gui.addWindow(&conf_check_win.vt, default_rect, .{});
+    const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.iconsole);
+    _ = try gui.addWindow(&console_win.vt, default_rect, .{});
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
     const nag_win = try NagWindow.create(&gui, editor);
@@ -421,7 +422,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx);
         } else {
             while (!win.should_exit) {
-                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, &conf_check_win.vt)) {
+                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, console_win, false)) {
                     .exit => break,
                     .unpause => break,
                     .cont => continue,
@@ -489,16 +490,21 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     var frame_timer = try std.time.Timer.start();
     var frame_time: u64 = 0;
+    var just_paused = false;
     win.grabMouse(true);
     main_loop: while (!win.should_exit) {
         if (win.isBindState(config.keys.quit.b, .rising) or pause_win.should_exit)
             break :main_loop;
         if (win.isBindState(config.keys.pause.b, .rising)) {
             editor.paused = !editor.paused;
+
+            if (editor.paused) { //Always start with it focused
+                just_paused = true;
+            }
         }
 
         if (editor.paused) {
-            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, null)) {
+            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, console_win, just_paused)) {
                 .cont => continue :main_loop,
                 .exit => break :main_loop,
                 .unpause => editor.paused = false,
@@ -569,7 +575,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
                 break; //The map has been saved async
             }
-            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, null)) {
+            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, console_win, false)) {
                 .exit => break,
                 .unpause => break,
                 .cont => continue,
