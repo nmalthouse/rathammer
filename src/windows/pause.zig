@@ -195,6 +195,7 @@ pub const PauseWindow = struct {
             }
         }
         if (eql(u8, tab, "recent")) {
+            if (self.editor.has_loaded_map == true) return;
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
@@ -236,9 +237,7 @@ pub const PauseWindow = struct {
             if (guis.label(vt, ly.getArea(), "p3", .{})) |ar|
                 _ = St(vt, ar, &ps[3], .{ .min = 4096, .max = max, .default = 16400 });
             if (guis.label(vt, ly.getArea(), "pad", .{})) |ar|
-                _ = Wg.Slider.build(vt, ar, &ed.draw_state.pad, 1, 4096, .{});
-            if (guis.label(vt, ly.getArea(), "index", .{})) |ar|
-                _ = Wg.Slider.build(vt, ar, &ed.draw_state.index, 0, 5, .{});
+                _ = St(vt, ar, &ed.draw_state.pad, .{ .min = 1, .max = 4096, .default = 164 });
             if (guis.label(vt, ly.getArea(), "gamma", .{})) |ar|
                 _ = St(vt, ar, &ed.renderer.gamma, .{ .min = 0.1, .max = 3, .default = 1.45, .slide = .{ .snap = 0.1 } });
             if (guis.label(vt, ly.getArea(), "exposure", .{})) |ar|
@@ -439,6 +438,8 @@ pub const PauseWindow = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.recents.items.len) return;
 
+        self.tab_index = 1; //set to main
+        self.vt.needs_rebuild = true;
         const mname = self.recents.items[id].name;
         const name = self.editor.printScratch("{s}.ratmap", .{mname}) catch return;
         self.editor.loadMap(self.editor.dirs.app_cwd.dir, name, self.editor.loadctx) catch |err| {

@@ -328,7 +328,7 @@ pub const CommandCtx = struct {
                 },
             }
         } else {
-            try wr.print("Unknown command\n", .{});
+            try wr.print("Unknown command, type 'help'\n", .{});
             //try printCommand(argv, wr);
             try wr.print("\n", .{});
         }

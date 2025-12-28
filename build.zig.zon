@@ -9,12 +9,12 @@
     .name = .rathammer,
     .fingerprint = 0x530d8075b6562538,
 
-    .version = "0.2.0-pre",
+    .version = "0.2.0",
 
     // This field is optional.
     // This is currently advisory only; Zig does not yet do anything
     // with this value.
-    .minimum_zig_version = "0.14.1",
+    .minimum_zig_version = "0.15.2",
 
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
