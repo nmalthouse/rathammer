@@ -1194,8 +1194,8 @@ pub fn customButtonDraw(vt: *iArea, _: *Gui, d: *DrawState) void {
     const self: *Wg.Button = @alignCast(@fieldParentPtr("vt", vt));
     d.ctx.rect(vt.area, d.nstyle.color.text_bg);
     if (self.opts.user_1 == 1) {
-        const SELECTED_FIELD_COLOR = 0x6097dbff;
-        d.ctx.rect(vt.area, SELECTED_FIELD_COLOR);
+        //const SELECTED_FIELD_COLOR = 0x6097dbff;
+        d.ctx.rect(vt.area, d.nstyle.color.selection);
     }
     const ta = vt.area.inset(3 * d.scale);
     d.ctx.textClipped(ta, "{s}", .{self.text}, d.textP(d.nstyle.color.text_fg), .center);

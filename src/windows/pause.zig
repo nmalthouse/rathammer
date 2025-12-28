@@ -166,7 +166,6 @@ pub const PauseWindow = struct {
         vt.area.clearChildren(gui, vt);
         vt.area.dirty();
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
-        _ = vt.area.addEmpty(graph.Rec(0, 0, 0, 0));
 
         _ = Wg.Tabs.build(&vt.area, inset, &.{
             "recent",
@@ -199,14 +198,13 @@ pub const PauseWindow = struct {
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
-            const ar = &win.area;
-            _ = Wg.Text.buildStatic(ar, ly.getArea(), "Welcome ", null);
-            _ = Btn(ar, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
-            _ = Btn(ar, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
+            _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", null);
+            _ = Btn(vt, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+            _ = Btn(vt, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
 
             ly.pushRemaining();
             const SZ = 5;
-            _ = Wg.VScroll.build(ar, ly.getArea(), .{
+            _ = Wg.VScroll.build(vt, ly.getArea(), .{
                 .count = self.recents.items.len,
                 .item_h = gui.dstate.style.config.default_item_h * SZ,
                 .build_cb = buildRecentScroll,

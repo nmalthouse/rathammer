@@ -332,7 +332,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     gui.dstate.style.config.text_h = scaled_text_height;
     gui.dstate.scale = gui_scale;
     gui.dstate.tint = config.gui_tint;
-    gui.dstate.nstyle.color = G.DarkColorscheme;
+    //gui.dstate.nstyle.color = G.DarkColorscheme;
     const default_rect = Rec(0, 0, 1000, 1000);
     const inspector_win = InspectorWindow.create(&gui, editor);
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
