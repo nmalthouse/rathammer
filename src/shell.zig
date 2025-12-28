@@ -13,7 +13,7 @@ const actions = @import("actions.zig");
 //write a save
 //kill the vbsp
 
-const Commands = enum {
+pub const Commands = enum {
     count_ents,
     help,
     select_id,

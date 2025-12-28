@@ -10,7 +10,9 @@ const guis = graph.RGui;
 const iWindow = guis.iWindow;
 const iArea = guis.iArea;
 const Wg = guis.Widget;
+const Readline = @import("../readline.zig");
 const Context = @import("../editor.zig").Context;
+const shell = @import("../shell.zig");
 pub const exec_command_cb = *const fn (
     *ConsoleCb,
     command_string: []const u8,
@@ -31,6 +33,8 @@ pub const Console = struct {
     lines: std.ArrayList([]const u8),
     scratch: std.array_list.Managed(u8),
 
+    readline: Readline,
+
     exec_vt: *ConsoleCb,
 
     pub fn create(gui: *Gui, editor: *Context, exec_vt: *ConsoleCb) !*Console {
@@ -44,7 +48,12 @@ pub const Console = struct {
             .scratch = .init(gui.alloc),
             .exec_vt = exec_vt,
             .alloc = gui.alloc,
+            .readline = .init(gui.alloc),
         };
+
+        inline for (@typeInfo(shell.Commands).@"enum".fields) |field| {
+            try self.readline.addComplete(field.name);
+        }
 
         return self;
     }
@@ -54,6 +63,7 @@ pub const Console = struct {
         vt.deinit(gui);
         self.lines.deinit(self.alloc);
         self.line_arena.deinit();
+        self.readline.deinit();
         self.scratch.deinit();
         gui.alloc.destroy(self);
     }
@@ -87,6 +97,7 @@ pub const Console = struct {
             .init_string = "",
             .commit_cb = &textbox_cb,
             .commit_vt = &self.cbhandle,
+            .fevent_override_cb = textbox_fevent,
             .user_id = 0,
             .clear_on_commit = true,
             .restricted_charset = "`",
@@ -112,12 +123,60 @@ pub const Console = struct {
     pub fn execCommand(self: *@This(), command: []const u8, gui: *Gui) void {
         self.scratch.clearRetainingCapacity();
         self.exec_vt.exec(self.exec_vt, command, &self.scratch);
+        self.readline.appendHistory(command) catch return;
         const duped = self.line_arena.allocator().dupe(u8, self.scratch.items) catch return;
         self.lines.append(self.alloc, duped) catch return;
         var tv = self.getTextView() orelse return;
         tv.addOwnedText(duped, gui) catch return;
         tv.gotoBottom();
         tv.rebuildScroll(gui, gui.getWindow(&self.vt.area) orelse return);
+    }
+
+    pub fn textbox_fevent(cb: *guis.CbHandle, ev: guis.FocusedEvent, tb: *Wg.Textbox) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        switch (ev.event) {
+            else => {},
+            .keydown => |kev| {
+                const M = graph.SDL.keycodes.Keymod;
+                const mod = kev.mod_state & ~M.mask(&.{ .SCROLL, .NUM, .CAPS });
+                for (kev.keys) |key| {
+                    if (key.state != .rising) continue;
+                    const ctrl = mod & M.mask(&.{.CTRL}) != 0;
+
+                    switch (@as(graph.SDL.keycodes.Scancode, @enumFromInt(key.key_id))) {
+                        .UP => if (self.readline.prev()) |prev| {
+                            tb.reset(prev) catch {};
+                            tb.move_to(.end);
+                        },
+                        .DOWN => if (self.readline.next()) |next| {
+                            tb.reset(next) catch {};
+                            tb.move_to(.end);
+                        },
+                        .R => if (ctrl) { //ctrl p
+                            if (self.readline.prev()) |prev| {
+                                tb.reset(prev) catch {};
+                                tb.move_to(.end);
+                            }
+                        },
+                        .L => if (ctrl) { //ctrl n
+                            if (self.readline.next()) |next| {
+                                tb.reset(next) catch {};
+                                tb.move_to(.end);
+                            }
+                        },
+                        else => {},
+                        .TAB => {
+                            tb.reset(self.readline.complete()) catch {};
+                            tb.move_to(.end);
+                            return; //skip emit
+                        },
+                    }
+                }
+            },
+        }
+        //pass on all events to textbox
+        Wg.Textbox.fevent_err(&tb.vt, ev) catch return;
+        self.readline.setLine(tb.codepoints.items) catch {};
     }
 
     pub fn textbox_cb(cb: *guis.CbHandle, gui: *Gui, string: []const u8, _: usize) void {
