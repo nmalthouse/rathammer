@@ -1,7 +1,8 @@
 pub const colors = Colors{};
 
 const Colors = struct {
-    clear: u32 = 0x9e8e7c_ff,
+    //clear: u32 = 0x9e8e7c_ff,
+    clear: u32 = 0x282828_ff,
     splash_clear: u32 = 0x678caa_ff,
     progress: u32 = 0xf7a41d_ff,
     //splash_tint: u32 = 0x88,

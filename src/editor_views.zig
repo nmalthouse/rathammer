@@ -259,6 +259,19 @@ pub fn draw3Dview(
         .ext = graph.Vec3f.new(100, 100, 100),
     });
 
+    {
+        var tp = td.text_param;
+        tp.background_rect = 0xff;
+        var ent_it = self.editIterator(.entity);
+        while (ent_it.next()) |ent| {
+            try ent.drawEnt(self, view_3d, draw, draw_nd, .{
+                .screen_area = screen_area,
+                .text_param = &tp,
+                .ent_id = ent_it.i,
+            });
+        }
+    }
+
     try self.renderer.draw(self.draw_state.cam3d, screen_area, old_dim, .{
         .fac = self.draw_state.factor,
         .pad = self.draw_state.pad,
@@ -292,18 +305,6 @@ pub fn draw3Dview(
     }
 
     try draw.flush(null, self.draw_state.cam3d);
-    {
-        var tp = td.text_param;
-        tp.background_rect = 0xff;
-        var ent_it = self.editIterator(.entity);
-        while (ent_it.next()) |ent| {
-            try ent.drawEnt(self, view_3d, draw, draw_nd, .{
-                .screen_area = screen_area,
-                .text_param = &tp,
-                .ent_id = ent_it.i,
-            });
-        }
-    }
 
     graph.c.glEnable(graph.c.GL_BLEND);
     graph.c.glBlendFunc(graph.c.GL_SRC_ALPHA, graph.c.GL_ONE_MINUS_SRC_ALPHA);

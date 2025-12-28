@@ -278,9 +278,9 @@ pub fn loadModelCrappy(
                     .z = v.pos.z(),
                     .u = v.uv.x,
                     .v = v.uv.y,
-                    .nx = 0,
-                    .ny = 0,
-                    .nz = 0,
+                    .nx = v.norm.x,
+                    .ny = v.norm.y,
+                    .nz = v.norm.z,
                     .color = 0xff_ff_ff_ff,
                 });
             }
@@ -518,6 +518,7 @@ pub const MultiMesh = struct {
             GL.floatVertexAttrib(mesh.vao, self.vbo, 2, 3, MeshVert, "nx"); //RGBA
             GL.intVertexAttrib(mesh.vao, self.vbo, 3, 1, MeshVert, "color", c.GL_UNSIGNED_INT);
             GL.floatVertexAttrib(mesh.vao, self.vbo, 4, 3, MeshVert, "tx");
+            GL.floatVertexAttrib(mesh.vao, self.vbo, 5, 1, MeshVert, "blend");
         }
 
         self.setData();

@@ -526,8 +526,18 @@ pub const Entity = struct {
                         const mat1 = Mat4.fromTranslate(ent.origin);
                         const quat = util3d.extEulerToQuat(ent.angle);
                         const mat3 = mat1.mul(quat.toMat4());
-                        mod.drawSimple(view_3d, mat3, editor.renderer.shader.forward);
-                        editor.renderer.countDCall();
+                        for (mod.meshes.items) |mesh| {
+                            try editor.renderer.submitDrawCall(.{
+                                .prim = .triangles,
+                                .num_elements = @intCast(mesh.indicies.items.len),
+                                .element_type = graph.c.GL_UNSIGNED_SHORT,
+                                .vao = mesh.vao,
+                                .diffuse = mesh.texture_id,
+                                .model = mat3,
+                            });
+                        }
+                        //mod.drawSimple(view_3d, mat3, editor.renderer.shader.forward);
+                        //editor.renderer.countDCall();
                         if (param.draw_model_bb) {
                             const rot = quat.toMat3();
                             //const rot = util3d.extrinsicEulerAnglesToMat3(ent.angle);
@@ -543,7 +553,7 @@ pub const Entity = struct {
                 }
             }
         }
-        if (dist < EXTRA_RENDER_DIST and param.ent_id != null and param.text_param != null) {
+        if (dist < EXTRA_RENDER_DIST and param.ent_id != null and param.text_param != null and editor.draw_state.tog.sprite) {
             if (try editor.ecs.getOptPtr(param.ent_id.?, .key_values)) |kvs| {
                 if (kvs.getString("targetname")) |tname| {
                     toolutil.drawText3D(ent.origin.add(Vec3.new(0, 0, 12)), draw_nd, param.text_param.?.*, param.screen_area, view_3d, "{s}", .{tname});

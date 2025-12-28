@@ -280,6 +280,7 @@ pub const PauseWindow = struct {
             _ = Wg.Checkbox.build(vt, ly.getArea(), "do hdr", .{ .bool_ptr = &ed.renderer.do_hdr_buffer }, null);
             _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw outline", .{ .bool_ptr = &ed.draw_state.draw_outlines }, null);
             _ = Wg.Checkbox.build(vt, ly.getArea(), "Draw displacement solid", .{ .bool_ptr = &ed.draw_state.draw_displacment_solid }, null);
+            _ = Wg.Checkbox.build(vt, ly.getArea(), "omit model shadow", .{ .bool_ptr = &ed.renderer.omit_model_shadow }, null);
             if (guis.label(vt, ly.getArea(), "far clip", .{})) |ar|
                 _ = St(vt, ar, &ed.draw_state.cam3d.far, .{ .min = 512 * 64, .max = 512 * 512, .default = 512 * 64, .slide = .{ .snap = 64 } });
             if (guis.label(vt, ly.getArea(), "near clip", .{})) |ar|
