@@ -23,7 +23,7 @@ jobs:
         uses: mlugg/setup-zig@v2.0.5
         with:
           # Version of the Zig compiler, e.g. "0.13.0" or "0.13.0-dev.351+64ef45eb0". "master" uses the latest nightly build. "latest" uses the latest tagged release. Leave empty to use minimum_zig_version from build.zig.zon, with a fallback to "latest".
-          version: "0.14.1"
+          version: "0.15.2"
           
       - name: build libs
         run:  bash ci/setup_linux.sh
