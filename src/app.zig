@@ -32,6 +32,7 @@ pub const EventKind = enum(EventKindT) {
     tool_changed,
     saved,
     menubar_dirty,
+    notify,
     //select,
 };
 
@@ -42,6 +43,14 @@ pub const Event = union(EventKind) {
     tool_changed: void,
     saved: void,
     menubar_dirty: void,
+    notify: []const u8,
+
+    pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
+        switch (self.*) {
+            else => {},
+            .notify => |n| alloc.free(n),
+        }
+    }
 };
 
 pub const EventCb = fn (user: *iEvent, ev: Event) void;
@@ -116,6 +125,7 @@ pub const EventCtx = struct {
                         l.cb(l, event.*);
                     }
                 }
+                event.deinit(self.alloc);
                 self.alloc.destroy(event);
             }
         } else {

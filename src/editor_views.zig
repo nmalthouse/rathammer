@@ -158,14 +158,14 @@ pub fn draw3Dview(
     while (it.next()) |mesh| {
         if (self.tool_res_map.contains(mesh.key_ptr.*))
             continue;
-        const blend = mesh.value_ptr.*.mat.id(.blend);
         try self.renderer.submitDrawCall(.{
             .prim = .triangles,
             .num_elements = @intCast(mesh.value_ptr.*.mesh.indicies.items.len),
             .element_type = graph.c.GL_UNSIGNED_INT,
             .vao = mesh.value_ptr.*.mesh.vao,
             .diffuse = mesh.value_ptr.*.mat.slots[0].id,
-            .blend = blend,
+            .blend = mesh.value_ptr.*.mat.id(.blend),
+            .bump = mesh.value_ptr.*.mat.id(.bump),
         });
         //mesh.value_ptr.*.mesh.drawSimple(view_3d, mat, self.draw_state.basic_shader);
     }

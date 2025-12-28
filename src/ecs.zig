@@ -668,7 +668,39 @@ pub const Side = struct {
             try batch.lines_index.append(@intCast(offset + next));
         }
         const indexs = try editor.csgctx.triangulateIndex(@intCast(side.index.items.len), @intCast(offset));
+        const start_i = mesh.indicies.items.len;
         try mesh.indicies.appendSlice(mesh.alloc, indexs);
+        for (0..@divExact(indexs.len, 3)) |tri_i| {
+            const si = tri_i * 3 + start_i;
+
+            const v1 = &mesh.vertices.items[mesh.indicies.items[si]];
+            const v2 = &mesh.vertices.items[mesh.indicies.items[si + 1]];
+            const v3 = &mesh.vertices.items[mesh.indicies.items[si + 2]];
+            const e1 = Vec3.new(v2.x, v2.y, v2.z).sub(Vec3.new(v1.x, v1.y, v1.z));
+            const e2 = Vec3.new(v3.x, v3.y, v3.z).sub(Vec3.new(v1.x, v1.y, v1.z));
+            const du1 = v2.u - v1.u;
+            const dv1 = v2.v - v1.v;
+            const du2 = v3.u - v1.u;
+            const dv2 = v3.v - v1.v;
+            const f = 1.0 / (du1 * dv2 - du2 * dv1);
+            const tangent = Vec3.new(
+                (dv2 * e1.x()) - (dv1 * e2.x()),
+                (dv2 * e1.y()) - (dv1 * e2.y()),
+                (dv2 * e1.z()) - (dv1 * e2.z()),
+            ).scale(f);
+
+            v1.tx += tangent.x();
+            v2.tx += tangent.x();
+            v3.tx += tangent.x();
+
+            v1.ty += tangent.y();
+            v2.ty += tangent.y();
+            v3.ty += tangent.y();
+
+            v1.tz += tangent.z();
+            v2.tz += tangent.z();
+            v3.tz += tangent.z();
+        }
     }
 
     pub fn serial(self: @This(), editor: *Editor, jw: anytype, ent_id: EcsT.Id) !void {

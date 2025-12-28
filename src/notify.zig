@@ -31,7 +31,8 @@ pub const NotifyCtx = struct {
         self.strbuf.deinit(self.alloc);
     }
 
-    pub fn submitNotify(self: *Self, comptime msg: []const u8, args: anytype, color: u32) !void {
+    /// returned string is only valid until next call to getSlice
+    pub fn submitNotify(self: *Self, comptime msg: []const u8, args: anytype, color: u32) ![]const u8 {
         self.strbuf.clearRetainingCapacity();
         try self.strbuf.print(self.alloc, msg, args);
         const str = try self.alloc.dupe(u8, self.strbuf.items);
@@ -41,6 +42,7 @@ pub const NotifyCtx = struct {
             .color = color,
             .time_left_ms = self.time,
         });
+        return str;
     }
 
     /// The returned slice becomes invalid if submitNotify or getSlice is called.

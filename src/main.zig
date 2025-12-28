@@ -340,6 +340,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.iconsole);
     _ = try gui.addWindow(&console_win.vt, default_rect, .{});
+    try console_win.printLine("steam_path {s}", .{
+        dirs.games_dir.path,
+    });
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
     const nag_win = try NagWindow.create(&gui, editor);
@@ -490,9 +493,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     var frame_timer = try std.time.Timer.start();
     var frame_time: u64 = 0;
-    var just_paused = false;
     win.grabMouse(true);
     main_loop: while (!win.should_exit) {
+        var just_paused = false;
         if (win.isBindState(config.keys.quit.b, .rising) or pause_win.should_exit)
             break :main_loop;
         if (win.isBindState(config.keys.pause.b, .rising)) {

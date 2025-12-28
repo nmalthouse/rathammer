@@ -13,6 +13,8 @@ const Wg = guis.Widget;
 const Readline = @import("../readline.zig");
 const Context = @import("../editor.zig").Context;
 const shell = @import("../shell.zig");
+const app = @import("../app.zig");
+
 pub const exec_command_cb = *const fn (
     *ConsoleCb,
     command_string: []const u8,
@@ -36,9 +38,9 @@ pub const Console = struct {
     readline: Readline,
 
     exec_vt: *ConsoleCb,
+    ev_vt: app.iEvent = .{ .cb = event_cb },
 
     pub fn create(gui: *Gui, editor: *Context, exec_vt: *ConsoleCb) !*Console {
-        _ = editor;
         const self = gui.create(@This());
 
         self.* = .{
@@ -50,6 +52,10 @@ pub const Console = struct {
             .alloc = gui.alloc,
             .readline = .init(gui.alloc),
         };
+
+        if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.notify)) catch {};
+        } else |_| {}
 
         inline for (@typeInfo(shell.Commands).@"enum".fields) |field| {
             try self.readline.addComplete(field.name);
@@ -75,6 +81,17 @@ pub const Console = struct {
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        switch (ev) {
+            .notify => |n| {
+                self.printLine("{s}", .{n}) catch {};
+            },
+            else => {},
+        }
+    }
 
     fn layout(gui: *Gui, area: Rect) struct { text: Rect, cmdline: Rect } {
         const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
@@ -120,6 +137,19 @@ pub const Console = struct {
         }
     }
 
+    pub fn printLine(self: *@This(), comptime fmt: []const u8, args: anytype) !void {
+        self.scratch.clearRetainingCapacity();
+        try self.scratch.print(fmt, args);
+        const duped = try self.line_arena.allocator().dupe(u8, self.scratch.items);
+        try self.lines.append(self.alloc, duped);
+
+        const gui = self.vt.gui_ptr;
+        var tv = self.getTextView() orelse return;
+        tv.addOwnedText(duped, gui) catch return;
+        tv.gotoBottom();
+        tv.rebuildScroll(gui, &self.vt);
+    }
+
     pub fn execCommand(self: *@This(), command: []const u8, gui: *Gui) void {
         self.scratch.clearRetainingCapacity();
         self.exec_vt.exec(self.exec_vt, command, &self.scratch);
@@ -129,7 +159,7 @@ pub const Console = struct {
         var tv = self.getTextView() orelse return;
         tv.addOwnedText(duped, gui) catch return;
         tv.gotoBottom();
-        tv.rebuildScroll(gui, gui.getWindow(&self.vt.area) orelse return);
+        tv.rebuildScroll(gui, &self.vt);
     }
 
     pub fn textbox_fevent(cb: *guis.CbHandle, ev: guis.FocusedEvent, tb: *Wg.Textbox) void {

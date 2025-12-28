@@ -99,6 +99,17 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
     }
 }
 
+pub fn helpCommand(cmd: Commands) []const u8 {
+    return switch (cmd) {
+        else => "",
+        .select_id => "id0 id1... -> Add or remove ids from selection",
+        .select_class => "prop_static infodecal... -> Add or remove any entities with matching class",
+        .snap_selected => "-> Round all vertices of selected solids to integers",
+        .optimize => "-> Attempt to fix invalid solids in selection",
+        .pointfile => "-> Attempt to load pointfile in map compile dir, or user path if specified",
+    };
+}
+
 pub const CommandCtx = struct {
     ed: *Editor,
     env: std.StringHashMap([]const u8),
@@ -161,14 +172,7 @@ pub const CommandCtx = struct {
                 .help => {
                     if (args.next()) |help_com| {
                         if (std.meta.stringToEnum(Commands, help_com)) |en| {
-                            try wr.print("{s}: {s}", .{ help_com, switch (en) {
-                                else => "no doc written",
-                                .select_id => "id0 id1... , Add or remove ids from selection",
-                                .select_class => "prop_static infodecal... , Add or remove any entities with matching class",
-                                .snap_selected => "Round all vertices of selected solids to integers",
-                                .optimize => "Attempt to fix invalid solids in selection",
-                                .pointfile => "Attempt to load pointfile in map compile dir, or user path if specified",
-                            } });
+                            try wr.print("Usage:\n\t{s} {s}", .{ help_com, helpCommand(en) });
                         } else {
                             try wr.print("Unknown command: {s}", .{help_com});
                         }

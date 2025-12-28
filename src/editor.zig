@@ -1493,9 +1493,11 @@ pub const Context = struct {
 
     pub fn notify(self: *Self, comptime fmt: []const u8, args: anytype, color: u32) void {
         log.info(fmt, args);
-        self.notifier.submitNotify(fmt, args, color) catch {
+        const str = self.notifier.submitNotify(fmt, args, color) catch {
             std.debug.print("NOTIFY FAILED\n", .{});
+            return;
         };
+        self.eventctx.pushEvent(.{ .notify = self.eventctx.alloc.dupe(u8, str) catch return });
     }
 
     pub fn loadSkybox(self: *Self, sky_name: []const u8) !void {
