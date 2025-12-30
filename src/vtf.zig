@@ -67,46 +67,46 @@ const ImageFormat = enum(i32) {
     }
     //TODO one more function that ouptuts gl type,
     //GL_BYTE, or  GL_UNSIGNED_SHORT_5_6_5 etc
-    pub fn toOpenGLType(self: @This()) !graph.c.GLenum {
+    pub fn toOpenGLType(self: @This()) !graph.gl.@"enum" {
         return switch (self) {
-            .IMAGE_FORMAT_RGBA8888, .IMAGE_FORMAT_ABGR8888, .IMAGE_FORMAT_RGB888, .IMAGE_FORMAT_BGR888, .IMAGE_FORMAT_I8, .IMAGE_FORMAT_IA88, .IMAGE_FORMAT_P8, .IMAGE_FORMAT_A8, .IMAGE_FORMAT_RGB888_BLUESCREEN, .IMAGE_FORMAT_BGR888_BLUESCREEN, .IMAGE_FORMAT_ARGB8888, .IMAGE_FORMAT_BGRA8888, .IMAGE_FORMAT_DXT1, .IMAGE_FORMAT_DXT3, .IMAGE_FORMAT_DXT5, .IMAGE_FORMAT_BGRX8888, .IMAGE_FORMAT_UVLX8888, .IMAGE_FORMAT_UV88, .IMAGE_FORMAT_UVWQ8888 => graph.c.GL_UNSIGNED_BYTE,
+            .IMAGE_FORMAT_RGBA8888, .IMAGE_FORMAT_ABGR8888, .IMAGE_FORMAT_RGB888, .IMAGE_FORMAT_BGR888, .IMAGE_FORMAT_I8, .IMAGE_FORMAT_IA88, .IMAGE_FORMAT_P8, .IMAGE_FORMAT_A8, .IMAGE_FORMAT_RGB888_BLUESCREEN, .IMAGE_FORMAT_BGR888_BLUESCREEN, .IMAGE_FORMAT_ARGB8888, .IMAGE_FORMAT_BGRA8888, .IMAGE_FORMAT_DXT1, .IMAGE_FORMAT_DXT3, .IMAGE_FORMAT_DXT5, .IMAGE_FORMAT_BGRX8888, .IMAGE_FORMAT_UVLX8888, .IMAGE_FORMAT_UV88, .IMAGE_FORMAT_UVWQ8888 => graph.gl.UNSIGNED_BYTE,
 
             //All that follow have not been tested,
             //most vtf's in the wild don't use these.
-            .IMAGE_FORMAT_RGB565, .IMAGE_FORMAT_BGR565 => graph.c.GL_UNSIGNED_SHORT_5_6_5,
-            .IMAGE_FORMAT_BGRA5551, .IMAGE_FORMAT_BGRX5551 => graph.c.GL_UNSIGNED_SHORT_5_5_5_1,
+            .IMAGE_FORMAT_RGB565, .IMAGE_FORMAT_BGR565 => graph.gl.UNSIGNED_SHORT_5_6_5,
+            .IMAGE_FORMAT_BGRA5551, .IMAGE_FORMAT_BGRX5551 => graph.gl.UNSIGNED_SHORT_5_5_5_1,
 
-            .IMAGE_FORMAT_BGRA4444 => graph.c.GL_UNSIGNED_SHORT_4_4_4_4,
-            .IMAGE_FORMAT_RGBA16161616F => graph.c.GL_HALF_FLOAT,
-            .IMAGE_FORMAT_RGBA16161616 => graph.c.GL_UNSIGNED_SHORT,
+            .IMAGE_FORMAT_BGRA4444 => graph.gl.UNSIGNED_SHORT_4_4_4_4,
+            .IMAGE_FORMAT_RGBA16161616F => graph.gl.HALF_FLOAT,
+            .IMAGE_FORMAT_RGBA16161616 => graph.gl.UNSIGNED_SHORT,
             //.IMAGE_FORMAT_DXT1_ONEBITALPHA,
 
             else => error.formatNotSupported,
         };
     }
 
-    pub fn toOpenGLFormat(self: @This()) !graph.c.GLenum {
+    pub fn toOpenGLFormat(self: @This()) !graph.gl.@"enum" {
         return switch (self) {
-            .IMAGE_FORMAT_DXT5 => graph.c.GL_COMPRESSED_RGBA_S3TC_DXT5_EXT,
-            .IMAGE_FORMAT_DXT1 => graph.c.GL_COMPRESSED_RGBA_S3TC_DXT1_EXT,
-            .IMAGE_FORMAT_DXT3 => graph.c.GL_COMPRESSED_RGBA_S3TC_DXT3_EXT,
-            .IMAGE_FORMAT_BGRA8888 => graph.c.GL_BGRA,
-            .IMAGE_FORMAT_RGBA8888 => graph.c.GL_RGBA,
-            .IMAGE_FORMAT_BGR888 => graph.c.GL_BGR,
-            .IMAGE_FORMAT_RGB888 => graph.c.GL_RGB,
-            .IMAGE_FORMAT_UV88 => graph.c.GL_RG,
-            .IMAGE_FORMAT_I8 => graph.c.GL_RED,
-            .IMAGE_FORMAT_RGBA16161616F => graph.c.GL_RGBA,
-            .IMAGE_FORMAT_RGBA16161616 => graph.c.GL_RGBA,
-            .IMAGE_FORMAT_A8 => graph.c.GL_RED,
+            .IMAGE_FORMAT_DXT5 => graph.gl.COMPRESSED_RGBA_S3TC_DXT5_EXT,
+            .IMAGE_FORMAT_DXT1 => graph.gl.COMPRESSED_RGBA_S3TC_DXT1_EXT,
+            .IMAGE_FORMAT_DXT3 => graph.gl.COMPRESSED_RGBA_S3TC_DXT3_EXT,
+            .IMAGE_FORMAT_BGRA8888 => graph.gl.BGRA,
+            .IMAGE_FORMAT_RGBA8888 => graph.gl.RGBA,
+            .IMAGE_FORMAT_BGR888 => graph.gl.BGR,
+            .IMAGE_FORMAT_RGB888 => graph.gl.RGB,
+            .IMAGE_FORMAT_UV88 => graph.gl.RG,
+            .IMAGE_FORMAT_I8 => graph.gl.RED,
+            .IMAGE_FORMAT_RGBA16161616F => graph.gl.RGBA,
+            .IMAGE_FORMAT_RGBA16161616 => graph.gl.RGBA,
+            .IMAGE_FORMAT_A8 => graph.gl.RED,
 
-            .IMAGE_FORMAT_ABGR8888 => graph.c.GL_RGBA, //These are wrong but I don't care
-            .IMAGE_FORMAT_ARGB8888 => graph.c.GL_RGBA,
-            .IMAGE_FORMAT_IA88 => graph.c.GL_RG,
-            .IMAGE_FORMAT_RGB888_BLUESCREEN => graph.c.GL_RGB,
-            .IMAGE_FORMAT_BGR888_BLUESCREEN => graph.c.GL_RGB,
+            .IMAGE_FORMAT_ABGR8888 => graph.gl.RGBA, //These are wrong but I don't care
+            .IMAGE_FORMAT_ARGB8888 => graph.gl.RGBA,
+            .IMAGE_FORMAT_IA88 => graph.gl.RG,
+            .IMAGE_FORMAT_RGB888_BLUESCREEN => graph.gl.RGB,
+            .IMAGE_FORMAT_BGR888_BLUESCREEN => graph.gl.RGB,
 
-            .IMAGE_FORMAT_BGRX8888 => graph.c.GL_BGRA,
+            .IMAGE_FORMAT_BGRX8888 => graph.gl.BGRA,
 
             .IMAGE_FORMAT_RGB565 => return error.formatNotSupported,
             .IMAGE_FORMAT_BGR565 => return error.formatNotSupported,
@@ -253,9 +253,9 @@ pub const VtfBuf = struct {
 
     width: u32,
     height: u32,
-    pixel_format: graph.c.GLenum,
+    pixel_format: graph.gl.@"enum",
     compressed: bool,
-    pixel_type: graph.c.GLenum,
+    pixel_type: graph.gl.@"enum",
 
     /// Caller must free, mip levels, smallest to largest
     /// When (width or height)  / buffers.len != 1, only the last MipLevel is used and mipmaps are generated
@@ -276,7 +276,7 @@ pub const VtfBuf = struct {
             .pixel_format = self.pixel_format,
             .is_compressed = self.compressed,
             .pixel_type = self.pixel_type,
-            .min_filter = graph.c.GL_LINEAR_MIPMAP_LINEAR,
+            .min_filter = graph.gl.LINEAR_MIPMAP_LINEAR,
         });
         const mip_count: u64 = @intCast(self.buffers.items.len);
         if (mip_count == 0 or mip_count > 64) return error.noTexture;
@@ -290,10 +290,10 @@ pub const VtfBuf = struct {
                 .pixel_format = self.pixel_format,
                 .is_compressed = self.compressed,
                 .pixel_type = self.pixel_type,
-                .min_filter = graph.c.GL_LINEAR_MIPMAP_LINEAR,
+                .min_filter = graph.gl.LINEAR_MIPMAP_LINEAR,
             }, @intCast(0));
-            graph.c.glBindTexture(graph.c.GL_TEXTURE_2D, tex.id);
-            graph.c.glGenerateMipmap(graph.c.GL_TEXTURE_2D);
+            graph.gl.BindTexture(graph.gl.TEXTURE_2D, tex.id);
+            graph.gl.GenerateMipmap(graph.gl.TEXTURE_2D);
         } else {
             for (self.buffers.items, 0..) |buf, mi| {
                 const level = mip_count - mi - 1;
@@ -304,8 +304,8 @@ pub const VtfBuf = struct {
                     .pixel_format = self.pixel_format,
                     .is_compressed = self.compressed,
                     .pixel_type = self.pixel_type,
-                    .min_filter = graph.c.GL_LINEAR,
-                    //.min_filter = graph.c.GL_LINEAR_MIPMAP_LINEAR,
+                    .min_filter = graph.gl.LINEAR,
+                    //.min_filter = graph.gl.LINEAR_MIPMAP_LINEAR,
                 }, @intCast(level));
             }
         }

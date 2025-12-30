@@ -218,23 +218,18 @@ pub const MeshBatch = struct {
     lines_index: std.array_list.Managed(u32),
 
     pub fn init(alloc: std.mem.Allocator, tex_id: vpk.VpkResId, mat: Material) Self {
-        var ret = MeshBatch{
+        const ret = MeshBatch{
             .mesh = meshutil.Mesh.init(alloc, mat.slots[0].id),
             .tex_res_id = tex_id,
             .mat = mat,
             .contains = std.AutoHashMap(EcsT.Id, void).init(alloc),
             .notify_vt = .{ .notify_fn = &notify },
-            .lines_vao = 0,
-            .lines_ebo = 0,
+            .lines_vao = graph.GL.genVertexArray(),
+            .lines_ebo = graph.GL.genBuffer(),
             .lines_index = .init(alloc),
         };
 
-        {
-            const c = graph.c;
-            c.glGenBuffers(1, &ret.lines_ebo);
-            c.glGenVertexArrays(1, &ret.lines_vao);
-            meshutil.Mesh.setVertexAttribs(ret.lines_vao, ret.mesh.vbo);
-        }
+        meshutil.Mesh.setVertexAttribs(ret.lines_vao, ret.mesh.vbo);
 
         return ret;
     }
@@ -288,9 +283,9 @@ pub const MeshBatch = struct {
         }
         self.mesh.setData();
         {
-            graph.c.glBindVertexArray(self.lines_vao);
-            graph.GL.bufferData(graph.c.GL_ARRAY_BUFFER, self.mesh.vbo, meshutil.MeshVert, self.mesh.vertices.items);
-            graph.GL.bufferData(graph.c.GL_ELEMENT_ARRAY_BUFFER, self.lines_ebo, u32, self.lines_index.items);
+            graph.gl.BindVertexArray(self.lines_vao);
+            graph.GL.bufferData(graph.gl.ARRAY_BUFFER, self.mesh.vbo, meshutil.MeshVert, self.mesh.vertices.items);
+            graph.GL.bufferData(graph.gl.ELEMENT_ARRAY_BUFFER, self.lines_ebo, u32, self.lines_index.items);
         }
     }
 };
@@ -530,7 +525,7 @@ pub const Entity = struct {
                             try editor.renderer.submitDrawCall(.{
                                 .prim = .triangles,
                                 .num_elements = @intCast(mesh.indicies.items.len),
-                                .element_type = graph.c.GL_UNSIGNED_SHORT,
+                                .element_type = graph.gl.UNSIGNED_SHORT,
                                 .vao = mesh.vao,
                                 .diffuse = mesh.texture_id,
                                 .model = mat3,

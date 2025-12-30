@@ -252,10 +252,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }, alloc);
     defer win.destroyWindow();
 
-    var tex_unit: c_int = 0;
-    graph.c.glGetIntegerv(graph.c.GL_MAX_TEXTURE_IMAGE_UNITS, &tex_unit);
-    std.debug.print("NUM TEX {d}\n", .{tex_unit});
-
     _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
 
     const Preset = struct {
@@ -437,8 +433,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     //TODO with assets loaded dynamically, names might not be correct when saving before all loaded
     loadctx.setTime();
 
-    graph.c.glEnable(graph.c.GL_CULL_FACE);
-    graph.c.glCullFace(graph.c.GL_BACK);
+    graph.gl.Enable(graph.gl.CULL_FACE);
+    graph.gl.CullFace(graph.gl.BACK);
 
     var ws = Split.Splits.init(alloc);
     defer ws.deinit();
@@ -525,7 +521,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
         const winrect = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
         gui.clamp_window = winrect;
-        graph.c.glEnable(graph.c.GL_BLEND);
+        graph.gl.Enable(graph.gl.BLEND);
         try editor.update(&win);
         //TODO move this back to POSONE once we can render 3dview to any fb
         //this is here so editor.update can create a thumbnail from backbuffer before its cleared

@@ -8,6 +8,7 @@ const views = @import("editor_views.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
 const gridutil = @import("grid.zig");
 const G = graph.RGui;
+const gl = graph.gl;
 const iWindow = G.iWindow;
 const iArea = G.iArea;
 const Gui = G.Gui;
@@ -50,15 +51,15 @@ pub const Ctx2dView = struct {
         const ed = self.ed;
         self.cam.screen_area = screen_area;
         self.cam.syncAspect();
-        //graph.c.glViewport(x, y, w, h);
-        //graph.c.glScissor(x, y, w, h);
+        //graph.gl.Viewport(x, y, w, h);
+        //graph.gl.Scissor(x, y, w, h);
         draw.setViewport(screen_area);
         const old_screen_dim = draw.screen_dimensions;
         defer draw.screen_dimensions = old_screen_dim;
         draw.screen_dimensions = .{ .x = screen_area.w, .y = screen_area.h };
 
-        //graph.c.glEnable(graph.c.GL_SCISSOR_TEST);
-        //defer graph.c.glDisable(graph.c.GL_SCISSOR_TEST);
+        //graph.gl.Enable(graph.gl.SCISSOR_TEST);
+        //defer graph.gl.Disable(graph.gl.SCISSOR_TEST);
         const can_grab = gui.canGrabMouseOverride(&self.vt);
         self.ed.stack_owns_input = can_grab;
         defer self.ed.stack_owns_input = false;
@@ -100,8 +101,8 @@ pub const Ctx2dView = struct {
             .x => view_pre.rotate(90, Vec3.new(0, 1, 0)).rotate(90, Vec3.new(1, 0, 0)),
         };
         try draw.flushCustomMat(view_2d, view_3d);
-        graph.c.glPolygonMode(graph.c.GL_FRONT_AND_BACK, graph.c.GL_LINE);
-        defer graph.c.glPolygonMode(graph.c.GL_FRONT_AND_BACK, graph.c.GL_FILL);
+        graph.gl.PolygonMode(graph.gl.FRONT_AND_BACK, graph.gl.LINE);
+        defer graph.gl.PolygonMode(graph.gl.FRONT_AND_BACK, graph.gl.FILL);
 
         {
             var ent_it = ed.ecs.iterator(.entity);
@@ -114,18 +115,17 @@ pub const Ctx2dView = struct {
         gridutil.drawGrid2DAxis('y', cb, 50, ed.grid.s.y(), draw, .{ .color = grid_color });
 
         var it = ed.meshmap.iterator();
-        const c = graph.c;
         const model = graph.za.Mat4.identity();
         while (it.next()) |mesh| {
-            graph.c.glUseProgram(ed.renderer.shader.forward);
+            graph.gl.UseProgram(ed.renderer.shader.forward);
             graph.GL.passUniform(ed.renderer.shader.forward, "view", view_3d);
             graph.GL.passUniform(ed.renderer.shader.forward, "model", model);
-            graph.c.glBindVertexArray(mesh.value_ptr.*.lines_vao);
-            const diffuse_loc = c.glGetUniformLocation(ed.renderer.shader.forward, "diffuse_texture");
+            graph.gl.BindVertexArray(mesh.value_ptr.*.lines_vao);
+            const diffuse_loc = gl.GetUniformLocation(ed.renderer.shader.forward, "diffuse_texture");
 
-            c.glUniform1i(diffuse_loc, 0);
-            c.glBindTextureUnit(0, mesh.value_ptr.*.mesh.diffuse_texture);
-            graph.c.glDrawElements(c.GL_LINES, @as(c_int, @intCast(mesh.value_ptr.*.lines_index.items.len)), graph.c.GL_UNSIGNED_INT, null);
+            gl.Uniform1i(diffuse_loc, 0);
+            gl.BindTextureUnit(0, mesh.value_ptr.*.mesh.diffuse_texture);
+            graph.gl.DrawElements(gl.LINES, @as(c_int, @intCast(mesh.value_ptr.*.lines_index.items.len)), graph.gl.UNSIGNED_INT, 0);
             //mesh.value_ptr.*.mesh.drawSimple(view_3d, mat, ed.draw_state.basic_shader);
         }
         const draw_nd = &ed.draw_state.ctx;
@@ -154,7 +154,7 @@ pub const Ctx2dView = struct {
         }
 
         try draw.flushCustomMat(view_2d, view_3d);
-        graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
+        graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
         try draw_nd.flushCustomMat(view_2d, view_3d);
     }
 

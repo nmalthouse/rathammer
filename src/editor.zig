@@ -1455,7 +1455,7 @@ pub const Context = struct {
 
                 var rb = try graph.RenderTexture.init(sz, sz);
                 defer rb.deinit();
-                graph.c.glBlitNamedFramebuffer(
+                graph.gl.BlitNamedFramebuffer(
                     0,
                     rb.fb,
                     0,
@@ -1466,11 +1466,11 @@ pub const Context = struct {
                     sz,
                     sz,
                     0,
-                    graph.c.GL_COLOR_BUFFER_BIT,
-                    graph.c.GL_LINEAR,
+                    graph.gl.COLOR_BUFFER_BIT,
+                    graph.gl.LINEAR,
                 );
-                graph.c.glBindFramebuffer(graph.c.GL_FRAMEBUFFER, rb.fb);
-                graph.c.glReadPixels(0, 0, sz, sz, graph.c.GL_RGB, graph.c.GL_UNSIGNED_BYTE, &bmp.data.items[0]);
+                graph.gl.BindFramebuffer(graph.gl.FRAMEBUFFER, rb.fb);
+                graph.gl.ReadPixels(0, 0, sz, sz, graph.gl.RGB, graph.gl.UNSIGNED_BYTE, &bmp.data.items[0]);
             }
 
             try async_util.CompressAndSave.spawn(
@@ -1756,8 +1756,8 @@ pub const LoadCtx = struct {
                 @tagName(builtin.target.os.tag),
                 @tagName(builtin.target.cpu.arch),
             });
-            graph.c.glEnable(graph.c.GL_BLEND);
-            //graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
+            graph.gl.Enable(graph.gl.BLEND);
+            //graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
             if (colors.splash_tint > 0)
                 self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
             oself.drawSplash(1.0, fbs.getWritten());
@@ -1819,9 +1819,9 @@ pub fn missingTexture() graph.Texture {
             2,
             2,
             .{
-                .pixel_format = graph.c.GL_RGB,
+                .pixel_format = graph.gl.RGB,
                 .pixel_store_alignment = 1,
-                .mag_filter = graph.c.GL_NEAREST,
+                .mag_filter = graph.gl.NEAREST,
             },
         );
         static.texture.?.w = 32; //Zoom the texture out

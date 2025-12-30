@@ -121,11 +121,11 @@ pub fn draw3Dview(
     font: *graph.FontUtil.PublicFontInterface,
     fh: f32,
 ) !void {
-    graph.c.glPolygonMode(
-        graph.c.GL_FRONT_AND_BACK,
-        if (self.draw_state.tog.wireframe) graph.c.GL_LINE else graph.c.GL_FILL,
+    graph.gl.PolygonMode(
+        graph.gl.FRONT_AND_BACK,
+        if (self.draw_state.tog.wireframe) graph.gl.LINE else graph.gl.FILL,
     );
-    defer graph.c.glPolygonMode(graph.c.GL_FRONT_AND_BACK, graph.c.GL_FILL);
+    defer graph.gl.PolygonMode(graph.gl.FRONT_AND_BACK, graph.gl.FILL);
     try self.draw_state.ctx.beginNoClear(screen_area.dim());
     try self.draw_state.screen_space_text_ctx.beginNoClear(screen_area.dim());
     draw.setViewport(screen_area);
@@ -135,7 +135,7 @@ pub fn draw3Dview(
     // draw_nd "draw no depth" is for any immediate drawing after the depth buffer has been cleared.
     // "draw" still has depth buffer
     const draw_nd = &self.draw_state.ctx;
-    //graph.c.glScissor(x, y, w, h);
+    //graph.gl.Scissor(x, y, w, h);
 
     //const mat = graph.za.Mat4.identity();
 
@@ -161,7 +161,7 @@ pub fn draw3Dview(
         try self.renderer.submitDrawCall(.{
             .prim = .triangles,
             .num_elements = @intCast(mesh.value_ptr.*.mesh.indicies.items.len),
-            .element_type = graph.c.GL_UNSIGNED_INT,
+            .element_type = graph.gl.UNSIGNED_INT,
             .vao = mesh.value_ptr.*.mesh.vao,
             .diffuse = mesh.value_ptr.*.mat.slots[0].id,
             .blend = mesh.value_ptr.*.mat.id(.blend),
@@ -306,9 +306,9 @@ pub fn draw3Dview(
 
     try draw.flush(null, self.draw_state.cam3d);
 
-    graph.c.glEnable(graph.c.GL_BLEND);
-    graph.c.glBlendFunc(graph.c.GL_SRC_ALPHA, graph.c.GL_ONE_MINUS_SRC_ALPHA);
-    graph.c.glBlendEquation(graph.c.GL_FUNC_ADD);
+    graph.gl.Enable(graph.gl.BLEND);
+    graph.gl.BlendFunc(graph.gl.SRC_ALPHA, graph.gl.ONE_MINUS_SRC_ALPHA);
+    graph.gl.BlendEquation(graph.gl.FUNC_ADD);
     { //Draw all the tools after everything as many are transparent
         //TODO turn into alpha tested texture map
 
@@ -427,10 +427,10 @@ pub fn draw3Dview(
     }
 
     try draw.flush(null, self.draw_state.cam3d);
-    graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
+    graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
 
     try draw_nd.flush(null, self.draw_state.cam3d);
-    graph.c.glClear(graph.c.GL_DEPTH_BUFFER_BIT);
+    graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
     { // text stuff
         const col = 0xff_ff_ffff;
         const p = self.draw_state.cam3d.pos;

@@ -7,6 +7,7 @@ const Vec3 = graph.za.Vec3;
 const vpk = @import("vpk.zig");
 const edit = @import("editor.zig");
 const load_pool = @import("thread_pool.zig");
+const gl = graph.gl;
 
 const VVD_MAGIC_STRING = "IDSV";
 const MAX_LODS = 8;
@@ -493,9 +494,9 @@ pub const MultiMesh = struct {
             .notify_vt = .{ .notify_fn = &notify },
         };
 
-        //c.glGenBuffers(1, &ret.vbo);
+        //gl.GenBuffers(1, &ret.vbo);
 
-        //GL.bufferData(c.GL_ELEMENT_ARRAY_BUFFER, ret.ebo, u32, ret.indicies.items);
+        //GL.bufferData(gl.ELEMENT_ARRAY_BUFFER, ret.ebo, u32, ret.indicies.items);
     }
 
     pub fn notify(vt: *load_pool.DeferredNotifyVtable, id: vpk.VpkResId, editor: *edit.Context) void {
@@ -509,14 +510,14 @@ pub const MultiMesh = struct {
 
     /// This should only be called from the active gl thread;
     pub fn initGl(self: *Self) void {
-        c.glGenBuffers(1, &self.vbo);
+        gl.GenBuffers(1, @ptrCast(&self.vbo));
         for (self.meshes.items) |*mesh| {
-            c.glGenBuffers(1, &mesh.ebo);
-            c.glGenVertexArrays(1, &mesh.vao);
+            gl.GenBuffers(1, @ptrCast(&mesh.ebo));
+            gl.GenVertexArrays(1, @ptrCast(&mesh.vao));
             GL.floatVertexAttrib(mesh.vao, self.vbo, 0, 3, MeshVert, "x"); //XYZ
             GL.floatVertexAttrib(mesh.vao, self.vbo, 1, 2, MeshVert, "u"); //RGBA
             GL.floatVertexAttrib(mesh.vao, self.vbo, 2, 3, MeshVert, "nx"); //RGBA
-            GL.intVertexAttrib(mesh.vao, self.vbo, 3, 1, MeshVert, "color", c.GL_UNSIGNED_INT);
+            GL.intVertexAttrib(mesh.vao, self.vbo, 3, 1, MeshVert, "color", gl.UNSIGNED_INT);
             GL.floatVertexAttrib(mesh.vao, self.vbo, 4, 3, MeshVert, "tx");
             GL.floatVertexAttrib(mesh.vao, self.vbo, 5, 1, MeshVert, "blend");
         }
@@ -531,9 +532,9 @@ pub const MultiMesh = struct {
 
     pub fn setData(self: *Self) void {
         for (self.meshes.items) |mesh| {
-            c.glBindVertexArray(mesh.vao);
-            GL.bufferData(c.GL_ARRAY_BUFFER, self.vbo, MeshVert, self.vertices.items);
-            GL.bufferData(c.GL_ELEMENT_ARRAY_BUFFER, mesh.ebo, u16, mesh.indicies.items);
+            gl.BindVertexArray(mesh.vao);
+            GL.bufferData(gl.ARRAY_BUFFER, self.vbo, MeshVert, self.vertices.items);
+            GL.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.ebo, u16, mesh.indicies.items);
         }
     }
 
@@ -546,16 +547,16 @@ pub const MultiMesh = struct {
     }
 
     pub fn drawSimple(self: *Self, view: graph.za.Mat4, model: graph.za.Mat4, shader: c_uint) void {
-        c.glUseProgram(shader);
+        gl.UseProgram(shader);
         GL.passUniform(shader, "view", view);
         GL.passUniform(shader, "model", model);
-        const diffuse_loc = c.glGetUniformLocation(shader, "diffuse_texture");
+        const diffuse_loc = gl.GetUniformLocation(shader, "diffuse_texture");
         for (self.meshes.items) |mesh| {
-            c.glBindVertexArray(mesh.vao);
-            c.glUniform1i(diffuse_loc, 0);
-            c.glBindTextureUnit(0, mesh.texture_id);
+            gl.BindVertexArray(mesh.vao);
+            gl.Uniform1i(diffuse_loc, 0);
+            gl.BindTextureUnit(0, mesh.texture_id);
 
-            c.glDrawElements(c.GL_TRIANGLES, @as(c_int, @intCast(mesh.indicies.items.len)), c.GL_UNSIGNED_SHORT, null);
+            gl.DrawElements(gl.TRIANGLES, @as(c_int, @intCast(mesh.indicies.items.len)), gl.UNSIGNED_SHORT, 0);
         }
     }
 };

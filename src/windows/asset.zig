@@ -472,10 +472,10 @@ pub const ModelPreview = struct {
         const w: i32 = @intFromFloat(screen_area.w);
         const h: i32 = @intFromFloat(screen_area.h);
 
-        graph.c.glViewport(x, y, w, h);
-        graph.c.glScissor(x, y, w, h);
-        graph.c.glEnable(graph.c.GL_SCISSOR_TEST);
-        defer graph.c.glDisable(graph.c.GL_SCISSOR_TEST);
+        graph.gl.Viewport(x, y, w, h);
+        graph.gl.Scissor(x, y, w, h);
+        graph.gl.Enable(graph.gl.SCISSOR_TEST);
+        defer graph.gl.Disable(graph.gl.SCISSOR_TEST);
 
         if (self.ed.models.get(selected_mod)) |mod| {
             if (mod.mesh) |mm| {
