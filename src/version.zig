@@ -4,9 +4,10 @@ const version_private = zon_version.version;
 
 const std = @import("std");
 
-pub const help_url = "https://git.sr.ht/~niklasm/rathammer/tree/master/doc/start.md";
-//pub const help_url = "https://github.com/nmalthouse/rathammer/blob/master/doc/start.md";
-pub const project_url = "https://git.sr.ht/~niklasm/rathammer";
+//pub const help_url = "https://git.sr.ht/~niklasm/rathammer/tree/master/doc/start.md";
+pub const help_url = "https://github.com/nmalthouse/rathammer/blob/master/doc/start.md";
+pub const project_url = "https://github.com/nmalthouse/rathammer";
+//pub const project_url = "https://git.sr.ht/~niklasm/rathammer";
 
 const sp = " ";
 pub const version_string = @tagName(builtin.mode) ++ sp ++

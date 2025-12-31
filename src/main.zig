@@ -69,11 +69,13 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
         try gui.pre_update();
         gui.active_windows.clearRetainingCapacity();
         try gui.active_windows.append(gui.alloc, win_vt);
-        try gui.active_windows.append(gui.alloc, &console.vt);
+        if (other_rect.w > 0)
+            try gui.active_windows.append(gui.alloc, &console.vt);
         if (rising) {
             console.focus(gui);
         }
-        try gui.updateWindowSize(&console.vt, other_rect);
+        if (other_rect.w > 0)
+            try gui.updateWindowSize(&console.vt, other_rect);
         try gui.updateWindowSize(win_vt, win_rect);
         try gui.update();
         try gui.draw(false);
@@ -246,7 +248,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
         .frame_sync = if (args.novsync != null) .immediate else .adaptive_vsync,
         .gl_major_version = 4,
-        .gl_minor_version = 2,
+        .gl_minor_version = 5,
         .enable_debug = IS_DEBUG,
         .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
     }, alloc);
