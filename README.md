@@ -37,34 +37,31 @@ You will need to manually edit this script so the paths are correct.
 Second, wine is very slow to startup by default, 'running wineserver --persistent' will speed up compile times significantly.
 
 ### Building from source
-* (debian) Download the correct zig 0.14.1 tar from [zig](https://ziglang.org/download/)
-* If building from master use zig 0.15.2, building latest tagged "v0.1.0" use zig 0.14.1
+* (debian) Download the correct zig 0.15.2 tar from [zig](https://ziglang.org/download/)
 * (debian) Install the dependencies listed under [sdl linux](https://github.com/libsdl-org/SDL/blob/main/docs/README-linux.md)
 * Follow the instructions below for building
 
 On arch make sure you have: 
 ```
-# Install zig 0.14.1 manually, the pacman package is too new
-sudo pacman -S zenity cmake meson
+# Install zig 0.15.2, the pacman package may not be the correct version
+# Install dependencies
+sudo pacman -S zenity 
 ```
 
 ### Building and running
 ```
 # Master has breaking changes, clone latest tag
-git clone https://github.com/nmalthouse/rathammer.git --branch v0.1.0 
+git clone https://github.com/nmalthouse/rathammer.git --branch v0.2.1 
 cd rathammer
 git submodule update --init --recursive
-cd ratgraph
-./setup_libs.sh
-cd ..
-zig build
+zig build -Doptimize=ReleaseFast
 
 # Example, running with hl2
 ./zig-out/bin/rathammer --custom_cwd ~/.local/share/Steam/steamapps/common --map my_maps/my_hl2map.vmf
 
-# This will load a vmf map. When we save the map with ctrl+s, a file named my_hl2_map.json will be written to the my_maps directory.
+# This will load a vmf map. When we save the map with ctrl+s, a file named my_hl2_map.ratmap will be written to the my_maps directory.
 The vmf file is not touched.
-After closing the editor, to continue editing our map, we must use --map my_maps/my_hl2_map.json
+After closing the editor, to continue editing our map, we must use --map my_maps/my_hl2_map.ratmap
 
 The file 'config.vdf' defines various game configurations. The default is basic_hl2, which searches the set cwd for a directory named Half-Life 2
 See config.vdf for defining other game configs.

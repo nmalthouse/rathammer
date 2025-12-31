@@ -316,9 +316,6 @@ The same is true for gameinfo.txt. Rathammer will only search for the lowercase 
 The zig programming language
 https://github.com/ziglang/zig
 
-LibEpoxy for OpenGL loading
-https://github.com/anholt/libepoxy
-
 STB single header c-libs
 https://github.com/nothings/stb
 
