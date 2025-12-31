@@ -7,7 +7,7 @@ On Linux you must have "zenity" installed to use the file browser! On Arch, Stea
 
 [Documentation](doc/start.md)
 
-![Screenshot of the editor](doc/screen.jpg)
+![Screenshot of the editor](doc/screen_v0.2.1.jpg)
 
 ## Getting vbsp.exe, fgd files, etc on Linux
 * You may have to install the SourceSdk or game authoring tools using Proton.

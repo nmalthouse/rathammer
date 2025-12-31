@@ -1,12 +1,2 @@
-# Changelog for v0.1.1
+# Changelog for v0.2.2
 
-* fix bug with last_selected getting cleared.
-* Fix marquee selection group parity bug
-* Fix selection group not updating on group change.
-* Fix bug where map isn't saved if user quits really fast after saving
-* Remove extraneous GUI elements
-* add select_tex command to select any brushes matching a texture name
-* Fix func_tracktrain
-* Texture tool now works on multiple faces. The last selected face is what is shown in inspector
-* add smoothing groups slider
-* Add --checkhealth and --games flags to print config info
