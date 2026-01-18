@@ -27,7 +27,7 @@ pub fn deleteSelected(ed: *Ed) !void {
             try ustack.append(.{ .create_destroy = try .create(ustack.alloc, id, .destroy) });
         }
         const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
-        ed.selection.list.clear();
+        ed.selection.clear();
         const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
 
         try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
@@ -81,7 +81,7 @@ pub fn clearSelection(ed: *Ed) !void {
     const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
 
     const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
-    ed.selection.list.clear();
+    ed.selection.clear();
     const new_selection = try ed.selection.createStateSnapshot(ustack.alloc);
 
     try ustack.append(.{ .selection = try .create(ustack.alloc, old_selection, new_selection) });
@@ -238,9 +238,9 @@ pub fn groupSelection(ed: *Ed) !void {
     const selection = ed.getSelected();
 
     if (selection.len == 0) return;
-    const last = ed.selection.list.getLast() orelse return;
-    const owner_count = ed.selection.list.countGroup();
-    const last_owner = ed.groups.getOwner(ed.selection.list.getGroup(last) orelse return) orelse null;
+    const last = ed.selection.getLast() orelse return;
+    const owner_count = ed.selection.countGroup();
+    const last_owner = ed.groups.getOwner(ed.selection.getGroup(last) orelse return) orelse null;
 
     if (owner_count > 1)
         ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
@@ -271,7 +271,7 @@ pub fn groupSelection(ed: *Ed) !void {
         }
     }
     const new_group = if (group) |g| g else try ed.groups.newGroup(owner);
-    if (owner) |o| try ed.selection.list.add(o, new_group);
+    if (owner) |o| try ed.selection.addWithGroup(o, new_group);
     for (selection) |id| {
         const old = if (try ed.ecs.getOpt(id, .group)) |g| g.id else 0;
         try ustack.append(.{
@@ -288,7 +288,7 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
     const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
     const old_selection_state = if (select) try ed.selection.createStateSnapshot(ustack.alloc) else null;
     if (select) {
-        ed.selection.list.clear();
+        ed.selection.clear();
         ed.selection.mode = .many;
     }
     const aa = ed.frame_arena.allocator();
@@ -367,7 +367,7 @@ pub fn selectInBounds(ed: *Ed, bounds: [2]Vec3) !void {
         var git = visited_groups.keyIterator();
         while (git.next()) |gid| {
             if (ed.groups.getOwner(gid.*)) |owner|
-                try ed.selection.list.add(owner, gid.*);
+                try ed.selection.addWithGroup(owner, gid.*);
         }
     }
 }
@@ -541,7 +541,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
         const solid = ed.getComponent(sel_id, .solid) orelse continue;
         var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.edit_state.selected_texture_vpk_id);
 
-        ed.selection.list.clear();
+        ed.selection.clear();
         try ustack.append(.{ .create_destroy = try .create(ustack.alloc, sel_id, .destroy) });
 
         for (&ret) |*r| {

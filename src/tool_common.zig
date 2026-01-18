@@ -55,16 +55,18 @@ pub fn drawText3D(pos: Vec3, draw: *DrawCtx, tp: DrawCtx.TextParam, screen_area:
     draw.textFmt(ss, fmt, args, tt);
 }
 
-pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, t: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4) void {
+pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, textp: DrawCtx.TextParam, screen_area: graph.Rect, view: graph.za.Mat4) void {
     const cc = util3d.cubeFromBounds(min, max);
     const ex = cc[1];
     const hx = ex.scale(0.5);
 
+    var tt = textp;
+    tt.background_rect = 0xaa;
     const num = roundForDrawing(ex);
     {
         const pos = cc[0].add(Vec3.new(hx.x(), 0, hx.z()));
         if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
-            draw.textFmt(ss, FMT1D, .{num.x()}, t);
+            draw.textFmt(ss, FMT1D, .{num.x()}, tt);
             const start = Vec3.new(cc[0].x(), cc[0].y(), cc[0].z() + cc[1].z() / 2);
             draw.line3D(start, start.add(Vec3.new(cc[1].x(), 0, 0)), 0xff, 1);
         }
@@ -72,7 +74,7 @@ pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, t: DrawCtx.TextPar
     {
         const pos = cc[0].add(Vec3.new(0, hx.y(), hx.z()));
         if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
-            draw.textFmt(ss, FMT1D, .{num.y()}, t);
+            draw.textFmt(ss, FMT1D, .{num.y()}, tt);
             const start = cc[0].add(Vec3.new(0, 0, hx.z()));
             draw.line3D(start, start.add(Vec3.new(0, ex.y(), 0)), 0xff, 1);
         }
@@ -80,7 +82,7 @@ pub fn drawBBDimensions(min: Vec3, max: Vec3, draw: *DrawCtx, t: DrawCtx.TextPar
     {
         const pos = cc[0].add(hx);
         if (util3d.worldToScreenSpace(screen_area, view, pos)) |ss| {
-            draw.textFmt(ss, FMT1D, .{num.z()}, t);
+            draw.textFmt(ss, FMT1D, .{num.z()}, tt);
             const start = cc[0].add(Vec3.new(hx.x(), hx.y(), 0));
             draw.line3D(start, start.add(Vec3.new(0, 0, ex.z())), 0xff, 1);
         }

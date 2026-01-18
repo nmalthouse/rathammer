@@ -18,6 +18,7 @@ const ecs = @import("ecs.zig");
 const eql = std.mem.eql;
 const Window = graph.SDL.Window;
 const action = @import("actions.zig");
+const app = @import("app.zig");
 
 pub const Main3DView = struct {
     const iWindow = G.iWindow;
@@ -29,6 +30,7 @@ pub const Main3DView = struct {
 
     ed: *Context,
     drawctx: *graph.ImmediateDrawingContext,
+    ev_vt: app.iEvent = .{ .cb = event_cb },
 
     // only used when grab_when == .toggle
     grab_toggled: bool = false,
@@ -94,6 +96,10 @@ pub const Main3DView = struct {
         };
         self.vt.update_fn = update;
 
+        if (ed.eventctx.registerListener(&self.ev_vt)) |listener| {
+            ed.eventctx.subscribe(listener, @intFromEnum(app.EventKind.selection_changed)) catch {};
+        } else |_| {}
+
         return &self.vt;
     }
 
@@ -111,6 +117,16 @@ pub const Main3DView = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         vt.deinit(gui);
         gui.alloc.destroy(self);
+    }
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        _ = self;
+        switch (ev) {
+            .selection_changed => {},
+            else => {},
+        }
     }
 };
 

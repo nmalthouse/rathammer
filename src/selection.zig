@@ -2,6 +2,7 @@ const std = @import("std");
 const edit = @import("editor.zig");
 const ecs = @import("ecs.zig");
 const GroupId = ecs.Groups.GroupId;
+const EventCtx = @import("app.zig").EventCtx;
 const Id = edit.EcsT.Id;
 
 const Self = @This();
@@ -33,14 +34,14 @@ const SelectionList = struct {
         self.groupmap.deinit(self.alloc);
     }
 
-    pub fn clear(self: *@This()) void {
+    fn clear(self: *@This()) void {
         self.ids.clearRetainingCapacity();
         self.groups.clearRetainingCapacity();
         self.idmap.clearRetainingCapacity();
         self.groupmap.clearRetainingCapacity();
     }
 
-    pub fn add(self: *@This(), id: Id, group: GroupId) !void {
+    fn add(self: *@This(), id: Id, group: GroupId) !void {
         if (self.idmap.get(id)) |index| {
             if (index < self.groups.items.len) {
                 const old_group = self.groups.items[index];
@@ -59,7 +60,7 @@ const SelectionList = struct {
         }
     }
 
-    pub fn updateGroup(self: *@This(), id: Id, group: GroupId) !void {
+    fn updateGroup(self: *@This(), id: Id, group: GroupId) !void {
         if (self.idmap.get(id)) |index| {
             if (index < self.groups.items.len) {
                 const old_group = self.groups.items[index];
@@ -133,17 +134,17 @@ const SelectionList = struct {
         return self.ids.items.len;
     }
 
-    pub fn countGroup(self: *const @This()) usize {
+    fn countGroup(self: *const @This()) usize {
         return self.groupmap.count();
     }
 
-    pub fn getLast(self: *const @This()) ?Id {
+    fn getLast(self: *const @This()) ?Id {
         if (self.ids.items.len > 0)
             return self.ids.items[self.ids.items.len - 1];
         return null;
     }
 
-    pub fn getGroup(self: *const @This(), id: Id) ?GroupId {
+    fn getGroup(self: *const @This(), id: Id) ?GroupId {
         if (self.idmap.get(id)) |index| {
             return self.groups.items[index];
         }
@@ -156,6 +157,13 @@ const SelectionList = struct {
 
     pub fn containsGroup(self: *const @This(), group: GroupId) bool {
         return self.groupmap.contains(group);
+    }
+
+    fn hash(self: *const @This()) u64 {
+        var hasher = std.hash.Wyhash.init(0);
+        std.hash.autoHashStrat(&hasher, self.ids.items, .Deep);
+        std.hash.autoHashStrat(&hasher, self.groups.items, .Deep);
+        return hasher.final();
     }
 };
 
@@ -178,11 +186,13 @@ mode: Mode = .one,
 /// Toggling this only effects the behavior of fn put()
 ignore_groups: bool = false,
 
-list: SelectionList,
+_list: SelectionList,
 
 alloc: std.mem.Allocator,
 
 scratch_list: std.ArrayListUnmanaged(Id) = .{},
+event_ctx: *EventCtx,
+last_selection_hash: u64 = 0,
 
 options: struct {
     brushes: bool = true,
@@ -195,15 +205,16 @@ options: struct {
     nearby_distance: f32 = 0.1,
 } = .{},
 
-pub fn init(alloc: std.mem.Allocator) Self {
+pub fn init(alloc: std.mem.Allocator, event_ctx: *EventCtx) Self {
     return .{
         .alloc = alloc,
-        .list = SelectionList.init(alloc),
+        ._list = SelectionList.init(alloc),
+        .event_ctx = event_ctx,
     };
 }
 
 pub fn deinit(self: *Self) void {
-    self.list.deinit();
+    self._list.deinit();
     self.scratch_list.deinit(self.alloc);
 }
 
@@ -217,8 +228,8 @@ pub fn toggle(self: *Self) void {
 //IF groups change ?
 //shouldn't be a problem becouse we have a seperate undo item for setting groups.
 pub fn createStateSnapshot(self: *Self, alloc: std.mem.Allocator) !StateSnapshot {
-    const multi = try alloc.dupe(Id, self.list.ids.items);
-    const groups = try alloc.dupe(GroupId, self.list.groups.items);
+    const multi = try alloc.dupe(Id, self._list.ids.items);
+    const groups = try alloc.dupe(GroupId, self._list.groups.items);
 
     return StateSnapshot{
         .mode = self.mode,
@@ -229,23 +240,24 @@ pub fn createStateSnapshot(self: *Self, alloc: std.mem.Allocator) !StateSnapshot
 
 pub fn setFromSnapshot(self: *Self, snapshot: StateSnapshot) !void {
     if (snapshot.multi.len != snapshot.groups.len) return error.invalidSnapshot;
-    self.list.clear();
+    self._list.clear();
 
     for (snapshot.multi, 0..) |m, mi| {
-        try self.list.add(m, snapshot.groups[mi]);
+        try self._list.add(m, snapshot.groups[mi]);
     }
 
     self.mode = snapshot.mode;
+    defer self.notifySelectionChanged();
 }
 
 pub fn countSelected(self: *Self) usize {
-    return self.list.count();
+    return self._list.count();
 }
 
 // Only return selected if length of selection is 1
 pub fn getExclusive(self: *Self) ?Id {
     if (self.countSelected() == 1) {
-        return self.list.getLast();
+        return self._list.getLast();
     }
     return null;
 }
@@ -254,10 +266,10 @@ pub fn getExclusive(self: *Self) ?Id {
 /// or it returns the selection when len == 1
 pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
     blk: {
-        if (self.list.countGroup() != 1) break :blk;
+        if (self._list.countGroup() != 1) break :blk;
 
-        const last = self.list.getLast() orelse break :blk;
-        const lgroup = self.list.getGroup(last) orelse break :blk;
+        const last = self._list.getLast() orelse break :blk;
+        const lgroup = self._list.getGroup(last) orelse break :blk;
         if (lgroup == 0) break :blk;
 
         return groups.getOwner(lgroup);
@@ -267,7 +279,7 @@ pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
 
 pub fn setToSingle(self: *Self, id: Id, ed: *edit.Context) !void {
     self.mode = .one;
-    self.list.clear();
+    self._list.clear();
     try self.add(id, ed);
 }
 
@@ -308,27 +320,28 @@ const PutResult = struct {
 };
 pub fn put(self: *Self, id: Id, editor: *edit.Context) !PutResult {
     if (!self.canSelect(id, editor)) return .{ .res = .masked, .group = 0 };
+    defer self.notifySelectionChanged();
     if (!self.ignore_groups) {
         if (try editor.ecs.getOpt(id, .group)) |group| {
             if (group.id != 0) {
                 switch (self.mode) {
-                    .one => self.list.clear(),
+                    .one => self._list.clear(),
                     .many => {},
                 }
-                const to_remove = self.list.contains(id);
+                const to_remove = self._list.contains(id);
 
                 if (to_remove) {
-                    try self.list.removeGroup(group.id);
+                    try self._list.removeGroup(group.id);
                 } else {
                     // Add the group owner ent aswell, not technically a part of group but shouldn't cause issues.
                     // Selecting a func_tracktrain and moving it will move the origin (group owner ent) aswell.
                     if (editor.groups.getOwner(group.id)) |owner| {
-                        try self.list.add(owner, group.id);
+                        try self._list.add(owner, group.id);
                     }
                     var it = editor.editIterator(.group);
                     while (it.next()) |ent| {
                         if (ent.id == group.id) {
-                            try self.list.add(it.i, ent.id);
+                            try self._list.add(it.i, ent.id);
                         }
                     }
                 }
@@ -344,7 +357,7 @@ pub fn put(self: *Self, id: Id, editor: *edit.Context) !PutResult {
             return .{ .group = group, .res = .added };
         },
         .many => {
-            return try self.list.addOrRemove(id, group);
+            return try self._list.addOrRemove(id, group);
         },
     }
 }
@@ -355,17 +368,55 @@ pub fn sanitizeSelection(self: *Self, ed: *edit.Context) !void {
 
     self.scratch_list.clearRetainingCapacity();
 
-    for (self.list.ids.items) |pot| {
+    for (self._list.ids.items) |pot| {
         if (ed.ecs.intersects(pot, vis_mask))
             try self.scratch_list.append(self.alloc, pot);
     }
 
     for (self.scratch_list.items) |to_remove| {
-        try self.list.remove(to_remove);
+        try self._list.remove(to_remove);
     }
+
+    if (self.scratch_list.items.len > 0)
+        self.notifySelectionChanged();
 }
 
 pub fn add(self: *Self, id: Id, editor: *edit.Context) !void {
     const group = if (try editor.ecs.getOpt(id, .group)) |g| g.id else 0;
-    try self.list.add(id, group);
+    try self._list.add(id, group);
+    self.notifySelectionChanged();
+}
+
+pub fn getLast(self: *const Self) ?Id {
+    return self._list.getLast();
+}
+
+pub fn updateGroup(self: *Self, id: Id, group: GroupId) !void {
+    try self._list.updateGroup(id, group);
+    self.notifySelectionChanged();
+}
+
+pub fn clear(self: *Self) void {
+    self._list.clear();
+    self.notifySelectionChanged();
+}
+
+pub fn countGroup(self: *Self) usize {
+    return self._list.countGroup();
+}
+
+pub fn getGroup(self: *const Self, id: Id) ?GroupId {
+    return self._list.getGroup(id);
+}
+
+pub fn addWithGroup(self: *Self, id: Id, group: GroupId) !void {
+    try self._list.add(id, group);
+    self.notifySelectionChanged();
+}
+
+fn notifySelectionChanged(self: *Self) void {
+    const last_hash = self.last_selection_hash;
+    self.last_selection_hash = self._list.hash();
+    if (last_hash != self.last_selection_hash)
+        self.event_ctx.pushEvent(.{ .selection_changed = {} });
 }

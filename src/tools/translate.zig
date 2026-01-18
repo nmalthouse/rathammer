@@ -183,7 +183,7 @@ pub const Translate = struct {
         switch (self.origin_mode) {
             .mean => {},
             .last_selected => {
-                const last_id = ed.selection.list.getLast() orelse return null;
+                const last_id = ed.selection.getLast() orelse return null;
                 const last_bb = ed.getComponent(last_id, .bounding_box) orelse return null;
                 if (ed.getComponent(last_id, .solid)) |solid| { //check Solid before Entity
                     _ = solid;

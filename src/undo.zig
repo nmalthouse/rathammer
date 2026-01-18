@@ -575,7 +575,7 @@ pub const UndoChangeGroup = struct {
         } else {
             try editor.ecs.attach(id, .group, .{ .id = new_group });
         }
-        try editor.selection.list.updateGroup(id, new_group);
+        try editor.selection.updateGroup(id, new_group);
     }
 
     pub fn redo(self: *@This(), editor: *Editor) void {

@@ -22,6 +22,7 @@ const Wg = guis.Widget;
 const gridutil = @import("grid.zig");
 const toolutil = @import("tool_common.zig");
 const action = @import("actions.zig");
+const colors = @import("colors.zig").colors;
 
 pub const CubeDraw = @import("tools/cube_draw.zig").CubeDraw;
 pub const TextureTool = @import("tools/texture.zig").TextureTool;
@@ -219,6 +220,20 @@ pub const FastFaceManip = struct {
                             }
                         }
                     }
+                } else {
+                    for (selected_slice) |sel| {
+                        if (!editor.hasComponent(sel, .solid)) continue;
+                        if (editor.getComponent(sel, .bounding_box)) |bb| {
+                            toolutil.drawBBDimensions(
+                                bb.a,
+                                bb.b,
+                                &editor.draw_state.screen_space_text_ctx,
+                                td.text_param,
+                                td.screen_area,
+                                td.view_3d.*,
+                            );
+                        }
+                    }
                 }
             },
             .active => {
@@ -253,15 +268,54 @@ pub const FastFaceManip = struct {
                                 _, const pos = inter_;
                                 const dist = editor.grid.snapV3(pos);
 
+                                //Get current bounds of each solid and display delta
                                 if (self.draw_text) {
-                                    toolutil.drawDistance(
-                                        self.start,
-                                        dist,
-                                        &editor.draw_state.screen_space_text_ctx,
-                                        td.text_param,
-                                        td.screen_area,
-                                        td.view_3d.*,
-                                    );
+                                    if (editor.getComponent(id, .bounding_box)) |bb| {
+                                        {
+                                            const aa = editor.frame_arena.allocator();
+                                            var vert_cpy = try aa.dupe(Vec3, ver);
+                                            defer aa.free(vert_cpy);
+                                            for (ind) |index|
+                                                vert_cpy[index] = vert_cpy[index].add(dist);
+                                            var bcpy = bb;
+                                            bcpy.a = .set(std.math.floatMax(f32));
+                                            bcpy.b = .set(-std.math.floatMax(f32));
+                                            for (vert_cpy) |v| {
+                                                bcpy.a = bcpy.a.min(v);
+                                                bcpy.b = bcpy.b.max(v);
+                                            }
+                                            toolutil.drawBBDimensions(
+                                                bcpy.a,
+                                                bcpy.b,
+                                                &editor.draw_state.screen_space_text_ctx,
+                                                td.text_param,
+                                                td.screen_area,
+                                                td.view_3d.*,
+                                            );
+                                        }
+
+                                        toolutil.drawText3D(
+                                            self.start.add(dist),
+                                            &editor.draw_state.screen_space_text_ctx,
+                                            td.text_param,
+                                            td.screen_area,
+                                            td.view_3d.*,
+                                            "[{d} {d} {d}]",
+                                            .{
+                                                dist.x(),
+                                                dist.y(),
+                                                dist.z(),
+                                            },
+                                        );
+                                    }
+                                    //toolutil.drawDistance(
+                                    //    self.start,
+                                    //    dist,
+                                    //    &editor.draw_state.screen_space_text_ctx,
+                                    //    td.text_param,
+                                    //    td.screen_area,
+                                    //    td.view_3d.*,
+                                    //);
                                 }
 
                                 if (self.draw_grid) {
@@ -286,7 +340,7 @@ pub const FastFaceManip = struct {
                                     const s_io: usize = @intCast(sel.side_i);
                                     const side_o = &solid_o.sides.items[s_io];
                                     solid_o.drawImmediate(td.draw, editor, dist, side_o.index.items, false) catch return;
-                                    draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, 0xff000088, .{ .offset = dist });
+                                    draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, colors.fast_face_plane, .{ .offset = dist });
                                 }
 
                                 const commit_btn = if (self.right) rm else lm;
@@ -294,7 +348,7 @@ pub const FastFaceManip = struct {
                                     try action.translateFace(editor, self.selected.items, dist);
                                 }
                             } else {
-                                draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, 0xff000088, .{});
+                                draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.fast_face_plane, .{});
                             }
                         }
 

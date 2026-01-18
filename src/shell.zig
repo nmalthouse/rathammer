@@ -48,6 +48,8 @@ pub const Commands = enum {
     unhideAll,
 
     translate,
+
+    create_cube,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -186,6 +188,22 @@ pub const CommandCtx = struct {
                     }, args, wr, com, self.arena.allocator()) catch return;
 
                     try actions.rotateTranslateSelected(self.ed, p.mod == .dupe, null, .zero(), .new(p.dx, p.dy, p.dz));
+                },
+                .create_cube => {
+                    const p = parseTypedArgs(struct {
+                        x: f32,
+                        y: f32,
+                        z: f32,
+
+                        x_dim: f32,
+                        y_dim: f32,
+                        z_dim: f32,
+                        mod: enum { select, none } = .none,
+                    }, args, wr, com, self.arena.allocator()) catch return;
+                    const pgen = @import("primitive_gen.zig");
+                    const cube = try pgen.cube(self.arena.allocator(), .{ .size = .new(p.x_dim, p.y_dim, p.z_dim) });
+                    const vpk_id = self.ed.edit_state.selected_texture_vpk_id orelse 0;
+                    _ = try actions.createSolid(self.ed, &cube, vpk_id, .new(p.x, p.y, p.z), .identity(), p.mod == .select);
                 },
                 .undo => actions.undo(self.ed),
                 .redo => actions.redo(self.ed),

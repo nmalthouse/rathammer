@@ -29,6 +29,7 @@ const EventKindT = u16;
 pub const EventKind = enum(EventKindT) {
     undo,
     redo,
+    selection_changed,
     tool_changed,
     saved,
     menubar_dirty,
@@ -40,6 +41,7 @@ pub const Event = union(EventKind) {
     undo: void,
     redo: void,
     //select: void,
+    selection_changed: void,
     tool_changed: void,
     saved: void,
     menubar_dirty: void,
@@ -107,6 +109,7 @@ pub const EventCtx = struct {
             std.debug.print("Failed to alloc event!\n", .{});
             return;
         };
+        //std.debug.print("Got event {t}\n", .{event});
         ev.* = event;
         graph.SDL.pushEvent(SdlEventId, 0, @ptrCast(self), @ptrCast(ev)) catch {
             std.debug.print("Error creating sdl event\n", .{});

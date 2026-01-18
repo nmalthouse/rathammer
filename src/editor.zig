@@ -337,7 +337,6 @@ pub const Context = struct {
             .notifier = NotifyCtx.init(alloc, 4000),
             .autosaver = try Autosaver.init(config.autosave.interval_min * std.time.ms_per_min, config.autosave.max, config.autosave.enable, alloc),
             .rayctx = raycast.Ctx.init(alloc),
-            .selection = Selection.init(alloc),
             .frame_arena = std.heap.ArenaAllocator.init(alloc),
             .groups = ecs.Groups.init(alloc),
             .config = config,
@@ -361,6 +360,7 @@ pub const Context = struct {
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
             .eventctx = try app.EventCtx.create(alloc),
+            .selection = Selection.init(alloc, ret.eventctx),
             .rpcserv = try rpc.RpcServer.create(alloc, ret.shell, shell.RpcEventId),
 
             .dirs = dirs,
@@ -508,6 +508,11 @@ pub const Context = struct {
         return self.ecs.getPtr(index, comp) catch null;
     }
 
+    pub fn hasComponent(self: *Self, index: EcsT.Id, comptime comp: EcsT.Components) bool {
+        const ent = self.ecs.getEntity(index) catch return false;
+        return ent.isSet(@intFromEnum(comp));
+    }
+
     pub fn putComponent(self: *Self, index: EcsT.Id, comptime comp: EcsT.Components, val: EcsT.Fields[@intFromEnum(comp)].ftype) void {
         const ent = self.ecs.getEntity(index) catch return;
         const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
@@ -575,7 +580,7 @@ pub const Context = struct {
         self._selection_scratch.clearRetainingCapacity();
 
         self.selection.sanitizeSelection(self) catch return &.{};
-        self._selection_scratch.appendSlice(self.alloc, self.selection.list.ids.items) catch return &.{};
+        self._selection_scratch.appendSlice(self.alloc, self.selection._list.ids.items) catch return &.{};
         //const vis_mask = EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
 
         //for (self.selection.list.ids.items) |pot| {
