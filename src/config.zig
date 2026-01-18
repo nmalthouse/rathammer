@@ -4,7 +4,6 @@ const graph = @import("graph");
 const StringStorage = @import("string.zig").StringStorage;
 const ArrayList = std.ArrayListUnmanaged;
 
-// TODO all values should have a default value
 /// The user's 'config.vdf' maps directly into this structure
 pub const Config = struct {
     const mask = graph.SDL.keycodes.Keymod.mask;
@@ -31,14 +30,14 @@ pub const Config = struct {
         cam_up: Keybind = .{ .b = SC(.SPACE, 0) },
         cam_pan: Keybind = .{ .b = SC(.SPACE, 0) },
 
+        tool_context: Keybind = .{ .b = SC(.G, 0) },
+
         mouse_capture: Keybind = .{ .b = SC(.LSHIFT, 0) },
 
         cam_slow: Keybind = .{ .b = SC(.LCTRL, 0) },
 
         hide_selected: Keybind = .{ .b = SC(.H, 0) },
         unhide_all: Keybind = .{ .b = SC(.H, mask(&.{.CTRL})) },
-
-        toggle_console: Keybind = .{ .b = SC(.GRAVE, 0) },
 
         quit: Keybind = .{ .b = SC(.ESCAPE, mask(&.{.CTRL})) },
         focus_search: Keybind = .{ .b = KC(.f, mask(&.{.CTRL})) },
