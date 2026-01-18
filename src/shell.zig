@@ -13,6 +13,10 @@ const actions = @import("actions.zig");
 //write a save
 //kill the vbsp
 
+const ArgIt = std.mem.TokenIterator(u8, .scalar);
+fn argIt(arg_string: []const u8) ArgIt {
+    return std.mem.tokenizeScalar(u8, arg_string, ' ');
+}
 pub const Commands = enum {
     count_ents,
     help,
@@ -34,12 +38,16 @@ pub const Commands = enum {
     pos,
 
     trySave,
+    save_as,
+
     undo,
     redo,
     clearSelection,
     delete,
     hide,
     unhideAll,
+
+    translate,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -60,17 +68,18 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
                     ha(0, "shell") => {
                         _ = cmd.arena.reset(.retain_capacity);
                         const aa = cmd.arena.allocator();
-                        var args = std.ArrayList([]const u8){};
+                        var args = std.ArrayList(u8){};
                         switch (msg.params) {
                             .array => |arr| {
                                 for (arr.items) |param| {
                                     switch (param) {
-                                        .string => |str| args.append(aa, str) catch return,
+                                        .string => |str| args.appendSlice(aa, str) catch return,
                                         else => {},
                                     }
                                 }
                                 var cmd_response = std.array_list.Managed(u8).init(aa);
-                                var arg_it = SliceIt{ .slices = args.items };
+                                var arg_it = argIt(args.items);
+
                                 cmd.execErr(&arg_it, &cmd_response) catch return;
 
                                 ed.rpcserv.respond(&wr.interface, .{
@@ -101,12 +110,13 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
 
 pub fn helpCommand(cmd: Commands) []const u8 {
     return switch (cmd) {
-        else => "",
+        else => "TODO WRITE USAGE",
         .select_id => "id0 id1... -> Add or remove ids from selection",
         .select_class => "prop_static infodecal... -> Add or remove any entities with matching class",
         .snap_selected => "-> Round all vertices of selected solids to integers",
         .optimize => "-> Attempt to fix invalid solids in selection",
         .pointfile => "-> Attempt to load pointfile in map compile dir, or user path if specified",
+        .translate => "dx:float dy:float dz:float duplicate:?bool",
     };
 }
 
@@ -149,18 +159,42 @@ pub const CommandCtx = struct {
 
     pub fn execConsole(vt: *Console.ConsoleCb, string: []const u8, wr: *std.array_list.Managed(u8)) void {
         const self: *@This() = @alignCast(@fieldParentPtr("iconsole", vt));
-        var args = std.mem.tokenizeScalar(u8, string, ' ');
-        self.execErr(&args, wr) catch return;
+        var args = argIt(string);
+        _ = self.arena.reset(.retain_capacity);
+        self.execErr(&args, wr) catch |err| {
+            var arg2 = argIt(string);
+            const com = arg2.next() orelse "";
+            wr.print("error.{t} executing command `{s}`\n", .{ err, com }) catch return;
+            if (std.meta.stringToEnum(Commands, com)) |comc| {
+                wr.print("Usage:\n\t{s} {s}", .{ com, helpCommand(comc) }) catch return;
+            }
+        };
     }
 
     /// args must be a container pointer with a pub fn next() ?[] const u8
-    pub fn execErr(self: *@This(), args: anytype, wr: *std.array_list.Managed(u8)) anyerror!void {
+    pub fn execErr(self: *@This(), args: *ArgIt, wr: *std.array_list.Managed(u8)) anyerror!void {
         //var args = SliceIt{ .slices = argv };
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
+                .translate => {
+                    const p = parseTypedArgs(struct {
+                        dx: f32,
+                        dy: f32,
+                        dz: f32,
+                        mod: enum { dupe, none } = .none,
+                    }, args, wr, com, self.arena.allocator()) catch return;
+
+                    try actions.rotateTranslateSelected(self.ed, p.mod == .dupe, null, .zero(), .new(p.dx, p.dy, p.dz));
+                },
                 .undo => actions.undo(self.ed),
                 .redo => actions.redo(self.ed),
+                .save_as => {
+                    const p = parseTypedArgs(struct { filepath: []const u8 }, args, wr, com, self.arena.allocator()) catch return;
+
+                    try self.ed.setMapName(p.filepath);
+                    try actions.trySave(self.ed);
+                },
                 .trySave => try actions.trySave(self.ed),
                 .clearSelection => try actions.clearSelection(self.ed),
                 .delete => try actions.deleteSelected(self.ed),
@@ -190,15 +224,50 @@ pub const CommandCtx = struct {
                     try wr.print("\n", .{});
                 },
                 .select_class => {
-                    const class = args.next() orelse return error.expectedClassName;
+                    const parg = parseTypedArgs(struct { class: []const []const u8 }, args, wr, com, self.arena.allocator()) catch return;
+                    var counts = try self.arena.allocator().alloc(struct {
+                        added: usize = 0,
+                        masked: usize = 0,
+                        removed: usize = 0,
+                    }, parg.class.len);
+
+                    for (counts) |*cc|
+                        cc.* = .{};
+
+                    self.ed.selection.setToMulti();
                     var it = self.ed.ecs.iterator(.entity);
-                    while (it.next()) |ent| {
-                        if (std.mem.eql(u8, class, ent.class)) {
-                            _ = self.ed.selection.put(it.i, self.ed) catch |err| {
-                                try wr.print("Selection failed {t}\n", .{err});
-                            };
+                    outer: while (it.next()) |ent| {
+                        for (parg.class, 0..) |class, c_i| {
+                            if (std.mem.eql(u8, class, ent.class)) {
+                                const res = self.ed.selection.put(it.i, self.ed) catch |err| {
+                                    try wr.print("Selection failed {t}\n", .{err});
+                                    continue;
+                                };
+                                const cc = &counts[c_i];
+                                switch (res.res) {
+                                    .masked => cc.masked += 1,
+                                    .added => cc.added += 1,
+                                    .removed => cc.removed += 1,
+                                }
+                                continue :outer;
+                            }
                         }
                     }
+
+                    var total_add: usize = 0;
+                    var total_mask: usize = 0;
+                    var total_rem: usize = 0;
+                    try wr.print("{s:<16} added removed masked\n", .{"key: class"});
+                    const fmt = "{s:<16} {d:>4} {d:>4} {d:>4}\n";
+                    for (parg.class, 0..) |class, c_i| {
+                        const cc = counts[c_i];
+                        total_add += cc.added;
+                        total_mask += cc.masked;
+                        total_rem += cc.removed;
+                        try wr.print(fmt, .{ class, cc.added, cc.removed, cc.masked });
+                    }
+                    try wr.print("\n", .{});
+                    try wr.print(fmt, .{ "total", total_add, total_rem, total_mask });
                 },
                 .select_tex => {
                     const tex = args.next() orelse return error.expectedTexturePrefix;
@@ -290,12 +359,9 @@ pub const CommandCtx = struct {
                     }
                 },
                 .tp => {
-                    if (parseVec(args)) |vec| {
-                        try wr.print("Teleporting to {d} {d} {d}\n", .{ vec.x(), vec.y(), vec.z() });
-                        self.ed.draw_state.cam3d.pos = vec;
-                    } else {
-                        //try wr.print("Invalid teleport command: '{s}'\n", .{scratch.items});
-                    }
+                    const parg = parseTypedArgs(struct { x: f32, y: f32, z: f32 }, args, wr, com, self.arena.allocator()) catch return;
+                    try wr.print("Teleporting to {d} {d} {d}\n", .{ parg.x, parg.y, parg.z });
+                    self.ed.draw_state.cam3d.pos = .new(parg.x, parg.y, parg.z);
                 },
                 .portalfile => {
                     const pf = &self.ed.draw_state.portalfile;
@@ -360,4 +426,98 @@ fn printCommand(argv: []const []const u8, wr: *std.array_list.Managed(u8)) !void
         try wr.print("{s}", .{arg});
     }
     try wr.print("\n", .{});
+}
+
+fn parseTypedArgs(comptime T: type, it: *ArgIt, wr: *std.array_list.Managed(u8), cmd: Commands, arena: std.mem.Allocator) !T {
+    return parseTypedArgsStruct(T, it, arena) catch |err| {
+        try writeErrorTypedArgs(T, err, it, wr, cmd);
+        return error.failed;
+    };
+}
+
+fn parseTypedArgsStruct(comptime struct_T: type, it: *ArgIt, arena: std.mem.Allocator) !struct_T {
+    const info = @typeInfo(struct_T);
+    if (info != .@"struct") @compileError("parseTypedArgs expected struct type");
+    var ret: struct_T = undefined;
+    inline for (info.@"struct".fields, 0..) |field, fi| {
+        switch (@typeInfo(field.type)) {
+            else => {
+                @field(ret, field.name) = try parseTypedArgsInner(it.next(), field);
+            },
+            .pointer => |p| {
+                if (field.type == []const u8) {
+                    @field(ret, field.name) = try parseTypedArgsInner(it.next(), field);
+                    continue;
+                }
+                if (p.size != .slice) @compileError("pointer must be slice");
+                var array = std.ArrayList(p.child){};
+                while (it.next()) |value| {
+                    try array.append(arena, try parseTypedArgsInner(value, .{
+                        .type = p.child,
+                        .name = field.name,
+                        .is_comptime = false,
+                        .alignment = @alignOf(p.child),
+                        .default_value_ptr = null,
+                    }));
+                }
+                if (array.items.len == 0) return error.expectedList;
+                @field(ret, field.name) = array.items;
+                if (fi != info.@"struct".fields.len - 1) @compileError("slice arg must be last in struct");
+                return ret;
+            },
+        }
+    }
+    return ret;
+}
+
+fn parseTypedArgsInner(value: ?[]const u8, comptime field: std.builtin.Type.StructField) !field.type {
+    const finfo = @typeInfo(field.type);
+
+    switch (finfo) {
+        else => @compileError("not supported " ++ field.name ++ " : " ++ @typeName(field.type)),
+        .pointer => |p| {
+            if (p.size != .slice or p.child != u8) @compileError("pointer must be []const u8");
+            return value orelse error.expectedString;
+        },
+        .float => return std.fmt.parseFloat(field.type, value orelse return error.expectedFloat),
+        .@"enum" => {
+            if (value) |val| {
+                return std.meta.stringToEnum(field.type, val) orelse return error.invalidEnum;
+            } else {
+                if (field.default_value_ptr) |default| {
+                    return @as(*const field.type, @ptrCast(default)).*;
+                }
+                return error.expectedEnum;
+            }
+        },
+    }
+}
+
+fn writeErrorTypedArgs(comptime T: type, err: anyerror, it: *const ArgIt, wr: *std.array_list.Managed(u8), cmd: Commands) !void {
+    const info = @typeInfo(T);
+
+    try wr.appendNTimes(' ', it.index);
+    try wr.print("^\n", .{});
+    try wr.print("{t}\n", .{err});
+
+    try wr.print("usage:\n{t} ", .{cmd});
+    inline for (info.@"struct".fields) |field| {
+        switch (@typeInfo(field.type)) {
+            .float => try wr.print("{s} ", .{field.name}),
+            .@"enum" => |e| {
+                try wr.print("{s}:{{ ", .{field.name});
+                inline for (e.fields) |ef| {
+                    try wr.print("{s} ", .{ef.name});
+                }
+                try wr.print("}} ", .{});
+            },
+            .pointer => {
+                for (0..3) |i| {
+                    try wr.print("{s}{d} ", .{ field.name, i });
+                }
+                try wr.print("...", .{});
+            },
+            else => @compileError(""),
+        }
+    }
 }

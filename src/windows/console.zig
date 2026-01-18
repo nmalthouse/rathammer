@@ -198,8 +198,11 @@ pub const Console = struct {
                         },
                         else => {},
                         .TAB => {
-                            tb.reset(self.readline.complete()) catch {};
-                            tb.move_to(.end);
+                            const complete_string = self.readline.complete();
+                            if (complete_string.len > 0) {
+                                tb.reset(complete_string) catch {};
+                                tb.move_to(.end);
+                            }
                             return; //skip emit
                         },
                     }
