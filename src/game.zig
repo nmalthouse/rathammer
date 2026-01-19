@@ -83,9 +83,14 @@ pub const GameList = struct {
         return self.list.getIndex(game_name);
     }
 
-    pub fn getName(self: *Self, id_: usize) []const u8 {
-        if (id_ >= self.list.values().len) return "";
+    pub fn getName(self: *Self, id_: usize) ?[]const u8 {
+        if (id_ >= self.list.values().len) return null;
         return self.list.values()[id_].name;
+    }
+
+    pub fn get(self: *Self, id_: usize) ?Game {
+        if (id_ >= self.list.values().len) return null;
+        return self.list.values()[id_];
     }
 };
 

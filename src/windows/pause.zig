@@ -153,7 +153,7 @@ pub const PauseWindow = struct {
             .new_map => {
                 self.vt.needs_rebuild = true;
                 const ed = self.editor;
-                ed.initNewMap("sky_day01_01", ed.config.default_game) catch {
+                ed.initNewMap("sky_day01_01", ed.games.getName(self.new_map_game_config) orelse ed.config.default_game) catch {
                     std.debug.print("ERROR INIT NEW MAP\n", .{});
                 };
                 self.editor.paused = false;
@@ -164,6 +164,10 @@ pub const PauseWindow = struct {
             },
             .pick_map => {
                 self.vt.needs_rebuild = true;
+
+                self.editor.loaded_game_name = self.editor.storeString(
+                    self.editor.games.getName(self.new_map_game_config) orelse self.editor.config.default_game,
+                ) catch return;
                 async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, .pick_map) catch return;
             },
             .open_help => {
@@ -218,18 +222,20 @@ pub const PauseWindow = struct {
             const Btn = Wg.Button.build;
             _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", null);
             {
-                var hy = gui.dstate.hlayout(ly.getArea() orelse return, 2);
+                ly.pushCount(2);
+                var hy = gui.dstate.tlayout(ly.getArea() orelse return, 2);
                 _ = Wg.ComboUser(usize).build(vt, hy.getArea() orelse return, .{
                     .user_vt = &self.cbhandle,
                     .current = self.new_map_game_config,
                     .count = self.editor.games.list.values().len,
 
-                    .commit_cb = gameComboCommit,
+                    .commit_cb = gameComboCommitNewMap,
                     .name_cb = gameComboName,
-                }, 0xff);
+                }, 0);
                 _ = Btn(vt, hy.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+                _ = hy.getArea();
+                _ = Btn(vt, hy.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
             }
-            _ = Btn(vt, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
 
             ly.pushRemaining();
             const SZ = 5;
@@ -484,6 +490,11 @@ pub const PauseWindow = struct {
         }
     }
 
+    fn gameComboCommitNewMap(cb: *CbHandle, id: usize, _: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.new_map_game_config = id;
+    }
+
     fn gameComboCommit(cb: *CbHandle, id: usize, rec_index: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.recents.items[rec_index].game_config_index = id;
@@ -509,7 +520,7 @@ pub const PauseWindow = struct {
             self.editor.dirs.app_cwd.dir,
             name,
             self.editor.loadctx,
-            self.editor.games.getName(self.recents.items[id].game_config_index orelse 0),
+            self.editor.games.getName(self.recents.items[id].game_config_index orelse 0) orelse self.editor.config.default_game,
         ) catch |err| {
             std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
             return;

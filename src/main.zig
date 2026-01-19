@@ -292,6 +292,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.iconsole);
     _ = try gui.addWindow(&console_win.vt, default_rect, .{});
+    if (builtin.target.os.tag == .linux) {
+        try console_win.printLine("On linux, you have to install the game with proton first and copy the bin folder to BIN\ncd Half-Life 2; cp -r bin BIN\n", .{});
+    }
     try console_win.printLine("steam_path {s}\nconfig_path {s}\n", .{
         dirs.games_dir.path,
         config_dir.path,

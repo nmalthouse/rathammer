@@ -112,7 +112,7 @@ pub const SdlFileData = struct {
                     self.name_buffer.items,
                     edit.loadctx,
 
-                    edit.config.default_game,
+                    edit.loaded_game_name orelse edit.config.default_game,
                 ) catch |err| {
                     std.debug.print("load failed because {t}\n", .{err});
                 };

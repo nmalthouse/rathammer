@@ -290,8 +290,19 @@ pub const Context = struct {
                             .obj => |o| {
                                 for (o.list.items) |kv| {
                                     const key = obj.stringFromId(kv.key) orelse "";
-                                    const val: []const u8 = if (kv.val == .literal) kv.val.literal else continue;
                                     var kind: ?ecs.Material.Kind = null;
+                                    const val: []const u8 = if (kv.val == .literal) kv.val.literal else blk: {
+                                        //>=dx90
+                                        if (eql(u8, key, ">=dx90")) { //ugly hack
+                                            if (kv.val.obj.getFirst(try obj.stringId("$basetexture"))) |first| {
+                                                if (first == .literal) {
+                                                    kind = .albedo;
+                                                    break :blk first.literal;
+                                                }
+                                            }
+                                        }
+                                        continue;
+                                    };
 
                                     if (eql(u8, key, "$basetexture") or eql(u8, key, "%tooltexture")) {
                                         kind = .albedo;

@@ -264,6 +264,7 @@ pub const Context = struct {
     /// This is always relative to cwd
     loaded_map_path: ?[]const u8 = null,
     loaded_game_name: ?[]const u8 = null,
+    game_loaded: bool = false,
 
     /// static string
     loaded_skybox_name: []const u8 = "",
@@ -1119,8 +1120,9 @@ pub const Context = struct {
     }
 
     pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx, game_name: []const u8) !void {
-        if (self.loaded_game_name == null) {
+        if (!self.game_loaded) {
             try self.loadGame(game_name);
+            self.game_loaded = true;
         }
         loadctx.printCb("Loading map {s}", .{filename});
         const endsWith = std.mem.endsWith;
