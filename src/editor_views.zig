@@ -387,11 +387,17 @@ pub const Main3DView = struct {
             try btns.append(aa, .{ 0, "boxy", .textbox });
             try btns.append(aa, .{ 0, "another box", .textbox });
             try btns.append(aa, .{ 0, "scale", .{ .vector = .new(1, 1, 1) } });
+
             const r_win = G.Widget.BtnContextWindow.create(gui, mpos.add(.{ .x = 0, .y = 10 }), .{
+                //.buttons = &.{},
                 .buttons = btns.items,
                 .btn_cb = toolContextBtn,
                 .btn_vt = &window.cbhandle,
             }) catch return;
+            //try gui.updateWindowSize(r_win, graph.Rec(mpos.x, mpos.y, 800, 1200));
+
+            //@import("main.zig").INSPECTOR.layer_widget.build(gui, r_win, &r_win.area, r_win.area.area) catch {};
+
             //self.right_click_id = self.opts.id;
             gui.setTransientWindow(r_win);
             gui.setGrabOverride(&window.vt, false, .{ .hide_pointer = false });

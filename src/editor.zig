@@ -811,6 +811,8 @@ pub const Context = struct {
                 try jwr.beginObject();
                 try jwr.objectField("recent_mat");
                 try self.writeComponentToJson(&jwr, self.asset_browser.recent_mats.list, 0);
+                try jwr.objectField("selected_layer");
+                try jwr.write(@as(u16, @intFromEnum(self.edit_state.selected_layer)));
                 try jwr.endObject();
             }
 
@@ -1209,7 +1211,7 @@ pub const Context = struct {
             log.info("Map version : {d}", .{self.edit_state.map_version});
             if (parsed.value.extra == .object) {
                 const ex = &parsed.value.extra;
-                if (std.json.parseFromValue(struct { recent_mat: [][]const u8 }, self.alloc, ex.*, .{})) |v| {
+                if (std.json.parseFromValue(struct { recent_mat: [][]const u8, selected_layer: u16 = 0 }, self.alloc, ex.*, .{})) |v| {
                     defer v.deinit();
                     for (v.value.recent_mat) |mat| {
                         if (try self.vpkctx.resolveId(.{ .name = mat }, false)) |id| {
@@ -1219,6 +1221,7 @@ pub const Context = struct {
                     if (self.asset_browser.recent_mats.list.items.len > 0) {
                         self.edit_state.selected_texture_vpk_id = self.asset_browser.recent_mats.list.items[0];
                     }
+                    self.edit_state.selected_layer = @enumFromInt(v.value.selected_layer);
                 } else |_| {} //This data is not essential to parse
             }
 
@@ -1227,6 +1230,8 @@ pub const Context = struct {
 
         loadctx.cb("Building meshes");
         try self.rebuildAllDependentState();
+        try self.layers.rebuildMasks();
+        try self.rebuildVisGroups();
     }
 
     //TODO write a vmf -> json utility like jsonToVmf.zig

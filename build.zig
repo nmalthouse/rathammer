@@ -9,12 +9,14 @@ pub fn build(b: *std.Build) void {
     // set a preferred release mode, allowing the user to decide how to optimize.
     const optimize = b.standardOptimizeOption(.{});
 
+    const strip = optimize == .ReleaseFast;
     const mapbuilder = b.addExecutable(.{
         .name = "mapbuilder",
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/map_builder.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = strip,
         }),
     });
 
@@ -24,6 +26,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/jsonToVmf.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = strip,
         }),
     });
 
@@ -33,7 +36,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/rpc/remote.zig"),
             .target = target,
             .optimize = optimize,
-            .strip = true,
+            .strip = strip,
         }),
     });
 
@@ -43,6 +46,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/main.zig"),
             .target = target,
             .optimize = optimize,
+            .strip = strip,
         }),
     });
     const ratdep = b.dependency("ratgraph", .{ .target = target, .optimize = optimize });

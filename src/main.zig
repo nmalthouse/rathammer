@@ -88,6 +88,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
     win.swap();
     return .cont;
 }
+pub var INSPECTOR: *InspectorWindow = undefined;
 
 const log = std.log.scoped(.app);
 pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
@@ -287,6 +288,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     //gui.dstate.nstyle.color = G.DarkColorscheme;
     const default_rect = Rec(0, 0, 1000, 1000);
     const inspector_win = InspectorWindow.create(&gui, editor);
+    INSPECTOR = inspector_win;
     const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
     _ = try gui.addWindow(&pause_win.vt, default_rect, .{});
 
@@ -300,7 +302,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         config_dir.path,
     });
     for (editor.games.list.values()) |game| {
-        try console_win.printLine("{s}: {s}\n", .{ game.name, if (game.good) "good" else game.reason });
+        if (game.good) continue;
+        try console_win.printLine("{s}: {s}\n", .{ game.name, game.reason });
     }
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});

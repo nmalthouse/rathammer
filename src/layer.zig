@@ -40,6 +40,8 @@ pub const Layer = struct {
 
     enabled: bool = true,
     collapse: bool = false,
+    locked: bool = false,
+    omit_export: bool = false,
 };
 
 const log = std.log.scoped(.layer);
@@ -60,6 +62,9 @@ pub const Context = struct {
     /// Bitmask that can be directly tested for visibility.
     /// Toggling a parent layers "enabled" field doesn't affect child's "enabled" flag but does affect the 'disabled' state
     disabled: std.DynamicBitSetUnmanaged = .{},
+
+    /// Same function as disabled, locked layer entities are drawn but can't be selected
+    locked: std.DynamicBitSetUnmanaged = .{},
 
     pub fn init(alloc: std.mem.Allocator) !Self {
         const root = try createLayer(alloc, .none, ROOT_LAYER_NAME);
@@ -163,6 +168,19 @@ pub const Context = struct {
         }
     }
 
+    pub fn rebuildMasks(self: *Self) !void {
+        self.disabled.unsetAll();
+
+        try self.rebuildDisabledRecur(self.root, self.root.enabled);
+    }
+
+    fn rebuildDisabledRecur(self: *Self, lay: *Layer, enabled: bool) !void {
+        try self.setDisabled(lay.id, enabled);
+        for (lay.children.items) |child| {
+            try self.rebuildDisabledRecur(child, child.enabled and enabled);
+        }
+    }
+
     pub fn recurDisable(self: *Self, layer: *const Layer, enable: bool) !void {
         //always disable layers, only enable layers if they are enabled
         const en = if (enable) layer.enabled else false;
@@ -201,6 +219,15 @@ pub const Context = struct {
         try wr.objectField("enabled");
         try wr.write(layer.enabled);
 
+        try wr.objectField("collapse");
+        try wr.write(layer.collapse);
+
+        try wr.objectField("locked");
+        try wr.write(layer.locked);
+
+        try wr.objectField("omit_export");
+        try wr.write(layer.omit_export);
+
         try wr.objectField("id");
         try wr.write(@as(u16, @intFromEnum(layer.id)));
         try wr.objectField("children");
@@ -231,7 +258,11 @@ pub const Context = struct {
         //Ensure any new groups don't intersect with old
         self.layer_counter = @max(self.layer_counter, layer.id);
 
-        const new = try createLayer(self.alloc, @enumFromInt(layer.id), layer.name);
+        var new = try createLayer(self.alloc, @enumFromInt(layer.id), layer.name);
+        new.enabled = layer.enabled;
+        new.collapse = layer.collapse;
+        new.locked = layer.locked;
+        new.omit_export = layer.omit_export;
         try self.layers.append(self.alloc, new);
         try self.map.put(@enumFromInt(layer.id), new);
 
@@ -540,11 +571,16 @@ const LayerWidget = struct {
                 var btns = ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
                 const allow_move = !self.opts.parent.ctx.isChildOf(self.opts.parent.selected_ptr.*, self.opts.id);
 
+                const locked = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.locked else false;
+                const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
+
                 btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
+                btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
                 btns.append(aa, .{ bi("move_selected"), "-> put", .btn }) catch {};
                 btns.append(aa, .{ bi("select_all"), "<- select", .btn }) catch {};
                 btns.append(aa, .{ bi("duplicate"), "duplicate", .btn }) catch {};
                 btns.append(aa, .{ bi("add_child"), "new child", .btn }) catch {};
+                btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
                 btns.append(aa, .{ bi("noop"), "", .btn }) catch {};
                 if (self.opts.id != .none) { //Root cannot be deleted or merged
                     btns.append(aa, .{ bi("delete"), "delete layer", .btn }) catch {};
@@ -558,11 +594,31 @@ const LayerWidget = struct {
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = btns.items,
                     .btn_cb = rightClickMenuBtn,
+                    .checkbox_cb = rightClickCheckbox,
                     .btn_vt = &self.cbhandle,
                 }) catch return;
                 self.right_click_id = self.opts.id;
                 cb.gui.setTransientWindow(r_win);
             },
+        }
+    }
+
+    fn rightClickCheckbox(cb: *CbHandle, _: *Gui, val: bool, id: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.vt.dirty();
+        const ed = self.opts.parent.editor;
+        const sel_id = self.right_click_id orelse return;
+        const bi = guis.Widget.BtnContextWindow.buttonId;
+        switch (id) {
+            bi("locked") => {
+                if (ed.layers.getLayerFromId(sel_id)) |lay| {
+                    lay.locked = val;
+                }
+            },
+            bi("omit") => if (ed.layers.getLayerFromId(sel_id)) |lay| {
+                lay.omit_export = val;
+            },
+            else => {},
         }
     }
 
