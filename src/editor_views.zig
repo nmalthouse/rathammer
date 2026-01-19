@@ -176,20 +176,26 @@ pub const Main3DView = struct {
             },
         };
 
-        var it = self.meshmap.iterator();
-        while (it.next()) |mesh| {
-            if (self.tool_res_map.contains(mesh.key_ptr.*))
-                continue;
-            try self.renderer.submitDrawCall(.{
-                .prim = .triangles,
-                .num_elements = @intCast(mesh.value_ptr.*.mesh.indicies.items.len),
-                .element_type = graph.gl.UNSIGNED_INT,
-                .vao = mesh.value_ptr.*.mesh.vao,
-                .diffuse = mesh.value_ptr.*.mat.slots[0].id,
-                .blend = mesh.value_ptr.*.mat.id(.blend),
-                .bump = mesh.value_ptr.*.mat.id(.bump),
-            });
-            //mesh.value_ptr.*.mesh.drawSimple(view_3d, mat, self.draw_state.basic_shader);
+        {
+            const override_texture: ?graph.glID = switch (self.draw_state.mode) {
+                .shaded => null,
+                .lightmap_scale => (try self.loadTextureFromVpk("editor/lightmapgrid")).tex.id,
+            };
+            var it = self.meshmap.iterator();
+            while (it.next()) |mesh| {
+                if (self.tool_res_map.contains(mesh.key_ptr.*))
+                    continue;
+                try self.renderer.submitDrawCall(.{
+                    .prim = .triangles,
+                    .num_elements = @intCast(mesh.value_ptr.*.mesh.indicies.items.len),
+                    .element_type = graph.gl.UNSIGNED_INT,
+                    .vao = mesh.value_ptr.*.mesh.vao,
+                    .diffuse = override_texture orelse mesh.value_ptr.*.mat.slots[0].id,
+                    .blend = if (override_texture != null) 0 else mesh.value_ptr.*.mat.id(.blend),
+                    .bump = if (override_texture != null) 0 else mesh.value_ptr.*.mat.id(.bump),
+                });
+                //mesh.value_ptr.*.mesh.drawSimple(view_3d, mat, self.draw_state.basic_shader);
+            }
         }
 
         if (self.renderer.mode == .def) {

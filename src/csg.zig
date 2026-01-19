@@ -236,7 +236,7 @@ pub const Context = struct {
         return uvs.items;
     }
 
-    pub fn calcUVCoordsIndexed(self: *Self, winding: []const Vec3_32, index: []const u32, side: ecs.Side, tex_w: u32, tex_h: u32, origin: Vec3_32) ![]const Vec2 {
+    pub fn calcUVCoordsIndexed(self: *Self, winding: []const Vec3_32, index: []const u32, side: ecs.Side, tex_w: u32, tex_h: u32, origin: Vec3_32, override_scale: ?f64) ![]const Vec2 {
         self.uvs.clearRetainingCapacity();
         const uvs = &self.uvs;
         var umin: f32 = std.math.floatMax(f32);
@@ -246,8 +246,8 @@ pub const Context = struct {
         for (index) |i| {
             const item = winding[i].sub(origin);
             const uv = Vec2.new(
-                @as(f32, @floatCast(item.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw)),
-                @as(f32, @floatCast(item.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th)),
+                @as(f32, @floatCast(item.dot(side.u.axis) / (tw * (override_scale orelse side.u.scale)) + side.u.trans / tw)),
+                @as(f32, @floatCast(item.dot(side.v.axis) / (th * (override_scale orelse side.v.scale)) + side.v.trans / th)),
             );
             try uvs.append(self.alloc, uv);
             umin = @min(umin, uv.x());

@@ -50,6 +50,8 @@ pub const Commands = enum {
     translate,
 
     create_cube,
+
+    rebuild_meshes,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -179,6 +181,11 @@ pub const CommandCtx = struct {
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
+                .rebuild_meshes => {
+                    var timer = try std.time.Timer.start();
+                    try self.ed.rebuildAllDependentState();
+                    try wr.print("mesh build took {d} ms\n", .{timer.read() / std.time.ns_per_ms});
+                },
                 .translate => {
                     const p = parseTypedArgs(struct {
                         dx: f32,

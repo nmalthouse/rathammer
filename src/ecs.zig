@@ -649,9 +649,10 @@ pub const Side = struct {
             solid.verts.items,
             side.index.items,
             side.*,
-            @intCast(side.tw),
-            @intCast(side.th),
+            if (editor.draw_state.mode == .lightmap_scale) 1.0 else @intCast(side.tw),
+            if (editor.draw_state.mode == .lightmap_scale) 1.0 else @intCast(side.th),
             Vec3.zero(),
+            if (editor.draw_state.mode == .lightmap_scale) @as(f64, @floatFromInt(side.lightmapscale)) else null,
         );
         const offset = mesh.vertices.items.len;
         for (side.index.items, 0..) |v_i, i| {
@@ -1724,9 +1725,10 @@ pub const Displacement = struct {
             solid.verts.items,
             side.index.items,
             side.*,
-            @intCast(batch.mat.slots[0].w),
-            @intCast(batch.mat.slots[0].h),
+            if (editor.draw_state.mode == .lightmap_scale) 1.0 else @intCast(batch.mat.slots[0].w),
+            if (editor.draw_state.mode == .lightmap_scale) 1.0 else @intCast(batch.mat.slots[0].h),
             Vec3.zero(),
+            if (editor.draw_state.mode == .lightmap_scale) @as(f64, @floatFromInt(side.lightmapscale)) else null,
         );
         const vper_row = std.math.pow(u32, 2, self.power) + 1;
         const vper_rowf: f32 = @floatFromInt(vper_row);
@@ -1798,6 +1800,7 @@ pub const Displacement = struct {
             @intCast(tex.w),
             @intCast(tex.h),
             Vec3.zero(),
+            null,
         );
         if (self._verts.items.len != vper_row * vper_row) return;
         const uv0 = uvs[si % 4];

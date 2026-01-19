@@ -117,11 +117,21 @@ pub const MenuBar = struct {
 
             _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
             ar.x += b + pad;
+            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.draw_state.mode, .{
+                .commit_vt = &self.cbhandle,
+                .commit_cb = drawModeCommit,
+            });
+            ar.x += b + pad;
 
             const ww = gui.dstate.minWidgetWidth(version.version_short);
             _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{version.version_short});
             ar.x += ww + pad;
         }
+    }
+
+    fn drawModeCommit(cb: *guis.CbHandle, _: usize, _: guis.Uid) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.ed.rebuildAllDependentState() catch {};
     }
 
     pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {

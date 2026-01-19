@@ -560,6 +560,7 @@ const Proportional = struct {
         var max = Vec3.set(-std.math.floatMax(f32));
 
         for (sel) |s| {
+            if (!ed.hasComponent(s, .solid)) continue;
             if (ed.getComponent(s, .bounding_box)) |b| {
                 min = min.min(b.a);
                 max = max.max(b.b);

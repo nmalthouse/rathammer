@@ -159,6 +159,10 @@ pub const Context = struct {
     has_loaded_map: bool = false,
 
     draw_state: struct {
+        mode: enum {
+            shaded,
+            lightmap_scale,
+        } = .shaded,
         skybox_textures: ?[6]graph.glID = null,
         frame_time_ms: f32 = 16,
         init_asset_count: usize = 0, //Used to indicate we are loading things
@@ -938,18 +942,15 @@ pub const Context = struct {
             }
         }
         { //Iterate all solids and add
-            var it = self.ecs.iterator(.solid);
+            var it = self.editIterator(.solid); //must use editIterator, omit hidden
             while (it.next()) |solid| {
                 const bb = (try self.ecs.getOptPtr(it.i, .bounding_box)) orelse continue;
                 solid.recomputeBounds(bb);
                 try solid.rebuild(it.i, self);
-                //if (solid._parent_entity) |pid| {
-                //    try self.attachSolid(it.i, pid);
-                //}
             }
         }
         {
-            var it = self.ecs.iterator(.displacements);
+            var it = self.editIterator(.displacements);
             while (it.next()) |disp| {
                 try disp.rebuild(it.i, self);
             }
@@ -1419,6 +1420,7 @@ pub const Context = struct {
         try self.async_asset_load.loadTexture(res_id, &self.vpkctx);
     }
 
+    /// 'material' is without materials/ prefix or .vmt suffix
     pub fn loadTextureFromVpk(self: *Self, material: []const u8) !struct { tex: graph.Texture, res_id: vpk.VpkResId } {
         const res_id = try self.vpkctx.getResourceIdFmt("vmt", "materials/{s}", .{material}, true) orelse return .{ .tex = missingTexture(), .res_id = 0 };
         if (self.textures.get(res_id)) |tex| return .{ .tex = tex.slots[0], .res_id = res_id };
