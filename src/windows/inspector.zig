@@ -279,9 +279,9 @@ pub const InspectorWindow = struct {
                         }
                     }
 
-                    fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+                    fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                        return lself.editor.fgd_ctx.getPtrId(id).name;
+                        return .{ .name = lself.editor.fgd_ctx.getPtrId(id).name };
                     }
                 };
                 self.selected_class_id = ed.fgd_ctx.getId(ent.class);
@@ -670,15 +670,15 @@ pub const InspectorWindow = struct {
                 lself.setKvStr(lself.getId(fie.name), fie.type.choices.items[id][0]);
             }
 
-            fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) []const u8 {
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) Wg.ComboItem {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
                 const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
                 const field = class.field_data.items[lam.fgd_field_index];
                 if (field.type == .choices) {
                     if (id < field.type.choices.items.len)
-                        return field.type.choices.items[id][1];
+                        return .{ .name = field.type.choices.items[id][1] };
                 }
-                return "not a choice";
+                return .{ .name = "not a choice", .enabled = false };
             }
         };
         _ = Wg.ComboUser(Lam).build(
@@ -1000,12 +1000,12 @@ const IoWg = struct {
                 ioTextboxCb(vtt, lself.win_ptr.gui_ptr, lname, OUTPUT_TABLE_INDEX);
             }
 
-            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
                 const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
-                const class = lself.getEntDef() orelse return "none";
-                if (id >= class.outputs.items.len) return "none";
+                const class = lself.getEntDef() orelse return .broken();
+                if (id >= class.outputs.items.len) return .broken();
                 const ind = class.outputs.items[id];
-                return class.io_data.items[ind].name;
+                return .{ .name = class.io_data.items[ind].name };
             }
         };
 
@@ -1046,11 +1046,11 @@ const IoWg = struct {
                 ioTextboxCb(vtt, lself.win_ptr.gui_ptr, item, INPUT_TEXT_INDEX);
             }
 
-            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) []const u8 {
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
                 const lself = vtt.cast(IoWg, "cbhandle");
                 const list = lself.matched_input_set.keys();
-                if (id >= list.len) return "none";
-                return lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
+                if (id >= list.len) return .broken();
+                return .{ .name = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name };
             }
         };
 

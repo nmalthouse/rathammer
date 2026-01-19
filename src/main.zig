@@ -198,52 +198,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }, &env);
     defer dirs.deinit(alloc);
 
-    if (args.games != null or args.checkhealth != null) {
-        var it = config.games.map.iterator();
-        while (it.next()) |item| {
-            if (!std.mem.eql(u8, item.key_ptr.*, default_game) and args.checkhealth == null) continue;
-            const en = item.value_ptr;
-            try stdout.print("{s}:\n", .{item.key_ptr.*});
-            var failed = false;
-            dirs.games_dir.doesFileExistInDir(en.fgd_dir, en.fgd) catch |err| {
-                failed = true;
-                try stdout.print("    fgd: {t}\n", .{err});
-                try stdout.print("        fgd_dir: {s}\n", .{en.fgd_dir});
-                try stdout.print("        fgd    : {s}\n", .{en.fgd});
-            };
-            for (en.gameinfo.items, 0..) |ginfo, i| {
-                const name = if (ginfo.gameinfo_name.len > 0) ginfo.gameinfo_name else "gameinfo.txt";
-
-                dirs.games_dir.doesFileExistInDir(ginfo.game_dir, name) catch |err| {
-                    failed = true;
-
-                    try stdout.print("    gameinfo {d}: {t}\n", .{ i, err });
-                    try stdout.print("        game_dir: {s}\n", .{ginfo.game_dir});
-                    try stdout.print("        gameinfo: {s}\n", .{name});
-                };
-            }
-            { //map builder
-
-                const gdir = dirs.games_dir.doesDirExist(en.mapbuilder.game_dir);
-                const edir = dirs.games_dir.doesDirExist(en.mapbuilder.exe_dir);
-                if (!gdir or !edir) {
-                    try stdout.print("    mapbuilder: \n", .{});
-                    if (!gdir)
-                        try stdout.print("        game_dir: error.fileNotFound\n", .{});
-                    if (!edir)
-                        try stdout.print("        exe_dir : error.fileNotFound\n", .{});
-                }
-            }
-
-            if (!failed)
-                try stdout.print("    good\n", .{});
-
-            try stdout.print("\n", .{});
-        }
-
-        return;
-    }
-
     var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
         .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
         .frame_sync = if (args.novsync != null) .immediate else .adaptive_vsync,
@@ -338,9 +292,13 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.iconsole);
     _ = try gui.addWindow(&console_win.vt, default_rect, .{});
-    try console_win.printLine("steam_path {s}", .{
+    try console_win.printLine("steam_path {s}\nconfig_path {s}\n", .{
         dirs.games_dir.path,
+        config_dir.path,
     });
+    for (editor.games.list.values()) |game| {
+        try console_win.printLine("{s}: {s}\n", .{ game.name, if (game.good) "good" else game.reason });
+    }
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
     const nag_win = try NagWindow.create(&gui, editor);
@@ -392,14 +350,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                         var rec = PauseWindow.Recent{
                             .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
                             .tex = vpk_id,
-                            .game_config_name = args.game orelse editor.config.default_game,
+                            .game_config_index = editor.games.id(args.game orelse config.default_game),
                             .description = try alloc.alloc(u8, 0),
                         };
                         if (std.json.parseFromSlice(json_map.JsonInfo, alloc, info_data, .{})) |info| {
                             defer info.deinit();
-                            rec.game_config_name = try editor.storeString(info.value.game_config_name);
                             alloc.free(rec.description);
                             rec.description = try alloc.dupe(u8, info.value.description);
+                            rec.game_config_index = editor.games.id(info.value.game_config_name);
                         } else |_| {}
 
                         try pause_win.recents.append(pause_win.alloc, rec);

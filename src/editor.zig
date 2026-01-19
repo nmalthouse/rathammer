@@ -55,6 +55,7 @@ const def_render = graph.def_render;
 
 const MAPFMT = " {s}{s} - RatHammer";
 var WINDOW_TITLE_BUFFER: [256]u8 = undefined;
+const Game = @import("game.zig");
 
 const builtin = @import("builtin");
 const WINDOZE = builtin.target.os.tag == .windows;
@@ -244,6 +245,7 @@ pub const Context = struct {
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 
+    games: Game.GameList,
     config: Conf.Config,
     game_conf: Conf.GameEntry,
     dirs: path_guess.Dirs,
@@ -333,6 +335,7 @@ pub const Context = struct {
             .asset = undefined,
             .asset_atlas = undefined,
 
+            .games = .init(alloc),
             .classtrack = .init(alloc),
             .targetname_track = .init(alloc),
             .loadctx = loadctx,
@@ -417,6 +420,7 @@ pub const Context = struct {
                 try async_util.CheckVersionHttp.spawn(self.alloc, &self.async_asset_load);
             }
         }
+        try self.games.createGameList(&self.config.games.map, self.dirs.games_dir);
     }
 
     pub fn loadGame(self: *Self, game_name: []const u8) !void {
@@ -457,7 +461,7 @@ pub const Context = struct {
 
     pub fn deinit(self: *Self) void {
         self.asset.deinit();
-
+        self.games.deinit();
         self.edit_state.map_description.deinit(self.alloc);
         self.classtrack.deinit();
         self.targetname_track.deinit();

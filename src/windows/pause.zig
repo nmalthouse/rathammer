@@ -38,7 +38,7 @@ pub const PauseWindow = struct {
     pub const Recent = struct {
         name: []const u8,
         description: []const u8,
-        game_config_name: []const u8, //Allocated elsewhere
+        game_config_index: ?usize,
         tex: vpk.VpkResId,
     };
 
@@ -60,6 +60,7 @@ pub const PauseWindow = struct {
     should_exit: bool = false,
     ent_select: u32 = 0,
 
+    new_map_game_config: usize = 0,
     texts: std.ArrayList(HelpText),
     selected_text_i: usize = 0,
 
@@ -104,6 +105,18 @@ pub const PauseWindow = struct {
             }
             std.sort.insertion(HelpText, self.texts.items, {}, SortHelpText.lessThan);
         } else |_| {}
+
+        for (editor.games.list.values(), 0..) |val, vi| {
+            if (val.good) {
+                self.new_map_game_config = vi;
+                break;
+            }
+        }
+        if (editor.games.list.get(editor.config.default_game)) |def| {
+            if (def.good) {
+                self.new_map_game_config = editor.games.id(def.name) orelse 0;
+            }
+        }
 
         return self;
     }
@@ -204,7 +217,18 @@ pub const PauseWindow = struct {
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
             _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", null);
-            _ = Btn(vt, ly.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+            {
+                var hy = gui.dstate.hlayout(ly.getArea() orelse return, 2);
+                _ = Wg.ComboUser(usize).build(vt, hy.getArea() orelse return, .{
+                    .user_vt = &self.cbhandle,
+                    .current = self.new_map_game_config,
+                    .count = self.editor.games.list.values().len,
+
+                    .commit_cb = gameComboCommit,
+                    .name_cb = gameComboName,
+                }, 0xff);
+                _ = Btn(vt, hy.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+            }
             _ = Btn(vt, ly.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
 
             ly.pushRemaining();
@@ -448,9 +472,27 @@ pub const PauseWindow = struct {
 
             _ = Wg.Button.build(area, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
 
-            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.game_config_name, null);
+            _ = Wg.ComboUser(usize).build(area, ly.getArea() orelse continue, .{
+                .user_vt = &self.cbhandle,
+                .current = rec.game_config_index orelse 0,
+                .count = self.editor.games.list.values().len,
+
+                .commit_cb = gameComboCommit,
+                .name_cb = gameComboName,
+            }, i);
             _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, null);
         }
+    }
+
+    fn gameComboCommit(cb: *CbHandle, id: usize, rec_index: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        self.recents.items[rec_index].game_config_index = id;
+    }
+    fn gameComboName(cb: *CbHandle, id: usize, _: *Gui, _: usize) Wg.ComboItem {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        if (id >= self.editor.games.list.values().len) return .broken();
+        const game = (self.editor.games.list.values()[id]);
+        return .{ .name = game.name, .enabled = game.good };
     }
 
     pub fn loadBtn(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
@@ -467,7 +509,7 @@ pub const PauseWindow = struct {
             self.editor.dirs.app_cwd.dir,
             name,
             self.editor.loadctx,
-            self.recents.items[id].game_config_name,
+            self.editor.games.getName(self.recents.items[id].game_config_index orelse 0),
         ) catch |err| {
             std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
             return;
