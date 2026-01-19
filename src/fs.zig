@@ -86,7 +86,7 @@ pub const Dirs = struct {
     games_dir: WrappedDir,
     app_cwd: WrappedDir,
     config: WrappedDir,
-    fgd: Dir,
+    fgd: ?Dir = null,
     pref: Dir,
     autosave: Dir,
 
@@ -106,7 +106,7 @@ pub const Dirs = struct {
     ) !Dirs {
         const games_dir = try openGameDir(alloc, cwd, param.override_games_dir, param.config_steam_dir, env);
         std.debug.print("Games dir  : {s}\n", .{games_dir.path});
-        const fgd_dir = util.openDirFatal(games_dir.dir, param.override_fgd_dir orelse param.config_fgd_dir, .{}, "");
+        //const fgd_dir = util.openDirFatal(games_dir.dir, param.override_fgd_dir orelse param.config_fgd_dir, .{}, "");
 
         const ORG = "rathammer";
         const APP = "";
@@ -119,7 +119,7 @@ pub const Dirs = struct {
 
         return .{
             .games_dir = games_dir,
-            .fgd = fgd_dir,
+            //.fgd = fgd_dir,
             .pref = pref,
             .autosave = autosave,
             .app_cwd = param.app_cwd,

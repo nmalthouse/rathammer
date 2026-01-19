@@ -59,7 +59,7 @@ var WINDOW_TITLE_BUFFER: [256]u8 = undefined;
 const builtin = @import("builtin");
 const WINDOZE = builtin.target.os.tag == .windows;
 
-const Model = struct {
+pub const Model = struct {
     mesh: ?*vvd.MultiMesh = null,
 
     pub fn initEmpty(_: std.mem.Allocator) @This() {
@@ -239,6 +239,8 @@ pub const Context = struct {
         selected_layer: Layer.Id = .none,
         selected_model_vpk_id: ?vpk.VpkResId = null,
         selected_texture_vpk_id: ?vpk.VpkResId = null,
+
+        map_description: std.ArrayList(u8) = .{},
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 
@@ -259,6 +261,7 @@ pub const Context = struct {
     loaded_map_name: ?[]const u8 = null,
     /// This is always relative to cwd
     loaded_map_path: ?[]const u8 = null,
+    loaded_game_name: ?[]const u8 = null,
 
     /// static string
     loaded_skybox_name: []const u8 = "",
@@ -382,30 +385,6 @@ pub const Context = struct {
             std.debug.print("config.vdf must specify a default_game!\n", .{});
             return error.incompleteConfig;
         }
-        const game_name = args.game orelse self.config.default_game;
-        const game_conf = self.config.games.map.get(game_name) orelse {
-            std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
-            return error.gameConfigNotFound;
-        };
-        self.game_conf = game_conf;
-
-        const custom_cwd_msg = "Set a custom cwd with --custom_cwd flag";
-        const games_dir = self.dirs.games_dir.dir;
-
-        for (game_conf.gameinfo.items) |gamei| {
-            const base_dir_ = util.openDirFatal(games_dir, gamei.base_dir, .{}, custom_cwd_msg);
-            const game_dir_ = util.openDirFatal(games_dir, gamei.game_dir, .{}, custom_cwd_msg);
-
-            try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, loadctx, if (gamei.gameinfo_name.len != 0) gamei.gameinfo_name else "gameinfo.txt");
-        }
-
-        if (args.basedir) |bd| {
-            if (args.gamedir) |gd| {
-                const base_dir_ = util.openDirFatal(games_dir, bd, .{}, custom_cwd_msg);
-                const game_dir_ = util.openDirFatal(games_dir, gd, .{}, custom_cwd_msg);
-                try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, loadctx, "gameinfo.txt");
-            }
-        }
 
         try graph.AssetBake.assetBake(self.alloc, self.dirs.app_cwd.dir, "ratasset", self.dirs.pref, "packed", .{});
         loadctx.cb("Asset's baked");
@@ -413,13 +392,7 @@ pub const Context = struct {
         self.asset = try graph.AssetBake.AssetMap.initFromManifest(self.alloc, self.dirs.pref, "packed");
         self.asset_atlas = try graph.AssetBake.AssetMap.initTextureFromManifest(self.alloc, self.dirs.pref, "packed");
 
-        //try gameinfo.loadGameinfo(self.alloc, base_dir, game_dir, &self.vpkctx, loadctx);
-        fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd, args.fgd orelse game_conf.fgd) catch |err| {
-            std.debug.print("--------------\n", .{});
-            std.debug.print("If this is an fgd of an existing game,  Please open a bug report containing the fgd you are trying to load and I will fix the parser\n", .{});
-            std.debug.print("--------------\n", .{});
-            return err;
-        };
+        //try self.loadGame(args.game orelse self.config.default_game);
 
         //The order in which these are registered maps to the order 'tool' keybinds are specified in config.vdf
         try self.tools.register(tool_def.Translate, try tool_def.Translate.create(self.alloc, self));
@@ -446,9 +419,46 @@ pub const Context = struct {
         }
     }
 
+    pub fn loadGame(self: *Self, game_name: []const u8) !void {
+        const custom_cwd_msg = "Set a custom cwd with --custom_cwd flag";
+        const game_conf = self.config.games.map.get(game_name) orelse {
+            std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
+            return error.gameConfigNotFound;
+        };
+        self.game_conf = game_conf;
+        const games_dir = self.dirs.games_dir.dir;
+        self.loaded_game_name = try self.storeString(game_name);
+        for (game_conf.gameinfo.items) |gamei| {
+            const base_dir_ = util.openDirFatal(games_dir, gamei.base_dir, .{}, custom_cwd_msg);
+            const game_dir_ = util.openDirFatal(games_dir, gamei.game_dir, .{}, custom_cwd_msg);
+
+            try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, self.loadctx, if (gamei.gameinfo_name.len != 0) gamei.gameinfo_name else "gameinfo.txt");
+        }
+        //if (args.basedir) |bd| {
+        //    if (args.gamedir) |gd| {
+        //        const base_dir_ = util.openDirFatal(games_dir, bd, .{}, custom_cwd_msg);
+        //        const game_dir_ = util.openDirFatal(games_dir, gd, .{}, custom_cwd_msg);
+        //        try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, loadctx, "gameinfo.txt");
+        //    }
+        //}
+
+        if (self.dirs.fgd) |*f| f.close();
+        self.dirs.fgd = util.openDirFatal(self.dirs.games_dir.dir, game_conf.fgd_dir, .{}, "");
+
+        fgd.loadFgd(&self.fgd_ctx, self.dirs.fgd orelse return error.noFgdDir, game_conf.fgd) catch |err| {
+            std.debug.print("--------------\n", .{});
+            std.debug.print("If this is an fgd of an existing game,  Please open a bug report containing the fgd you are trying to load and I will fix the parser\n", .{});
+            std.debug.print("--------------\n", .{});
+            return err;
+        };
+
+        self.eventctx.pushEvent(.{ .gameLoaded = {} });
+    }
+
     pub fn deinit(self: *Self) void {
         self.asset.deinit();
 
+        self.edit_state.map_description.deinit(self.alloc);
         self.classtrack.deinit();
         self.targetname_track.deinit();
         self.autovis.deinit();
@@ -1103,7 +1113,10 @@ pub const Context = struct {
         //return error.invalidTarRatmap;
     }
 
-    pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
+    pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx, game_name: []const u8) !void {
+        if (self.loaded_game_name == null) {
+            try self.loadGame(game_name);
+        }
         loadctx.printCb("Loading map {s}", .{filename});
         const endsWith = std.mem.endsWith;
         var ext: []const u8 = "";
@@ -1445,6 +1458,14 @@ pub const Context = struct {
         }
 
         if (self.writeToJson(&jwriter.writer)) {
+            var info_writer = std.Io.Writer.Allocating.init(self.alloc);
+            var jwr_info = std.json.Stringify{ .writer = &info_writer.writer, .options = .{} };
+            try jwr_info.write(json_map.JsonInfo{
+                .json_info_version = json_map.JsonInfo.format_version,
+                .game_config_name = self.loaded_game_name orelse "nogame",
+                .description = self.edit_state.map_description.items,
+            });
+
             self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
@@ -1483,6 +1504,7 @@ pub const Context = struct {
                 &self.async_asset_load,
                 .{
                     .json_buffer = try jwriter.toOwnedSlice(),
+                    .json_info_buffer = try info_writer.toOwnedSlice(),
                     .dir = try std.fs.cwd().openDir(".", .{}),
                     .name = name,
                     .thumbnail = bmp,

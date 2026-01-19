@@ -386,6 +386,7 @@ pub const Main3DView = struct {
             try btns.append(aa, .{ 0, "this does nothing yet", .btn });
             try btns.append(aa, .{ 0, "boxy", .textbox });
             try btns.append(aa, .{ 0, "another box", .textbox });
+            try btns.append(aa, .{ 0, "scale", .{ .vector = .new(1, 1, 1) } });
             const r_win = G.Widget.BtnContextWindow.create(gui, mpos.add(.{ .x = 0, .y = 10 }), .{
                 .buttons = btns.items,
                 .btn_cb = toolContextBtn,

@@ -34,18 +34,18 @@ pub const EventKind = enum(EventKindT) {
     saved,
     menubar_dirty,
     notify,
-    //select,
+    gameLoaded,
 };
 
 pub const Event = union(EventKind) {
     undo: void,
     redo: void,
-    //select: void,
     selection_changed: void,
     tool_changed: void,
     saved: void,
     menubar_dirty: void,
     notify: []const u8,
+    gameLoaded: void,
 
     pub fn deinit(self: *@This(), alloc: std.mem.Allocator) void {
         switch (self.*) {

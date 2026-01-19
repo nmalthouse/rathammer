@@ -9,6 +9,7 @@ const guis = graph.RGui;
 const iWindow = guis.iWindow;
 const iArea = guis.iArea;
 const Wg = guis.Widget;
+const app = @import("../app.zig");
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const CbHandle = guis.CbHandle;
@@ -34,14 +35,18 @@ pub const AssetBrowser = struct {
     tab_index: usize = 0,
 
     ed: *Context,
+    ev_vt: app.iEvent = .{ .cb = event_cb },
 
-    pub fn create(gui: *Gui, editor: *Context) !*AssetBrowser {
+    mod: *ModelBrowser,
+
+    pub fn create(gui: *Gui, editor: *Context, model_browser: *ModelBrowser) !*AssetBrowser {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .ed = editor,
             .alloc = gui.alloc,
             .tex_browse = .{ .alloc = gui.alloc, .ed = editor, .win = &self.vt },
+            .mod = model_browser,
             .vpk_browse = .{ .list = .{
                 .alloc = gui.alloc,
                 .search_vt = &self.vpk_browse.lscb,
@@ -49,7 +54,24 @@ pub const AssetBrowser = struct {
             }, .ed = editor, .win = &self.vt },
         };
 
+        if (editor.eventctx.registerListener(&self.ev_vt)) |listener| {
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.gameLoaded)) catch {};
+        } else |_| {}
+
         return self;
+    }
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        switch (ev) {
+            .gameLoaded => {
+                self.populate(&self.ed.vpkctx, self.ed.game_conf.asset_browser_exclude.prefix, self.ed.game_conf.asset_browser_exclude.entry.items, self.mod) catch {
+                    log.err("populate failed", .{});
+                };
+            },
+            else => {},
+        }
     }
 
     pub fn populate(

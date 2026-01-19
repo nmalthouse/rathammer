@@ -107,7 +107,13 @@ pub const SdlFileData = struct {
                 edit.loadctx.setDraw(true); // Renable it
                 edit.paused = false;
                 edit.loadctx.resetTime();
-                edit.loadMap(std.fs.cwd(), self.name_buffer.items, edit.loadctx) catch |err| {
+                edit.loadMap(
+                    std.fs.cwd(),
+                    self.name_buffer.items,
+                    edit.loadctx,
+
+                    edit.config.default_game,
+                ) catch |err| {
                     std.debug.print("load failed because {t}\n", .{err});
                 };
             },
@@ -244,6 +250,7 @@ pub const CompressAndSave = struct {
         dir: std.fs.Dir,
         name: []const u8,
         json_buffer: []const u8,
+        json_info_buffer: []const u8,
         thumbnail: ?graph.Bitmap,
     };
     job: thread_pool.iJob,
@@ -251,6 +258,7 @@ pub const CompressAndSave = struct {
 
     alloc: std.mem.Allocator,
     json_buf: []const u8,
+    json_info_buf: []const u8,
 
     dir: std.fs.Dir,
     filename: []const u8,
@@ -268,6 +276,7 @@ pub const CompressAndSave = struct {
             .thumb = opts.thumbnail,
             .alloc = alloc,
             .json_buf = opts.json_buffer,
+            .json_info_buf = opts.json_info_buffer,
             .pool_ptr = pool,
             .dir = opts.dir,
             .filename = try alloc.dupe(u8, opts.name),
@@ -277,6 +286,7 @@ pub const CompressAndSave = struct {
 
     pub fn destroy(self: *@This()) void {
         self.alloc.free(self.json_buf);
+        self.alloc.free(self.json_info_buf);
         self.dir.close();
         self.alloc.free(self.filename);
         if (self.thumb) |th|
@@ -352,6 +362,12 @@ pub const CompressAndSave = struct {
 
             tar_wr.writeFileBytes("map.json.gz", compressed.written(), .{}) catch |err| {
                 log.err("file write failed {t}", .{err});
+                self.status = .failed;
+                return;
+            };
+
+            tar_wr.writeFileBytes("info.json", self.json_info_buf, .{}) catch |err| {
+                log.err("json info write failed {t}", .{err});
                 self.status = .failed;
                 return;
             };

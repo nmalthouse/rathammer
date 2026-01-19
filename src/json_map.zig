@@ -106,6 +106,15 @@ pub const JsonMap = struct {
     extra: std.json.Value = .{ .null = {} },
 };
 
+pub const JsonInfo = struct {
+    pub const format_version = "0.0.1";
+
+    json_info_version: []const u8 = "0.0.0",
+    /// The name of the game config used when last writing map
+    game_config_name: []const u8,
+    description: []const u8 = "",
+};
+
 pub const InitFromJsonCtx = struct {
     alloc: std.mem.Allocator,
     str_store: *StringStorage,

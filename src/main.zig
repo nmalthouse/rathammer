@@ -345,12 +345,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
     const nag_win = try NagWindow.create(&gui, editor);
     _ = try gui.addWindow(&nag_win.vt, default_rect, .{});
-    const asset_win = try AssetBrowser.AssetBrowser.create(&gui, editor);
-    const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_browse = try AssetBrowser.ModelBrowser.create(&gui, editor);
+    const asset_win = try AssetBrowser.AssetBrowser.create(&gui, editor, model_browse);
+    const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_win = try gui.addWindow(&model_browse.vt, default_rect, .{});
     const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, &gui, &draw), default_rect, .{});
-    try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
+    //try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
 
     const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), default_rect, .{});
 
@@ -374,6 +374,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                         defer recent_map.close();
                         const qoi_data = util.getFileFromTar(alloc, recent_map, "thumbnail.qoi") catch continue;
 
+                        const info_data = util.getFileFromTar(alloc, recent_map, "info.json") catch try alloc.alloc(u8, 0);
+                        defer alloc.free(info_data);
+
                         const vpk_id = (editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, false) catch null) orelse {
                             alloc.free(qoi_data);
                             continue;
@@ -386,10 +389,18 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                             continue;
                         };
 
-                        const rec = PauseWindow.Recent{
+                        var rec = PauseWindow.Recent{
                             .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
                             .tex = vpk_id,
+                            .game_config_name = args.game orelse editor.config.default_game,
+                            .description = try alloc.alloc(u8, 0),
                         };
+                        if (std.json.parseFromSlice(json_map.JsonInfo, alloc, info_data, .{})) |info| {
+                            defer info.deinit();
+                            rec.game_config_name = try editor.storeString(info.value.game_config_name);
+                            alloc.free(rec.description);
+                            rec.description = try alloc.dupe(u8, info.value.description);
+                        } else |_| {}
 
                         try pause_win.recents.append(pause_win.alloc, rec);
                     } else |_| {}
@@ -416,11 +427,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     win.forcePoll(); // ensure first draw is fast on eventWait
     if (args.blank) |blank| {
+        try editor.loadGame(args.game orelse editor.config.default_game);
         try editor.setMapName(blank);
         try editor.initNewMap("sky_day01_01");
     } else {
         if (args.map) |mapname| {
-            try editor.loadMap(app_cwd.dir, mapname, &loadctx);
+            try editor.loadMap(app_cwd.dir, mapname, &loadctx, args.game orelse editor.config.default_game);
         } else {
             while (!win.should_exit) {
                 switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, console_win, false)) {

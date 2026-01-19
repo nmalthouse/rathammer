@@ -37,12 +37,15 @@ pub const PauseWindow = struct {
 
     pub const Recent = struct {
         name: []const u8,
+        description: []const u8,
+        game_config_name: []const u8, //Allocated elsewhere
         tex: vpk.VpkResId,
     };
 
     const Textboxes = enum {
         set_import_visgroup,
         set_skyname,
+        set_desc,
     };
 
     const HelpText = struct {
@@ -108,6 +111,7 @@ pub const PauseWindow = struct {
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         for (self.recents.items) |*rec| {
+            self.alloc.free(rec.description);
             self.alloc.free(rec.name);
         }
         self.recents.deinit(self.alloc);
@@ -221,6 +225,14 @@ pub const PauseWindow = struct {
                     .commit_cb = &textbox_cb,
                     .commit_vt = &self.cbhandle,
                     .user_id = @intFromEnum(Textboxes.set_skyname),
+                });
+
+            if (guis.label(vt, ly.getArea(), "desc: ", .{})) |ar|
+                _ = Wg.Textbox.buildOpts(vt, ar, .{
+                    .init_string = self.editor.edit_state.map_description.items,
+                    .commit_cb = &textbox_cb,
+                    .commit_vt = &self.cbhandle,
+                    .user_id = @intFromEnum(Textboxes.set_desc),
                 });
         }
         if (eql(u8, tab, "graphics")) {
@@ -379,6 +391,10 @@ pub const PauseWindow = struct {
             .set_skyname => {
                 self.editor.loadSkybox(str) catch return;
             },
+            .set_desc => {
+                self.editor.edit_state.map_description.clearRetainingCapacity();
+                self.editor.edit_state.map_description.appendSlice(self.editor.alloc, string) catch {};
+            },
             .set_import_visgroup => {
                 self.editor.hacky_extra_vmf.override_vis_group = str;
             },
@@ -431,6 +447,9 @@ pub const PauseWindow = struct {
             const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
 
             _ = Wg.Button.build(area, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
+
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.game_config_name, null);
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, null);
         }
     }
 
@@ -441,8 +460,15 @@ pub const PauseWindow = struct {
         self.tab_index = 1; //set to main
         self.vt.needs_rebuild = true;
         const mname = self.recents.items[id].name;
+        self.editor.edit_state.map_description.clearRetainingCapacity();
+        self.editor.edit_state.map_description.appendSlice(self.editor.alloc, self.recents.items[id].description) catch {};
         const name = self.editor.printScratch("{s}.ratmap", .{mname}) catch return;
-        self.editor.loadMap(self.editor.dirs.app_cwd.dir, name, self.editor.loadctx) catch |err| {
+        self.editor.loadMap(
+            self.editor.dirs.app_cwd.dir,
+            name,
+            self.editor.loadctx,
+            self.recents.items[id].game_config_name,
+        ) catch |err| {
             std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
             return;
         };
