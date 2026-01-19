@@ -1,12 +1,5 @@
 # Intro
-RatHammer is an editor for Valve's Source engine maps, though it can also be used standalone as well.
-
-I started developing RatHammer without the intention of it becoming a fully fledged editor, I initially wanted to create a sort of sandbox game I was calling 2x4 simulator, where players could build graybox style environments. In other words, the goal of rathammer is to make the creation of 3d environments enjoyable. 
-The style of building the world out of many convex polyhedra is a core part of this.
-
-I occasionally get the urge to make some 3D environments and Half Life 2, with its asset library and its 'easy' way of making level geometry make it a default.
-The issue is that Hammer does not run on Linux, and the ergonomics are terrible.
-You can't rebind keys for example, and if you use a keyboard layout other than Qwerty you will have to constantly switch layouts. Every operation requires you to move your left hand over to the enter key. And most editing requires you to orient yourself in 4 different views at once. In its current state RatHammer does not have full feature parity with Hammer, but it can do a lot of editing in a way that is much nicer.
+RatHammer is an editor for Valve's Source engine maps, though it can also be used for standalone mapping.
 
 Open a terminal and navigate to where you downloaded RatHammer.
 ```
@@ -65,8 +58,7 @@ Quick reference:
 * Camera up/down -> space/c
 * Change camera speed -> scroll
 * Uncapture mouse -> shift
-* Pause -> Escape
-* Toggle console -> tilde (~)
+* Pause/console -> Escape
 * Grid inc/dec -> R/F
 * Duplicate / texture-wrap -> z
 * Delete -> ctrl+d
@@ -112,7 +104,7 @@ Clicking on any part of the selected brushes will let you do a "smart move" If y
 
 This smart move function means you can move objects along arbitrary planes, by creating a temporary solid with desired plane, moving along that plane with all selected, then deleting the temporary solid.
 
-The gizmo is always positioned on the centeroid of the last selected object. Rotatations are done about this point. This means you can specfiy an arbirary origin for rotations by creating a temporary object, selecting it last, then doing the rotation.
+The gizmo is always positioned on the centroid of the last selected object. Rotations are done about this point. This means you can specify an arbitrary origin for rotations by creating a temporary object, selecting it last, then doing the rotation.
 
 ### Face translate tool.
 A Specialized tool for moving the faces of a single solid in an arbitrary direction. If more than one entity is selected it will draw a bounding box around all selected and allow you to scale them proportionally. 
@@ -205,7 +197,7 @@ RatHammer has a few different workspaces.
 See the folder rat_custom in the git repository for a minimal example.
 
 ## The console
-Press the tilda key to toggle the console.
+Press the escape key to toggle the console.
 
 The help command shows a list of commands.
 
@@ -231,7 +223,7 @@ Most data is serialized directly from rathammer, with little transformation, so 
 Components:
 
 
-solid: defines a brush. Has a set of verticies (Vec3) and a set of sides which each contain indexes into the set of verticies.
+solid: defines a brush. Has a set of vertices (Vec3) and a set of sides which each contain indexes into the set of vertices.
 
 entity: lights, props, etc.
 
