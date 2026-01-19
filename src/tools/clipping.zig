@@ -230,8 +230,15 @@ pub const Clipping = struct {
                     const r2 = p1.add(cut_dir.scale(-100));
                     const r3 = p1.add(cut_dir.scale(100));
 
-                    td.draw.convexPoly(&.{ r0, r1, r2, r3 }, 0xff000088);
-                    draw_nd.convexPoly(&.{ r0, r1, r2, r3 }, 0xff000044);
+                    const tex_id = try ed.getTexture(ed.edit_state.selected_texture_vpk_id orelse 0);
+                    const V2 = graph.za.Vec2;
+                    td.draw.convexPolyTex(
+                        &.{ r0, r1, r2, r3 },
+                        &.{ V2.new(0, 0), V2.new(0, 1), V2.new(1, 1), V2.new(1, 0) },
+                        0xffffffdd,
+                        tex_id,
+                    );
+                    //draw_nd.convexPoly(&.{ r0, r1, r2, r3 }, 0xff000044);
                 }
                 { //Draw the third point plane
                     const r0 = p0.add(pnorm.scale(50));

@@ -140,7 +140,7 @@ pub const PauseWindow = struct {
             .new_map => {
                 self.vt.needs_rebuild = true;
                 const ed = self.editor;
-                ed.initNewMap("sky_day01_01") catch {
+                ed.initNewMap("sky_day01_01", ed.config.default_game) catch {
                     std.debug.print("ERROR INIT NEW MAP\n", .{});
                 };
                 self.editor.paused = false;

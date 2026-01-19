@@ -427,9 +427,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     win.forcePoll(); // ensure first draw is fast on eventWait
     if (args.blank) |blank| {
-        try editor.loadGame(args.game orelse editor.config.default_game);
         try editor.setMapName(blank);
-        try editor.initNewMap("sky_day01_01");
+        try editor.initNewMap("sky_day01_01", args.game orelse editor.config.default_game);
     } else {
         if (args.map) |mapname| {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx, args.game orelse editor.config.default_game);

@@ -1088,7 +1088,8 @@ pub const Context = struct {
         }
     }
 
-    pub fn initNewMap(self: *Self, sky_name: []const u8) !void {
+    pub fn initNewMap(self: *Self, sky_name: []const u8, game_name: []const u8) !void {
+        try self.loadGame(game_name);
         if (sky_name.len > 0)
             try self.loadSkybox(sky_name);
         self.has_loaded_map = true;
