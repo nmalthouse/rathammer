@@ -1,15 +1,15 @@
 # An alternative to the Hammer editor.
-[Download Alpha Build](https://github.com/nmalthouse/rathammer/releases)
+[Download Alpha Build (Linux/Windows)](https://github.com/nmalthouse/rathammer/releases)
+
+[DOCUMENTATION](doc/start.md)
 
 [Discord server](https://discord.gg/wP7gMXpcNR)
 
-On Linux you must have "zenity" installed to use the file browser! On Arch, Steam depends on this so you probably have it installed already.
-
-[Documentation](doc/start.md)
 
 ![Screenshot of the editor](doc/screen_v0.2.1.jpg)
 
 ## Getting vbsp.exe, fgd files, etc on Linux
+* You will need to install wine to run the compile tools.
 * You may have to install the SourceSdk or game authoring tools using Proton.
 * Install the game you want to map for using proton. I will use tf2 as an example. Right click -> properties -> compatibility -> check and select Proton
 * Navigate to the game's steam folder "steamapps/common/Team Fortress 2"
@@ -71,16 +71,25 @@ See config.vdf for defining other game configs.
 ```
 
 ### Building on Windows
-You could probably adapt ratgraph/setup_libs.sh to work with a msys environment.
-It is easier to cross compile for Windows from Linux than to compile natively.
+Same as Linux, do a recursive clone of the git repo and run zig build -Doptimize=ReleaseFast
 
 ### Planned
-* Gui dark mode.
-* Displacement tool.
-* Multi map tabs.
+* Displacement tool. (partially implemented)
 * Editing multiple entities at once in the inspector.
-* Drawing decals.
+* Drawing decals. (partially implemented)
+* 2d entity i/o graph "logical view"
+* collaborative editing over the internet
+* some sort of scripting/plugin system, probably with lua
 
+### Credits
+* zig
+* SDL2
+* freetype2
+* miniz
+* libspng
+* stb libs
+* zalgebra
+* zigglgen
+* uuid-zig
 
-### Style stuff.
-Fields beginning with an underscore are private fields and should not be modified or read directly
+Developed by Niklas Malthouse

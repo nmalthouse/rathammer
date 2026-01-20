@@ -202,6 +202,7 @@ pub const Context = struct {
         } = .{},
 
         cam3d: graph.Camera3D = .{
+            .pos = .new(0, 0, 128),
             .up = .z,
             .move_speed = 10,
             .max_move_speed = 100,
