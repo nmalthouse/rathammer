@@ -117,7 +117,14 @@ pub const MenuBar = struct {
 
             _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
             ar.x += b + pad;
+
             _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.draw_state.mode, .{
+                .commit_vt = &self.cbhandle,
+                .commit_cb = drawModeCommit,
+            });
+            ar.x += b + pad;
+
+            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.draw_state.displacement_mode, .{
                 .commit_vt = &self.cbhandle,
                 .commit_cb = drawModeCommit,
             });

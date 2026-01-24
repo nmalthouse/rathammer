@@ -61,7 +61,10 @@ pub const RcastItem = struct {
 
 pub const Ctx = struct {
     const Self = @This();
+    /// broad phase potential's (AABB's)
     pot: std.ArrayList(RcastItem) = .{},
+
+    /// Narrow phase, subset of pot.
     pot_fine: std.ArrayList(RcastItem) = .{},
     alloc: std.mem.Allocator,
 
@@ -76,38 +79,84 @@ pub const Ctx = struct {
         self.pot_fine.deinit(self.alloc);
     }
 
-    pub fn findNearestSolid(self: *Self, ecs_p: *edit.EcsT, ray_o: Vec3, ray_d: Vec3, csgctx: *csg.Context, bb_only: bool) ![]const RcastItem {
+    //TODO check disps before solids
+    pub fn findNearestObject(self: *Self, ed: *edit.Context, ray_o: Vec3, ray_d: Vec3, opts: struct {
+        aabb_only: bool,
+    }) ![]const RcastItem {
         const vis_mask = edit.EcsT.getComponentMask(&.{ .invisible, .deleted, .autovis_invisible });
         //var rcast_timer = try std.time.Timer.start();
         //defer std.debug.print("Rcast took {d} us\n", .{rcast_timer.read() / std.time.ns_per_us});
         self.pot.clearRetainingCapacity();
-        var bbit = ecs_p.iterator(.bounding_box);
+        var bbit = ed.ecs.iterator(.bounding_box);
         while (bbit.next()) |bb| {
-            if (ecs_p.intersects(bbit.i, vis_mask))
+            if (ed.ecs.intersects(bbit.i, vis_mask))
                 continue;
             if (util3d.doesRayIntersectBBZ(ray_o, ray_d, bb.a, bb.b)) |inter| {
                 const len = inter.distance(ray_o);
                 try self.pot.append(self.alloc, .{ .id = bbit.i, .dist = len, .side_id = null });
             }
         }
-        if (!bb_only) {
-            self.pot_fine.clearRetainingCapacity();
-            for (self.pot.items) |bp_rc| {
-                if (try ecs_p.getOptPtr(bp_rc.id, .solid)) |solid| {
-                    for (try doesRayIntersectSolid(ray_o, ray_d, solid, csgctx)) |in| {
-                        const len = in.point.distance(ray_o);
-                        try self.pot_fine.append(self.alloc, .{ .id = bp_rc.id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
-                    }
-                } else {
-                    try self.pot_fine.append(self.alloc, bp_rc);
+
+        if (opts.aabb_only) {
+            std.sort.insertion(RcastItem, self.pot.items, {}, RcastItem.lessThan);
+            return self.pot.items;
+        }
+
+        self.pot_fine.clearRetainingCapacity();
+        for (self.pot.items) |bp_rc| {
+            const o_disp = switch (ed.draw_state.displacement_mode) {
+                .disp_only, .both => try ed.ecs.getOptPtr(bp_rc.id, .displacements),
+                else => null,
+            };
+
+            const o_solid = if (ed.draw_state.displacement_mode == .disp_only and o_disp != null) null else try ed.ecs.getOptPtr(bp_rc.id, .solid);
+
+            //Disp has priority over solid
+            if (o_disp) |disp| {
+                if (disp.doesRayIntersect(ray_o, ray_d)) |inter| {
+                    try self.pot_fine.append(self.alloc, .{
+                        .point = inter,
+                        .id = bp_rc.id,
+                        .side_id = null,
+                        .dist = inter.distance(ray_o),
+                    });
                 }
             }
 
-            std.sort.insertion(RcastItem, self.pot_fine.items, {}, RcastItem.lessThan);
-            return self.pot_fine.items;
+            if (o_solid) |solid| {
+                for (try doesRayIntersectSolid(ray_o, ray_d, solid, &ed.csgctx)) |in| {
+                    const len = in.point.distance(ray_o);
+                    try self.pot_fine.append(self.alloc, .{ .id = bp_rc.id, .dist = len, .point = in.point, .side_id = @intCast(in.side_index) });
+                }
+            }
+
+            if (try ed.ecs.getOptPtr(bp_rc.id, .entity)) |entity| {
+                //TODO should there be an early out for models suffeciently far from camera?
+                const omod = if (entity._model_id) |mid| ed.models.getPtr(mid) else null;
+                const omesh = if (omod) |mod| mod.mesh else null;
+                if (omesh) |mesh| {
+                    const mat1 = graph.za.Mat4.fromTranslate(entity.origin);
+                    const quat = util3d.extEulerToQuat(entity.angle);
+                    const mat3 = mat1.mul(quat.toMat4());
+
+                    if (mesh.doesRayIntersect(ray_o, ray_d, mat3)) |inter| {
+                        try self.pot_fine.append(self.alloc, .{
+                            .point = inter,
+                            .id = bp_rc.id,
+                            .side_id = null,
+                            .dist = inter.distance(ray_o),
+                        });
+                    }
+                } else { //Fallback to bounding box
+                    try self.pot_fine.append(self.alloc, bp_rc);
+                }
+            } else {
+                //try self.pot_fine.append(self.alloc, bp_rc);
+            }
         }
-        std.sort.insertion(RcastItem, self.pot.items, {}, RcastItem.lessThan);
-        return self.pot.items;
+
+        std.sort.insertion(RcastItem, self.pot_fine.items, {}, RcastItem.lessThan);
+        return self.pot_fine.items;
     }
 
     pub fn reset(self: *Self) void {

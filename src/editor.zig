@@ -170,7 +170,7 @@ pub const Context = struct {
         active_lights: usize = 0,
         draw_outlines: bool = true,
 
-        draw_displacment_solid: bool = false,
+        //draw_displacment_solid: bool = false,
 
         factor: f32 = 64,
         light_mul: f32 = 0.11,
@@ -211,6 +211,12 @@ pub const Context = struct {
             .near = 1,
             .far = 512 * 64,
         },
+
+        displacement_mode: enum {
+            disp_only,
+            solid_only,
+            both,
+        } = .disp_only,
 
         /// we keep our own so that we can do some draw calls with depth some without.
         ctx: graph.ImmediateDrawingContext,
@@ -624,7 +630,7 @@ pub const Context = struct {
             var it = self.ecs.iterator(.invisible);
             while (it.next()) |_| {
                 if (try self.ecs.getOptPtr(it.i, .solid)) |solid| {
-                    try solid.rebuild(it.i, self);
+                    try solid.markDirty(it.i, self);
                 }
             }
             self.ecs.clearComponent(.invisible);
@@ -640,7 +646,7 @@ pub const Context = struct {
             } else {
                 _ = try self.ecs.removeComponentOpt(it.i, .invisible);
                 if (try self.ecs.getOptPtr(it.i, .solid)) |solid|
-                    try solid.rebuild(it.i, self);
+                    try solid.markDirty(it.i, self);
             }
         }
     }
@@ -744,7 +750,7 @@ pub const Context = struct {
                     if (is_hidden) {
                         try s_ptr.removeFromMeshMap(it.i, self);
                     } else {
-                        try s_ptr.rebuild(it.i, self);
+                        try s_ptr.markDirty(it.i, self);
                     }
                 }
             }
@@ -942,18 +948,18 @@ pub const Context = struct {
                 batch.*.mesh.indicies.clearRetainingCapacity();
             }
         }
-        { //Iterate all solids and add
-            var it = self.editIterator(.solid); //must use editIterator, omit hidden
-            while (it.next()) |solid| {
-                const bb = (try self.ecs.getOptPtr(it.i, .bounding_box)) orelse continue;
-                solid.recomputeBounds(bb);
-                try solid.rebuild(it.i, self);
-            }
-        }
         {
             var it = self.editIterator(.displacements);
             while (it.next()) |disp| {
-                try disp.rebuild(it.i, self);
+                try disp.markDispDirty(it.i, self);
+            }
+        }
+        { //Iterate all solids and add
+            var it = self.editIterator(.solid); //must use editIterator, omit hidden
+            while (it.next()) |solid| {
+                //const bb = (try self.ecs.getOptPtr(it.i, .bounding_box)) orelse continue;
+                //solid.recomputeBounds(bb, try self.ecs.getOptPtr(it.i, .displacements));
+                try solid.markDirty(it.i, self);
             }
         }
         { //Set all the gl data
@@ -1063,7 +1069,9 @@ pub const Context = struct {
             if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos.sub(screen_area.pos()),
             view_3d,
         );
-        return self.rayctx.findNearestSolid(&self.ecs, rc[0], rc[1], &self.csgctx, false) catch &.{};
+        return self.rayctx.findNearestObject(self, rc[0], rc[1], .{
+            .aabb_only = false,
+        }) catch &.{};
     }
 
     pub fn getCurrentTool(self: *Self) ?*tool_def.i3DTool {
@@ -1688,6 +1696,16 @@ pub const Context = struct {
                 //std.debug.print("{d} mesh build in {d} ms\n", .{ count, took / std.time.ns_per_ms });
             }
         }
+    }
+
+    pub fn markMeshDirty(ed: *Self, ent_id: EcsT.Id, tex_id: vpk.VpkResId) !void {
+        const batch = try ed.getOrPutMeshBatch(tex_id);
+        batch.*.is_dirty = true;
+
+        //ensure this is in batch
+        try batch.*.contains.put(ent_id, {});
+
+        ed.draw_state.meshes_dirty = true;
     }
 
     pub fn handleTabKeys(ed: *Self, tabs: anytype) void {

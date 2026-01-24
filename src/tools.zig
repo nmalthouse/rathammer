@@ -355,7 +355,7 @@ pub const FastFaceManip = struct {
                         if (rm != .high and lm != .high) {
                             for (self.selected.items) |sel| {
                                 const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                try solid_o.rebuild(sel.id, editor);
+                                try solid_o.markDirty(sel.id, editor);
                             }
                             self.reset();
                         }

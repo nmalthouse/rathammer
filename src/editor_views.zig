@@ -19,6 +19,7 @@ const eql = std.mem.eql;
 const Window = graph.SDL.Window;
 const action = @import("actions.zig");
 const app = @import("app.zig");
+const limits = @import("limits.zig");
 
 pub const Main3DView = struct {
     const iWindow = G.iWindow;
@@ -384,7 +385,7 @@ pub const Main3DView = struct {
             }
         }
 
-        if (self.isBindState(self.config.keys.tool_context.b, .rising)) {
+        if (self.isBindState(self.config.keys.tool_context.b, .rising) and limits.IS_DEBUG) {
             const mpos = if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos.sub(screen_area.pos());
             const aa = self.frame_arena.allocator();
             var btns = std.ArrayList(G.Widget.BtnContextWindow.ButtonMapping){};

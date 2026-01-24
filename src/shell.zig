@@ -373,7 +373,7 @@ pub const CommandCtx = struct {
                     const selected_slice = self.ed.getSelected();
                     for (selected_slice) |id| {
                         if (try self.ed.ecs.getOptPtr(id, .solid)) |solid|
-                            try solid.optimizeMesh();
+                            try solid.optimizeMesh(.{ .can_reorder = !self.ed.hasComponent(id, .displacements) });
                     }
                 },
                 .snap_selected => {

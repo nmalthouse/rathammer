@@ -571,16 +571,16 @@ const LayerWidget = struct {
                 var btns = ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
                 const allow_move = !self.opts.parent.ctx.isChildOf(self.opts.parent.selected_ptr.*, self.opts.id);
 
-                const locked = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.locked else false;
-                const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
+                //const locked = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.locked else false;
+                //const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
 
                 btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
-                btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
+                //btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
                 btns.append(aa, .{ bi("move_selected"), "-> put", .btn }) catch {};
                 btns.append(aa, .{ bi("select_all"), "<- select", .btn }) catch {};
                 btns.append(aa, .{ bi("duplicate"), "duplicate", .btn }) catch {};
                 btns.append(aa, .{ bi("add_child"), "new child", .btn }) catch {};
-                btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
+                //btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
                 btns.append(aa, .{ bi("noop"), "", .btn }) catch {};
                 if (self.opts.id != .none) { //Root cannot be deleted or merged
                     btns.append(aa, .{ bi("delete"), "delete layer", .btn }) catch {};

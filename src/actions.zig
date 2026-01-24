@@ -53,7 +53,7 @@ pub fn hideSelected(ed: *Ed) !void {
 
             _ = ed.ecs.removeComponent(sel, .invisible) catch continue;
             if (ed.getComponent(sel, .solid)) |solid| {
-                try solid.rebuild(sel, ed);
+                try solid.markDirty(sel, ed);
             }
         }
     }

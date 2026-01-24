@@ -290,7 +290,7 @@ fn writeSolid(
     csgctx: *csg.Context,
     opts: Opts,
 ) !void {
-    try solid.optimizeMesh();
+    try solid.optimizeMesh(.{ .can_reorder = !try ecs_p.hasComponent(ent_id, .displacements) });
 
     solid.validateVmfSolid(csgctx) catch |err| {
         std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });

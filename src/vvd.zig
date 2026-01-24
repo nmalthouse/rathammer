@@ -4,9 +4,11 @@ const parseStruct = com.parseStruct;
 const mdl = @import("mdl.zig");
 const graph = @import("graph");
 const Vec3 = graph.za.Vec3;
+const Mat4 = graph.za.Mat4;
 const vpk = @import("vpk.zig");
 const edit = @import("editor.zig");
 const load_pool = @import("thread_pool.zig");
+const util3d = graph.util_3d;
 const gl = graph.gl;
 
 const VVD_MAGIC_STRING = "IDSV";
@@ -250,6 +252,7 @@ pub fn loadModelCrappy(
             }
             try verts.append(alloc, vert);
         }
+
         var total: usize = 0;
         if (fixups.items.len > 0) {
             for (fixups.items) |fu| {
@@ -546,7 +549,7 @@ pub const MultiMesh = struct {
         self.meshes.deinit(self.alloc);
     }
 
-    pub fn drawSimple(self: *Self, view: graph.za.Mat4, model: graph.za.Mat4, shader: c_uint) void {
+    pub fn drawSimple(self: *Self, view: Mat4, model: Mat4, shader: c_uint) void {
         gl.UseProgram(shader);
         GL.passUniform(shader, "view", view);
         GL.passUniform(shader, "model", model);
@@ -558,5 +561,27 @@ pub const MultiMesh = struct {
 
             gl.DrawElements(gl.TRIANGLES, @as(c_int, @intCast(mesh.indicies.items.len)), gl.UNSIGNED_SHORT, 0);
         }
+    }
+
+    /// This is broken as the model needs to be transformed to world space first
+    /// This is probably slow! Intersection is not guaranteed to be nearest
+    pub fn doesRayIntersect(self: *const Self, ray_o: Vec3, ray_d: Vec3, transform: Mat4) ?Vec3 {
+        const vs = self.vertices.items;
+        for (self.meshes.items) |mesh| {
+            const tri_len = @divExact(mesh.indicies.items.len, 3);
+            for (0..tri_len) |tri_i| {
+                const adj_i = tri_i * 3;
+                if (util3d.mollerTrumboreIntersection(
+                    ray_o,
+                    ray_d,
+                    transform.mulByVec3(vs[mesh.indicies.items[adj_i]].posZa()),
+                    transform.mulByVec3(vs[mesh.indicies.items[adj_i + 1]].posZa()),
+                    transform.mulByVec3(vs[mesh.indicies.items[adj_i + 2]].posZa()),
+                )) |inter| {
+                    return inter;
+                }
+            }
+        }
+        return null;
     }
 };

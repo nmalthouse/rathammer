@@ -404,7 +404,7 @@ pub const TextureTool = struct {
                 .reset_world, .reset_norm => {
                     const norm = side.normal(solid);
                     side.resetUv(norm, btn_k == .reset_norm);
-                    solid.rebuild(sf.id, self.ed) catch return;
+                    solid.markDirty(sf.id, self.ed) catch return;
                     self.ed.draw_state.meshes_dirty = true;
                     new = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };
                 },

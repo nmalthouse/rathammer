@@ -267,17 +267,27 @@ pub const MeshBatch = struct {
         self.lines_index.clearRetainingCapacity();
         var it = self.contains.iterator();
         while (it.next()) |id| {
+            if (editor.ecs.getOptPtr(id.key_ptr.*, .displacements) catch null) |disp| {
+                for (disp.disps.items) |*di| {
+                    if (di.tex_id == self.tex_res_id)
+                        try di.rebuild(id.key_ptr.*, editor);
+                }
+            }
             if (editor.ecs.getOptPtr(id.key_ptr.*, .solid) catch null) |solid| {
                 for (solid.sides.items) |*side| {
                     if (side.tex_id == self.tex_res_id) {
                         try side.rebuild(solid, self, editor);
                     }
-                }
-            }
-            if (editor.ecs.getOptPtr(id.key_ptr.*, .displacements) catch null) |disp| {
-                for (disp.disps.items) |*di| {
-                    if (di.tex_id == self.tex_res_id)
-                        try di.rebuild(id.key_ptr.*, editor);
+
+                    //This must be done last, after displacement has been rebuilt
+                    const bb = (try editor.ecs.getPtr(id.key_ptr.*, .bounding_box));
+                    solid.recomputeBounds(bb, switch (editor.draw_state.displacement_mode) {
+                        .disp_only, .both => try editor.ecs.getOptPtr(id.key_ptr.*, .displacements),
+                        else => null,
+                    }, .{ .include_both = switch (editor.draw_state.displacement_mode) {
+                        .both => true,
+                        else => false,
+                    } });
                 }
             }
         }
@@ -591,7 +601,7 @@ pub const Side = struct {
     };
 
     /// Used by displacement
-    omit_from_batch: bool = false,
+    _omit_from_batch: bool = false,
 
     _alloc: std.mem.Allocator,
     index: ArrayList(u32) = .{},
@@ -634,7 +644,7 @@ pub const Side = struct {
     }
 
     pub fn rebuild(side: *@This(), solid: *Solid, batch: *MeshBatch, editor: *Editor) !void {
-        if (side.omit_from_batch)
+        if (side._omit_from_batch)
             return;
         side.tex_id = batch.tex_res_id;
         side.tw = batch.mat.slots[0].w;
@@ -915,7 +925,7 @@ pub const Solid = struct {
                 .tex_id = tex_id,
             });
         }
-        try ret.optimizeMesh();
+        try ret.optimizeMesh(.{ .can_reorder = true });
         for (ret.sides.items) |*side| {
             const norm = side.normal(&ret);
             side.resetUv(norm, true);
@@ -933,7 +943,9 @@ pub const Solid = struct {
     ///
     /// Does NOT check for convexity
     /// Does NOT check for solidity
-    pub fn optimizeMesh(self: *Self) !void {
+    pub fn optimizeMesh(self: *Self, opts: struct {
+        can_reorder: bool = false,
+    }) !void {
         const alloc = self._alloc;
         var vmap = csg.VecMap.init(alloc);
         defer vmap.deinit();
@@ -972,9 +984,8 @@ pub const Solid = struct {
         }
         try self.verts.resize(self._alloc, vmap.verts.items.len);
 
-        //FIXME we can not reorder indicies without breaking displacements
-        //either keep disabled or update any disps
-        if (false) { //Canonical form of solid . verts have a unique order, index have a unique order
+        //Do not reorder indices or remove duplicate faces when a disp is attached as it may cause disp to be modified
+        if (opts.can_reorder) { //Canonical form of solid . verts have a unique order, index have a unique order
             //enables fast comparison
             const mapping = try self._alloc.alloc(usize, vmap.verts.items.len);
             defer self._alloc.free(mapping);
@@ -1012,7 +1023,7 @@ pub const Solid = struct {
 
         @memcpy(self.verts.items, vmap.verts.items);
 
-        { //Check all sides are unique
+        if (opts.can_reorder) { //Check all sides are unique
 
             const HashCtx = struct {
                 const Key = []const u32;
@@ -1115,7 +1126,7 @@ pub const Solid = struct {
         for (self.verts.items) |*vert| {
             vert.data = @round(vert.data);
         }
-        try self.rebuild(id, ed);
+        try self.markDirty(id, ed);
     }
 
     pub fn deinit(self: *Self) void {
@@ -1125,12 +1136,26 @@ pub const Solid = struct {
         self.verts.deinit(self._alloc);
     }
 
-    pub fn recomputeBounds(self: *Self, aabb: *AABB) void {
+    pub fn recomputeBounds(self: *Self, aabb: *AABB, o_disp: ?*Displacements, opts: struct {
+        include_both: bool,
+    }) void {
         var min = Vec3.set(std.math.floatMax(f32));
         var max = Vec3.set(-std.math.floatMax(f32));
-        for (self.verts.items) |s| {
-            min = min.min(s);
-            max = max.max(s);
+
+        if (o_disp) |disps| {
+            for (disps.disps.items) |disp| {
+                for (disp._verts.items) |v| {
+                    min = min.min(v);
+                    max = max.max(v);
+                }
+            }
+        }
+
+        if (opts.include_both or o_disp == null) {
+            for (self.verts.items) |s| {
+                min = min.min(s);
+                max = max.max(s);
+            }
         }
         aabb.a = min;
         aabb.b = max;
@@ -1156,16 +1181,7 @@ pub const Solid = struct {
             self.translateVertsSimple(vert_i, offset);
         }
 
-        for (self.sides.items) |*side| {
-            const batch = editor.meshmap.getPtr(side.tex_id) orelse continue;
-            batch.*.is_dirty = true;
-
-            //ensure this is in batch
-            try batch.*.contains.put(id, {});
-        }
-        const bb = (try editor.ecs.getPtr(id, .bounding_box));
-        self.recomputeBounds(bb);
-        editor.draw_state.meshes_dirty = true;
+        try self.markDirty(id, editor);
     }
 
     //Update displacement
@@ -1175,27 +1191,13 @@ pub const Solid = struct {
             self.verts.items[ind] = self.verts.items[ind].add(vec);
         }
 
-        for (self.sides.items) |*side| {
-            const batch = editor.meshmap.getPtr(side.tex_id) orelse continue;
-            batch.*.is_dirty = true;
-
-            //ensure this is in batch
-            try batch.*.contains.put(id, {});
-        }
-        const bb = (try editor.ecs.getPtr(id, .bounding_box));
-        self.recomputeBounds(bb);
-        editor.draw_state.meshes_dirty = true;
+        try self.markDirty(id, editor);
     }
 
-    pub fn rebuild(self: *@This(), id: EcsT.Id, editor: *Editor) !void {
+    pub fn markDirty(self: *@This(), id: EcsT.Id, editor: *Editor) !void {
         for (self.sides.items) |*side| {
-            const batch = try editor.getOrPutMeshBatch(side.tex_id);
-            batch.*.is_dirty = true;
-            //ensure this is in batch
-            try batch.*.contains.put(id, {});
+            try editor.markMeshDirty(id, side.tex_id);
         }
-        const bb = try editor.ecs.getPtr(id, .bounding_box);
-        self.recomputeBounds(bb);
         editor.draw_state.meshes_dirty = true;
     }
 
@@ -1238,7 +1240,7 @@ pub const Solid = struct {
                 side.v.axis = new_v_axis;
             }
         }
-        try self.rebuild(id, editor);
+        try self.markDirty(id, editor);
         editor.draw_state.meshes_dirty = true;
     }
 
@@ -1304,7 +1306,7 @@ pub const Solid = struct {
     /// If it is null, all vertices are offset
     pub fn drawImmediate(self: *Self, draw: *DrawCtx, editor: *Editor, offset: Vec3, only_verts: ?[]const u32, texture_lock: bool) !void {
         for (self.sides.items) |side| {
-            if (side.omit_from_batch)
+            if (side._omit_from_batch)
                 continue;
             const batch = &(draw.getBatch(.{ .batch_kind = .billboard, .params = .{
                 .shader = DrawCtx.billboard_shader,
@@ -1347,7 +1349,7 @@ pub const Solid = struct {
     //the vertexOffsetCb is given the vertex, the side_index, the index
     pub fn drawImmediateCustom(self: *Self, draw: *DrawCtx, ed: *Editor, user: anytype, vertOffsetCb: fn (@TypeOf(user), Vec3, u32, u32) Vec3, texture_lock: bool) !void {
         for (self.sides.items, 0..) |side, s_i| {
-            if (side.omit_from_batch) //don't draw this sideit
+            if (side._omit_from_batch) //don't draw this sideit
                 continue;
             const batch = &(draw.getBatch(.{ .batch_kind = .billboard, .params = .{
                 .shader = DrawCtx.billboard_shader,
@@ -1440,6 +1442,12 @@ pub const Displacements = struct {
         return ret;
     }
 
+    pub fn markDispDirty(self: *Self, ent_id: EcsT.Id, ed: *Editor) !void {
+        for (self.disps.items) |*disp| {
+            try disp.markForRebuild(ent_id, ed);
+        }
+    }
+
     pub fn rebuild(self: *Self, ent_id: EcsT.Id, ed: *Editor) !void {
         for (self.disps.items) |*disp| {
             try disp.rebuild(ent_id, ed);
@@ -1470,6 +1478,34 @@ pub const Displacements = struct {
         }
 
         self.sides.items[side_id] = disp_index;
+    }
+
+    pub fn doesRayIntersect(self: *Self, ray_o: Vec3, ray_d: Vec3) ?Vec3 {
+        var nearest: ?Vec3 = null;
+        var min_dist: f32 = std.math.floatMax(f32);
+
+        for (self.disps.items) |disp| {
+            const num_tri = @divExact(disp._index.items.len, 3);
+            const vs = disp._verts.items;
+            for (0..num_tri) |tri_i| {
+                const adj_i = tri_i * 3;
+                if (util3d.mollerTrumboreIntersection(
+                    ray_o,
+                    ray_d,
+                    vs[disp._index.items[adj_i]],
+                    vs[disp._index.items[adj_i + 1]],
+                    vs[disp._index.items[adj_i + 2]],
+                )) |inter| {
+                    const dist = inter.distance(ray_o);
+                    if (dist < min_dist) {
+                        nearest = inter;
+                        min_dist = dist;
+                    }
+                }
+            }
+        }
+
+        return nearest;
     }
 };
 
@@ -1696,23 +1732,32 @@ pub const Displacement = struct {
     }
 
     pub fn markForRebuild(self: *Self, id: EcsT.Id, editor: *Editor) !void {
-        const batch = try editor.getOrPutMeshBatch(self.tex_id);
-        batch.*.is_dirty = true;
-        try batch.*.contains.put(id, {});
+        try editor.markMeshDirty(id, self.tex_id);
     }
 
     pub fn rebuild(self: *Self, id: EcsT.Id, editor: *Editor) !void {
+        const solid = try editor.ecs.getOptPtr(id, .solid) orelse return;
+        const hide_solid = switch (editor.draw_state.displacement_mode) {
+            .disp_only => true,
+            .both => false,
+            .solid_only => {
+                //Don't build the displacament
+                for (solid.sides.items) |*side| {
+                    side._omit_from_batch = false;
+                }
+                return;
+            },
+        };
+
         const batch = try editor.getOrPutMeshBatch(self.tex_id);
         batch.*.is_dirty = true;
         try batch.*.contains.put(id, {});
 
         self.tex_id = batch.tex_res_id;
-        const solid = try editor.ecs.getOptPtr(id, .solid) orelse return;
         if (self.parent_side_i >= solid.sides.items.len) return;
         for (solid.sides.items) |*side| {
-            side.omit_from_batch = !editor.draw_state.draw_displacment_solid;
+            side._omit_from_batch = hide_solid;
         }
-        solid.sides.items[self.parent_side_i].omit_from_batch = true;
 
         self._verts.clearRetainingCapacity();
         self._index.clearRetainingCapacity();

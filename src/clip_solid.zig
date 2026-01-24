@@ -124,7 +124,7 @@ const Mapper = struct {
                 index.* = self.map.get(index.*) orelse return error.broken;
             }
         }
-        try solid.optimizeMesh();
+        try solid.optimizeMesh(.{ .can_reorder = true });
     }
 };
 

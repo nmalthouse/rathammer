@@ -412,7 +412,7 @@ pub const Translate = struct {
                         }
                     };
 
-                    if (giz_active == .high) {
+                    if (giz_active == .high and self.draw_state.displacement_mode != .solid_only) {
                         const h = Help{ .dist = dist };
                         for (disps.disps.items) |*disp| {
                             try disp.drawImmediate(draw, self, id, h, Help.offset);

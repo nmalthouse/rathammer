@@ -460,7 +460,7 @@ pub const UndoCreateDestroy = struct {
         _ = editor.ecs.removeComponentOpt(self.id, .deleted) catch {};
         //editor.ecs.attach(self.id, .deleted, .{}) catch {};
         if (try editor.ecs.getOptPtr(self.id, .solid)) |solid| {
-            try solid.rebuild(self.id, editor);
+            try solid.markDirty(self.id, editor);
         }
     }
 
@@ -535,7 +535,7 @@ pub const UndoTextureManip = struct {
             side.tex_id = new.tex_id;
             side.lightmapscale = new.lightmapscale;
             side.smoothing_groups = new.smoothing_groups;
-            try solid.rebuild(self.id, editor);
+            try solid.markDirty(self.id, editor);
         }
     }
 

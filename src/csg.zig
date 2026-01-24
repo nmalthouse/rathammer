@@ -131,7 +131,7 @@ pub const Context = struct {
             gen_time += timer.read();
         }
         try ret.verts.appendSlice(ret._alloc, self.vecmap.verts.items);
-        try ret.optimizeMesh();
+        try ret.optimizeMesh(.{ .can_reorder = true });
         return ret;
     }
 
