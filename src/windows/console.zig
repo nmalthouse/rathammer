@@ -214,9 +214,9 @@ pub const Console = struct {
         self.readline.setLine(tb.codepoints.items) catch {};
     }
 
-    pub fn textbox_cb(cb: *guis.CbHandle, gui: *Gui, string: []const u8, _: usize) void {
+    pub fn textbox_cb(cb: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.execCommand(string, gui);
+        self.execCommand(p.string, p.gui);
     }
 
     pub fn draw(vt: *iArea, d: DrawState) void {

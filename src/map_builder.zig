@@ -42,11 +42,8 @@ fn die() noreturn {
 const builtin = @import("builtin");
 const DO_WINE = builtin.target.os.tag != .windows;
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-    var arg_it = try std.process.argsWithAllocator(alloc);
-    defer arg_it.deinit();
+pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, stdout: *std.io.Writer) !void {
+    _ = stdout;
     const Arg = graph.ArgGen.Arg;
     const args = try graph.ArgGen.parseArgs(&.{
         Arg("vmf", .string, "vmf to load"),
@@ -55,7 +52,7 @@ pub fn main() !void {
         Arg("gamename", .string, "name of game 'hl2_complete'"),
         Arg("outputdir", .string, "dir relative to gamedir where bsp is put, 'hl2/maps'"),
         Arg("tmpdir", .string, "directory for map artifacts, default is /tmp/mapcompile"),
-    }, &arg_it);
+    }, arg_it);
     try buildmap(alloc, .{
         .cwd_path = try std.process.getCwdAlloc(alloc),
         .exedir_pre = args.exedir orelse "Half-Life 2/bin",

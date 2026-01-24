@@ -13,15 +13,8 @@ pub const Args = [_]graph.ArgGen.ArgItem{
     graph.ArgGen.ArgCustom("kind", Kind, "type of session to start"),
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    //defer _ = gpa.detectLeaks();
-    const alloc = gpa.allocator();
-
-    var arg_it = try std.process.argsWithAllocator(alloc);
-    defer arg_it.deinit();
-
-    const args = try graph.ArgGen.parseArgs(&Args, &arg_it);
+pub fn remote(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, stdout: *std.io.Writer) !void {
+    const args = try graph.ArgGen.parseArgs(&Args, arg_it);
     const kind = args.kind orelse .command;
 
     const stream = try std.net.connectUnixSocket(args.socket orelse {
@@ -37,10 +30,6 @@ pub fn main() !void {
 
     var stdin_reader = std.fs.File.stdin().reader(&stdin_buf);
     const stdin = &stdin_reader.interface;
-
-    var stdout_buf: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
-    const stdout = &stdout_writer.interface;
 
     var buf: std.Io.Writer.Allocating = .init(alloc);
     defer buf.deinit();

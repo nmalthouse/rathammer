@@ -260,11 +260,11 @@ pub const TextureTool = struct {
         }
     }
 
-    fn textbox_cb(cb: *guis.CbHandle, _: *Gui, string: []const u8, id: usize) void {
+    fn textbox_cb(cb: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
-        const num = std.fmt.parseFloat(f32, string) catch return;
-        self.textboxErr(num, id) catch return;
+        const num = std.fmt.parseFloat(f32, p.string) catch return;
+        self.textboxErr(num, p.user_id) catch return;
     }
 
     fn textboxErr(self: *@This(), num: f32, id: usize) !void {

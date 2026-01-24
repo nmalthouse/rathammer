@@ -528,9 +528,9 @@ pub const Translate = struct {
             wp.needs_rebuild = true;
     }
 
-    fn textbox_cb(vt: *guis.CbHandle, _: *RGui, string: []const u8, id: usize) void {
+    fn textbox_cb(vt: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
-        self.textboxErr(string, id) catch return;
+        self.textboxErr(p.string, p.user_id) catch return;
         if (self.win_ptr) |wp|
             wp.needs_rebuild = true;
     }

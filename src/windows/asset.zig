@@ -639,18 +639,18 @@ const TextureBrowser = struct {
         return view_width / @as(f32, @floatFromInt(self.num_column));
     }
 
-    fn cb_commitTextbox(cb: *CbHandle, gui: *Gui, string: []const u8, _: usize) void {
+    fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        if (std.mem.eql(u8, string, self.prev_search.items))
+        if (std.mem.eql(u8, p.string, self.prev_search.items))
             return;
         defer {
             self.prev_search.clearRetainingCapacity();
-            self.prev_search.appendSlice(self.alloc, string) catch {};
+            self.prev_search.appendSlice(self.alloc, p.string) catch {};
         }
 
         var search_list = self.mat_list.items;
 
-        if (std.mem.startsWith(u8, string, self.prev_search.items)) {
+        if (std.mem.startsWith(u8, p.string, self.prev_search.items)) {
             self.mat_list_search_b.clearRetainingCapacity();
             self.mat_list_search_b.appendSlice(self.alloc, self.mat_list_search_a.items) catch return;
             search_list = self.mat_list_search_b.items;
@@ -659,14 +659,14 @@ const TextureBrowser = struct {
         self.mat_list_search_a.clearRetainingCapacity();
         for (search_list) |item| {
             const tt = self.ed.vpkctx.entries.get(item) orelse continue;
-            if (io(u8, tt.path, string) != null or io(u8, tt.name, string) != null)
+            if (io(u8, tt.path, p.string) != null or io(u8, tt.name, p.string) != null)
                 self.mat_list_search_a.append(self.alloc, item) catch return;
         }
         self.num_result = self.mat_list_search_a.items.len;
         if (self.scr_ptr) |scr| {
             scr.updateCount(self.getTextureRowCount());
             scr.index_ptr.* = 0;
-            scr.rebuild(gui, self.win);
+            scr.rebuild(p.gui, self.win);
         }
     }
 
@@ -783,33 +783,33 @@ const ListSearch = struct {
         return self.list_a.items[index];
     }
 
-    fn cb_commitTextbox(cb: *CbHandle, gui: *Gui, string: []const u8, _: usize) void {
+    fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        if (std.mem.eql(u8, string, self.prev_search.items))
+        if (std.mem.eql(u8, p.string, self.prev_search.items))
             return;
         defer {
             self.prev_search.clearRetainingCapacity();
-            self.prev_search.appendSlice(self.alloc, string) catch {};
+            self.prev_search.appendSlice(self.alloc, p.string) catch {};
             self.list_a_built_with_hash = getHash(self.prev_search.items);
         }
 
         var search_list = self.master.items;
 
-        if (std.mem.startsWith(u8, string, self.prev_search.items)) {
+        if (std.mem.startsWith(u8, p.string, self.prev_search.items)) {
             self.list_b.clearRetainingCapacity();
             self.list_b.appendSlice(self.alloc, self.list_a.items) catch return;
             search_list = self.list_b.items;
         }
         self.list_a.clearRetainingCapacity();
         for (search_list) |item| {
-            if (self.search_vt.search_cb(self.search_vt, item, string))
+            if (self.search_vt.search_cb(self.search_vt, item, p.string))
                 self.list_a.append(self.alloc, item) catch return;
         }
         self.num_result = self.list_a.items.len;
         if (self.scr_ptr) |scr| {
             scr.updateCount(self.list_a.items.len);
             scr.index_ptr.* = 0;
-            scr.rebuild(gui, self.win);
+            scr.rebuild(p.gui, self.win);
         }
     }
 

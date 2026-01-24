@@ -573,6 +573,8 @@ pub fn main() !void {
     const alloc = if (IS_DEBUG) gpa.allocator() else std.heap.smp_allocator;
     var arg_it = try std.process.argsWithAllocator(alloc);
     defer arg_it.deinit();
+    const exe_name = arg_it.next() orelse return error.invalidArgIt;
+    _ = exe_name;
     var stdout_buf: [128]u8 = undefined;
 
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);

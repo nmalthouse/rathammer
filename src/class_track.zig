@@ -8,9 +8,10 @@ const Id = ecs.EcsT.Id;
 pub const Tracker = struct {
     const Self = @This();
     const List = std.ArrayListUnmanaged(Id);
-    const MapT = std.StringHashMap(List);
+    const MapT = std.StringArrayHashMap(List);
 
     alloc: std.mem.Allocator,
+    /// map class_name to list of entity ids
     map: MapT,
 
     get_buf: std.ArrayList(Id),

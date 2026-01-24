@@ -11,8 +11,8 @@ mkdir "$RATOUT"
 zig build -Doptimize=ReleaseSafe -Dcpu=x86_64 -Dcommit_hash=$(git rev-parse HEAD) -Dhttp_version_check=true
 
 cp zig-out/bin/rathammer "$RATOUT"
-cp zig-out/bin/jsonmaptovmf "$RATOUT"
-cp zig-out/bin/mapbuilder "$RATOUT"
+#cp zig-out/bin/jsonmaptovmf "$RATOUT"
+cp zig-out/bin/ratremote "$RATOUT"
 cp -r ratasset "$RATOUT"
 cp  config.vdf "$RATOUT"
 cp -r doc "$RATOUT"

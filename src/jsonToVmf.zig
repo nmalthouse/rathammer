@@ -200,18 +200,13 @@ pub fn jsontovmf(
     try bb.flush();
 }
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const alloc = gpa.allocator();
-    var arg_it = try std.process.argsWithAllocator(alloc);
-    defer arg_it.deinit();
-
+pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.io.Writer) !void {
     const Arg = graph.ArgGen.Arg;
     const args = try graph.ArgGen.parseArgs(&.{
         Arg("map", .string, "ratmap or json map to load"),
         Arg("output", .string, "name of vmf file to write"),
         Arg("no-check", .flag, "don't check solids for validity"),
-    }, &arg_it);
+    }, arg_it);
 
     var loadctx = LoadCtx{};
 

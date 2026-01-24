@@ -435,11 +435,11 @@ pub const GuiWidget = struct {
         }
     }
 
-    fn textCb(vt: *CbHandle, _: *Gui, new: []const u8, id: guis.Uid) void {
+    fn textCb(vt: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
-        switch (id) {
+        switch (p.user_id) {
             bi("set_name") => {
-                self.ctx.setName(self.selected_ptr.*, new) catch {};
+                self.ctx.setName(self.selected_ptr.*, p.string) catch {};
                 self.win.needs_rebuild = true;
             },
             else => {},

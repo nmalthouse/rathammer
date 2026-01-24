@@ -70,6 +70,7 @@ pub const InspectorWindow = struct {
                 .matched_input_set = .init(editor.alloc),
                 .editor = editor,
                 .win_ptr = &self.vt,
+                .scratch_buf = .init(editor.alloc),
             },
         };
 
@@ -88,6 +89,7 @@ pub const InspectorWindow = struct {
         self.kv_id_map.deinit();
         self.id_kv_map.deinit();
         self.io.matched_input_set.deinit();
+        self.io.scratch_buf.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self); //second
     }
@@ -258,14 +260,14 @@ pub const InspectorWindow = struct {
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
                 const aa = ly.getArea() orelse return;
                 const ClassCombo = struct {
-                    fn commit(cb: *CbHandle, id: usize, _: void) void {
+                    fn commit(cb: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
                         const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
                         const fields = lself.editor.fgd_ctx.classSlice();
                         lself.vt.needs_rebuild = true;
-                        if (id >= fields.len) return;
+                        if (p.index >= fields.len) return;
                         const led = lself.editor;
                         if (led.selection.getGroupOwnerExclusive(&led.groups)) |lsel_id| {
-                            const new_class_name = lself.editor.fgd_ctx.getPtrId(id).name;
+                            const new_class_name = lself.editor.fgd_ctx.getPtrId(p.index).name;
                             if (led.ecs.getOptPtr(lsel_id, .entity) catch null) |lent| {
                                 const ustack = led.undoctx.pushNewFmt("change class {s} -> {s}", .{ lent.class, new_class_name }) catch return;
                                 ustack.append(.{ .set_class = undo.UndoSetClass.create(
@@ -286,7 +288,7 @@ pub const InspectorWindow = struct {
                 };
                 self.selected_class_id = ed.fgd_ctx.getId(ent.class);
                 if (guis.label(lay, aa, "Ent Class", .{})) |ar|
-                    _ = Wg.ComboUser(void).build(lay, ar, .{
+                    _ = Wg.ComboVoid.build(lay, ar, .{
                         .user_vt = &self.cbhandle,
                         .commit_cb = &ClassCombo.commit,
                         .name_cb = &ClassCombo.name,
@@ -523,15 +525,15 @@ pub const InspectorWindow = struct {
         }
     }
 
-    fn setBrightness(cb: *CbHandle, _: *Gui, value: []const u8, id: usize) void {
+    fn setBrightness(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        if (self.getNameFromId(id)) |field_name| {
+        if (self.getNameFromId(p.user_id)) |field_name| {
             const ent_id = self.getSelId() orelse return;
             const kvs = self.getKvsPtr() orelse return;
 
             if (kvs.map.getPtr(field_name)) |ptr| {
                 var floats = ptr.getFloats(4);
-                floats[3] = std.fmt.parseFloat(f32, value) catch return;
+                floats[3] = std.fmt.parseFloat(f32, p.string) catch return;
                 const ustack = self.editor.undoctx.pushNewFmt("Set brightness {s}: {d}", .{ field_name, floats[3] }) catch return;
                 const old = kvs.getString(field_name) orelse "";
                 ustack.append(.{ .set_kv = undo.UndoSetKeyValue.createFloats(
@@ -637,9 +639,9 @@ pub const InspectorWindow = struct {
         self.vt.needs_rebuild = true;
     }
 
-    pub fn cb_commitTextbox(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
+    pub fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.setKvStr(id, string);
+        self.setKvStr(p.user_id, p.string);
     }
 
     pub fn select_kv_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, win: *iWindow) void {
@@ -661,13 +663,13 @@ pub const InspectorWindow = struct {
             fgd_class_index: usize,
             fgd_field_index: usize,
 
-            fn commit(vtt: *CbHandle, id: usize, lam: @This()) void {
+            fn commit(vtt: *CbHandle, lam: @This(), p: Wg.ComboCommitParam) void {
                 const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
                 const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
                 const fie = class.field_data.items[lam.fgd_field_index];
 
-                lself.setKvStr(lself.getId(fie.name), fie.type.choices.items[id][0]);
+                lself.setKvStr(lself.getId(fie.name), fie.type.choices.items[p.index][0]);
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) Wg.ComboItem {
@@ -738,9 +740,13 @@ const IoWg = struct {
     selected_io_index: usize = 0,
     right_click_index: ?usize = null,
     io_scroll_index: usize = 0,
+
+    /// set of input class' that io targetname refers to
     matched_input_set: std.AutoArrayHashMap(fgd.InputId, void),
     editor: *Context,
     win_ptr: *iWindow,
+
+    scratch_buf: std.array_list.Managed(u8),
 
     fn buildIo(user_vt: *CbHandle, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", user_vt));
@@ -941,7 +947,7 @@ const IoWg = struct {
         win.needs_rebuild = true;
     }
 
-    fn ioTextboxCb(cb: *CbHandle, _: *Gui, string: []const u8, id: usize) void {
+    fn ioTextboxCb(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
@@ -950,23 +956,23 @@ const IoWg = struct {
         const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
 
         //Numbers are indexes into the table "names"
-        const delta: undo.UndoConnectDelta.Delta = switch (id) {
+        const delta: undo.UndoConnectDelta.Delta = switch (p.user_id) {
             0 => .{
-                .listen_event = [2][]const u8{ con.listen_event, string },
+                .listen_event = [2][]const u8{ con.listen_event, p.string },
             },
             1 => .{
-                .target = [2][]const u8{ con.target.items, string },
+                .target = [2][]const u8{ con.target.items, p.string },
             },
             2 => .{
-                .input = [2][]const u8{ con.input, string },
+                .input = [2][]const u8{ con.input, p.string },
             },
             3 => .{
-                .value = [2][]const u8{ con.value.items, string },
+                .value = [2][]const u8{ con.value.items, p.string },
             },
             4 => .{
-                .delay = [2]f32{ con.delay, std.fmt.parseFloat(f32, string) catch return },
+                .delay = [2]f32{ con.delay, std.fmt.parseFloat(f32, p.string) catch return },
             },
-            5 => .{ .fire_count = [2]i32{ con.fire_count, std.fmt.parseInt(i32, string, 10) catch return } },
+            5 => .{ .fire_count = [2]i32{ con.fire_count, std.fmt.parseInt(i32, p.string, 10) catch return } },
             else => return,
         };
 
@@ -983,21 +989,77 @@ const IoWg = struct {
         self.win_ptr.needs_rebuild = true;
     }
 
+    pub fn buildTargetCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
+        const cons = self.getConsPtr() orelse return;
+        if (self.selected_io_index >= cons.list.items.len) return;
+
+        const TargetCombo = struct {
+            fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
+                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+
+                const OUTPUT_TABLE_INDEX = 1;
+                const keys = lself.editor.targetname_track.map.keys();
+                if (p.index >= keys.len) {
+                    ioTextboxCb(vtt, .{ .gui = lself.win_ptr.gui_ptr, .string = p.search_string, .user_id = OUTPUT_TABLE_INDEX, .forced = true });
+                    return;
+                }
+
+                ioTextboxCb(vtt, .{ .gui = lself.win_ptr.gui_ptr, .string = keys[p.index], .user_id = OUTPUT_TABLE_INDEX, .forced = true });
+            }
+
+            fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
+                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const keys = lself.editor.targetname_track.map.keys();
+                const vals = lself.editor.targetname_track.map.values();
+
+                if (id >= keys.len) {
+                    const lcons = lself.getConsPtr() orelse return .broken();
+                    return .{ .name = lcons.list.items[lself.selected_io_index].target.items };
+                }
+
+                lself.scratch_buf.clearRetainingCapacity();
+                lself.scratch_buf.print("({d}) {s}", .{ vals[id].items.len, keys[id] }) catch {};
+                return .{ .name = lself.scratch_buf.items, .enabled = vals[id].items.len > 0 };
+            }
+        };
+
+        //TODO determine set of valid outputs and limit to that
+
+        const current_target = cons.list.items[self.selected_io_index].target.items;
+        var index: usize = std.math.maxInt(usize);
+        for (self.editor.targetname_track.map.keys(), 0..) |targetname, i| {
+            if (std.mem.eql(u8, targetname, current_target)) {
+                index = i;
+                break;
+            }
+        }
+
+        _ = Wg.ComboUser(void).build(lay, aa, .{
+            .user_vt = &self.cbhandle,
+            .commit_cb = &TargetCombo.commit,
+            .name_cb = &TargetCombo.name,
+            .current = index,
+            //.current = self.selected_class_id orelse 0,
+            .count = self.editor.targetname_track.map.count(),
+            .commit_invalid = true,
+        }, {});
+    }
+
     pub fn buildOutputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
 
         const OutputCombo = struct {
-            fn commit(vtt: *CbHandle, id: usize, _: void) void {
+            fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
                 const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
 
                 const class = lself.getEntDef() orelse return;
-                if (id >= class.outputs.items.len) return;
-                const ind = class.outputs.items[id];
+                if (p.index >= class.outputs.items.len) return;
+                const ind = class.outputs.items[p.index];
                 const lname = class.io_data.items[ind].name;
 
                 const OUTPUT_TABLE_INDEX = 0;
-                ioTextboxCb(vtt, lself.win_ptr.gui_ptr, lname, OUTPUT_TABLE_INDEX);
+                ioTextboxCb(vtt, .{ .gui = lself.win_ptr.gui_ptr, .string = lname, .user_id = OUTPUT_TABLE_INDEX, .forced = true });
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
@@ -1034,16 +1096,16 @@ const IoWg = struct {
 
     pub fn buildInputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
         const InputCombo = struct {
-            fn commit(vtt: *CbHandle, id: usize, _: void) void {
+            fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
                 const lself = vtt.cast(IoWg, "cbhandle");
 
                 const list = lself.matched_input_set.keys();
-                if (id >= list.len) return;
+                if (p.index >= list.len) return;
 
-                const item = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name;
+                const item = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[p.index])].name;
 
                 const INPUT_TEXT_INDEX = 2;
-                ioTextboxCb(vtt, lself.win_ptr.gui_ptr, item, INPUT_TEXT_INDEX);
+                ioTextboxCb(vtt, .{ .gui = lself.win_ptr.gui_ptr, .string = item, .user_id = INPUT_TEXT_INDEX, .forced = true });
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
@@ -1149,12 +1211,13 @@ const IoWg = struct {
                 _ = switch (i) {
                     0 => self.buildOutputCombo(vt, sp1[1]),
                     1 => {
-                        _ = Wg.Textbox.buildOpts(vt, sp1[1], .{
-                            .init_string = li.target.items,
-                            .user_id = 1,
-                            .commit_vt = &self.cbhandle,
-                            .commit_cb = &ioTextboxCb,
-                        });
+                        self.buildTargetCombo(vt, sp1[1]);
+                        //_ = Wg.Textbox.buildOpts(vt, sp1[1], .{
+                        //    .init_string = li.target.items,
+                        //    .user_id = 1,
+                        //    .commit_vt = &self.cbhandle,
+                        //    .commit_cb = &ioTextboxCb,
+                        //});
                     },
                     2 => self.buildInputCombo(vt, sp1[1]),
                     3 => Wg.Textbox.buildOpts(vt, sp1[1], .{

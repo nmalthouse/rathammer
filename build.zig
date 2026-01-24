@@ -10,30 +10,11 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const strip = optimize == .ReleaseFast;
-    const mapbuilder = b.addExecutable(.{
-        .name = "mapbuilder",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/map_builder.zig"),
-            .target = target,
-            .optimize = optimize,
-            .strip = strip,
-        }),
-    });
-
-    const jsonToVmf = b.addExecutable(.{
-        .name = "jsonmaptovmf",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/jsonToVmf.zig"),
-            .target = target,
-            .optimize = optimize,
-            .strip = strip,
-        }),
-    });
 
     const remote = b.addExecutable(.{
         .name = "ratremote",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/rpc/remote.zig"),
+            .root_source_file = b.path("src/remote.zig"),
             .target = target,
             .optimize = optimize,
             .strip = strip,
@@ -55,8 +36,6 @@ pub fn build(b: *std.Build) void {
     const ratmod = ratdep.module("ratgraph");
     hammer_exe.root_module.addImport("graph", ratmod);
     hammer_exe.root_module.addImport("uuidlib", uuidmod);
-    jsonToVmf.root_module.addImport("graph", ratmod);
-    mapbuilder.root_module.addImport("graph", ratmod);
     remote.root_module.addImport("graph", ratmod);
 
     const opts = b.addOptions();
@@ -73,15 +52,13 @@ pub fn build(b: *std.Build) void {
 
     hammer_exe.root_module.addOptions("config", opts);
     hammer_exe.root_module.addOptions("version", version_opt);
-    jsonToVmf.root_module.addOptions("version", version_opt);
+    remote.root_module.addOptions("version", version_opt);
 
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
     b.installArtifact(hammer_exe);
     b.installArtifact(remote);
-    b.installArtifact(jsonToVmf);
-    b.installArtifact(mapbuilder);
 
     // This *creates* a Run step in the build graph, to be executed when another
     // step is evaluated that depends on it. The next line below will establish

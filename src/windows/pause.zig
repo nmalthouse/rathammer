@@ -412,17 +412,17 @@ pub const PauseWindow = struct {
         self.vt.needs_rebuild = true;
     }
 
-    pub fn textbox_cb(cb: *guis.CbHandle, _: *Gui, string: []const u8, id: usize) void {
+    pub fn textbox_cb(cb: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
 
-        const str = self.editor.storeString(string) catch return;
-        switch (@as(Textboxes, @enumFromInt(id))) {
+        const str = self.editor.storeString(p.string) catch return;
+        switch (@as(Textboxes, @enumFromInt(p.user_id))) {
             .set_skyname => {
                 self.editor.loadSkybox(str) catch return;
             },
             .set_desc => {
                 self.editor.edit_state.map_description.clearRetainingCapacity();
-                self.editor.edit_state.map_description.appendSlice(self.editor.alloc, string) catch {};
+                self.editor.edit_state.map_description.appendSlice(self.editor.alloc, p.string) catch {};
             },
             .set_import_visgroup => {
                 self.editor.hacky_extra_vmf.override_vis_group = str;
@@ -489,14 +489,14 @@ pub const PauseWindow = struct {
         }
     }
 
-    fn gameComboCommitNewMap(cb: *CbHandle, id: usize, _: usize) void {
+    fn gameComboCommitNewMap(cb: *CbHandle, _: usize, p: Wg.ComboCommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.new_map_game_config = id;
+        self.new_map_game_config = p.index;
     }
 
-    fn gameComboCommit(cb: *CbHandle, id: usize, rec_index: usize) void {
+    fn gameComboCommit(cb: *CbHandle, rec_index: usize, p: Wg.ComboCommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
-        self.recents.items[rec_index].game_config_index = id;
+        self.recents.items[rec_index].game_config_index = p.index;
     }
     fn gameComboName(cb: *CbHandle, id: usize, _: *Gui, _: usize) Wg.ComboItem {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
