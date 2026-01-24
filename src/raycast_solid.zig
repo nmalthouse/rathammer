@@ -131,24 +131,26 @@ pub const Ctx = struct {
             }
 
             if (try ed.ecs.getOptPtr(bp_rc.id, .entity)) |entity| {
-                //TODO should there be an early out for models suffeciently far from camera?
-                const omod = if (entity._model_id) |mid| ed.models.getPtr(mid) else null;
-                const omesh = if (omod) |mod| mod.mesh else null;
-                if (omesh) |mesh| {
-                    const mat1 = graph.za.Mat4.fromTranslate(entity.origin);
-                    const quat = util3d.extEulerToQuat(entity.angle);
-                    const mat3 = mat1.mul(quat.toMat4());
+                if (bp_rc.dist < ed.draw_state.tog.model_render_dist) {
+                    //TODO should there be an early out for models suffeciently far from camera?
+                    const omod = if (entity._model_id) |mid| ed.models.getPtr(mid) else null;
+                    const omesh = if (omod) |mod| mod.mesh else null;
+                    if (omesh) |mesh| {
+                        const mat1 = graph.za.Mat4.fromTranslate(entity.origin);
+                        const quat = util3d.extEulerToQuat(entity.angle);
+                        const mat3 = mat1.mul(quat.toMat4());
 
-                    if (mesh.doesRayIntersect(ray_o, ray_d, mat3)) |inter| {
-                        try self.pot_fine.append(self.alloc, .{
-                            .point = inter,
-                            .id = bp_rc.id,
-                            .side_id = null,
-                            .dist = inter.distance(ray_o),
-                        });
+                        if (mesh.doesRayIntersect(ray_o, ray_d, mat3)) |inter| {
+                            try self.pot_fine.append(self.alloc, .{
+                                .point = inter,
+                                .id = bp_rc.id,
+                                .side_id = null,
+                                .dist = inter.distance(ray_o),
+                            });
+                        }
+                    } else { //Fallback to bounding box
+                        try self.pot_fine.append(self.alloc, bp_rc);
                     }
-                } else { //Fallback to bounding box
-                    try self.pot_fine.append(self.alloc, bp_rc);
                 }
             } else {
                 //try self.pot_fine.append(self.alloc, bp_rc);

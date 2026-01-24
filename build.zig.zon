@@ -9,7 +9,7 @@
     .name = .rathammer,
     .fingerprint = 0x530d8075b6562538,
 
-    .version = "0.2.2-pre",
+    .version = "0.2.2",
 
     // This field is optional.
     // This is currently advisory only; Zig does not yet do anything

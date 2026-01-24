@@ -273,7 +273,7 @@ pub const Translate = struct {
                         const quat = util3d.extEulerToQuat(snapV3(angle, tool.angle_snap));
                         copy_ent.origin = quat.rotateVec(pos_v).add(origin);
 
-                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area });
+                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area, .defer_model = false });
 
                         if (commit) {
                             angle_delta = copy_ent.angle.sub(ent.angle);
@@ -427,7 +427,7 @@ pub const Translate = struct {
                     if (giz_active == .high) {
                         var copy_ent = ent.*;
                         copy_ent.origin = ent.origin.add(dist);
-                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area });
+                        try copy_ent.drawEnt(self, td.view_3d.*, draw, draw_nd, .{ .frame_color = color, .draw_model_bb = true, .screen_area = td.screen_area, .defer_model = false });
                     }
                 }
             }

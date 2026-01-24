@@ -511,13 +511,21 @@ pub const Entity = struct {
         }
     }
 
-    pub fn drawEnt(ent: *@This(), editor: *Editor, view_3d: Mat4, draw: *DrawCtx, draw_nd: *DrawCtx, param: struct {
-        frame_color: u32 = 0x00ff00ff,
-        draw_model_bb: bool = false,
-        ent_id: ?EcsT.Id = null,
-        text_param: ?*const graph.ImmediateDrawingContext.TextParam = null,
-        screen_area: graph.Rect,
-    }) !void {
+    pub fn drawEnt(
+        ent: *@This(),
+        editor: *Editor,
+        view_3d: Mat4,
+        draw: *DrawCtx,
+        draw_nd: *DrawCtx,
+        param: struct {
+            frame_color: u32 = 0x00ff00ff,
+            draw_model_bb: bool = false,
+            ent_id: ?EcsT.Id = null,
+            text_param: ?*const graph.ImmediateDrawingContext.TextParam = null,
+            screen_area: graph.Rect,
+            defer_model: bool = true, //Draw this model in renderer
+        },
+    ) !void {
         //if(ent._has_point0 != null) {
         //    draw.cube(ent.origin)
         //}
@@ -532,17 +540,20 @@ pub const Entity = struct {
                         const quat = util3d.extEulerToQuat(ent.angle);
                         const mat3 = mat1.mul(quat.toMat4());
                         for (mod.meshes.items) |mesh| {
-                            try editor.renderer.submitDrawCall(.{
-                                .prim = .triangles,
-                                .num_elements = @intCast(mesh.indicies.items.len),
-                                .element_type = graph.gl.UNSIGNED_SHORT,
-                                .vao = mesh.vao,
-                                .diffuse = mesh.texture_id,
-                                .model = mat3,
-                            });
+                            if (param.defer_model) {
+                                try editor.renderer.submitDrawCall(.{
+                                    .prim = .triangles,
+                                    .num_elements = @intCast(mesh.indicies.items.len),
+                                    .element_type = graph.gl.UNSIGNED_SHORT,
+                                    .vao = mesh.vao,
+                                    .diffuse = mesh.texture_id,
+                                    .model = mat3,
+                                });
+                            } else {
+                                mod.drawSimple(view_3d, mat3, editor.renderer.shader.forward);
+                                editor.renderer.countDCall();
+                            }
                         }
-                        //mod.drawSimple(view_3d, mat3, editor.renderer.shader.forward);
-                        //editor.renderer.countDCall();
                         if (param.draw_model_bb) {
                             const rot = quat.toMat3();
                             //const rot = util3d.extrinsicEulerAnglesToMat3(ent.angle);

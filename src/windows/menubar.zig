@@ -31,6 +31,10 @@ const MenuBtn = enum(guis.Uid) {
     open_project_url,
     draw_sprite,
     draw_mod,
+    draw_hdr,
+    draw_mod_shadow,
+    draw_skybox,
+    draw_outline,
     draw_debug,
     export_obj,
     export_obj_as,
@@ -199,6 +203,10 @@ pub const MenuBar = struct {
         switch (id) {
             btn_id(.draw_sprite) => self.ed.draw_state.tog.sprite = val,
             btn_id(.draw_mod) => self.ed.draw_state.tog.models = val,
+            btn_id(.draw_hdr) => self.ed.renderer.do_hdr_buffer = val,
+            btn_id(.draw_mod_shadow) => self.ed.renderer.omit_model_shadow = !val,
+            btn_id(.draw_outline) => self.ed.draw_state.draw_outlines = val,
+            btn_id(.draw_skybox) => self.ed.draw_state.tog.skybox = val,
             btn_id(.draw_debug) => self.ed.draw_state.tog.debug_stats = val,
             else => {},
         }
@@ -212,6 +220,10 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.draw_sprite), "Draw Sprites", .{ .checkbox = tog.sprite } },
                     .{ btn_id(.draw_mod), "Draw Models", .{ .checkbox = tog.models } },
+                    .{ btn_id(.draw_hdr), "HDR", .{ .checkbox = self.ed.renderer.do_hdr_buffer } },
+                    .{ btn_id(.draw_mod_shadow), "Model shadows", .{ .checkbox = !self.ed.renderer.omit_model_shadow } },
+                    .{ btn_id(.draw_outline), "Draw outlines", .{ .checkbox = self.ed.draw_state.draw_outlines } },
+                    .{ btn_id(.draw_skybox), "Draw skybox", .{ .checkbox = tog.skybox } },
                     .{ btn_id(.draw_debug), "Draw debug stats", .{ .checkbox = tog.debug_stats } },
                 });
             },

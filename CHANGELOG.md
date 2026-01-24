@@ -1,4 +1,5 @@
 # Changelog for v0.2.2
+* strip binaries of debug info
 * improve shell and add commands for translate, save_as
 * fix bug resetting displacement orientation on vmf export
 * add lightmapscale preview
@@ -9,3 +10,5 @@
 * serialize active layer
 * draw clip plane as the texture being used for clipped faces
 * add a info.json to ratmap tar
+* raycast models and displacements
+* add menubar option to toggle displacement rendering
