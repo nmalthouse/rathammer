@@ -545,7 +545,7 @@ pub const Main3DView = struct {
             ), cross, self.asset_atlas);
         }
 
-        try self.draw_state.screen_space_text_ctx.flush(null, null);
+        try self.draw_state.screen_space_text_ctx.flush(null, self.draw_state.cam3d);
         try draw.flush(null, null);
     }
 };

@@ -972,7 +972,9 @@ pub const Solid = struct {
         }
         try self.verts.resize(self._alloc, vmap.verts.items.len);
 
-        { //Canonical form of solid . verts have a unique order, index have a unique order
+        //FIXME we can not reorder indicies without breaking displacements
+        //either keep disabled or update any disps
+        if (false) { //Canonical form of solid . verts have a unique order, index have a unique order
             //enables fast comparison
             const mapping = try self._alloc.alloc(usize, vmap.verts.items.len);
             defer self._alloc.free(mapping);
