@@ -16,6 +16,7 @@ const action = @import("../actions.zig");
 const version = @import("../version.zig");
 const colors = @import("../colors.zig").colors;
 const app = @import("../app.zig");
+const L = @import("../locale.zig");
 
 const MenuBtn = enum(guis.Uid) {
     save,
@@ -111,10 +112,9 @@ pub const MenuBar = struct {
         }
 
         {
-            const name = "ignore groups";
-            const b = Wg.Checkbox.getWidth(gui, name, .{});
+            const b = Wg.Checkbox.getWidth(gui, L.lang.btn.ignore_groups, .{});
 
-            _ = Wg.Checkbox.build(&win.area, ar.replace(null, null, b + pad, null), name, .{
+            _ = Wg.Checkbox.build(&win.area, ar.replace(null, null, b + pad, null), L.lang.btn.ignore_groups, .{
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null);
             ar.x += b + pad;
@@ -230,15 +230,15 @@ pub const MenuBar = struct {
             btn_strid("file") => {
                 const has_obj = self.ed.last_exported_obj_path != null;
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id(.save), "save", .btn },
-                    .{ btn_id(.saveas), "save-as", .btn },
+                    .{ btn_id(.save), L.lang.btn.save, .btn },
+                    .{ btn_id(.saveas), L.lang.btn.save_as, .btn },
                     //.{ btn_id(.save_selection), "save-selection-as", .btn },
                     //.{ btn_id(.import_map), "import-map", .btn },
-                    .{ btn_id(.build_map), "build", .btn },
-                    .{ btn_id(.build_map_user), "build-user", .btn },
-                    .{ btn_id(.export_obj), "export-obj", if (has_obj) .btn else .blank },
-                    .{ btn_id(.export_obj_as), "export-obj-as", .btn },
-                    .{ btn_id(.quit), "quit", .btn },
+                    .{ btn_id(.build_map), L.lang.btn.build, .btn },
+                    .{ btn_id(.build_map_user), L.lang.btn.build_user, .btn },
+                    .{ btn_id(.export_obj), L.lang.btn.export_obj, if (has_obj) .btn else .blank },
+                    .{ btn_id(.export_obj_as), L.lang.btn.export_obj_as, .btn },
+                    .{ btn_id(.quit), L.lang.btn.quit, .btn },
                 });
             },
             btn_strid("edit") => {
@@ -253,8 +253,8 @@ pub const MenuBar = struct {
             },
             btn_strid("help") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id(.open_project_url), "Open homepage", .btn },
-                    .{ btn_id(.open_help_url), "Open Help", .btn },
+                    .{ btn_id(.open_project_url), L.lang.btn.open_home, .btn },
+                    .{ btn_id(.open_help_url), L.lang.btn.open_help, .btn },
                 });
             },
             else => return &TodoBtns,

@@ -19,6 +19,8 @@ const app = @import("../app.zig");
 const Layer = @import("../layer.zig");
 const CbHandle = guis.CbHandle;
 
+const L = @import("../locale.zig");
+
 const IoBtn = enum(usize) {
     new,
     delete,
@@ -160,7 +162,7 @@ pub const InspectorWindow = struct {
         _ = Wg.Tabs.build(a, ly.getArea(), &tabs, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
     }
 
-    fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
+    fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "layer")) {
@@ -947,6 +949,19 @@ const IoWg = struct {
         win.needs_rebuild = true;
     }
 
+    fn ioStaticSlideCb(cb: *CbHandle, g: *Gui, value: f32, user_id: usize) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+
+        self.scratch_buf.clearRetainingCapacity();
+        self.scratch_buf.print("{d}", .{value}) catch {};
+        ioTextboxCb(cb, .{
+            .gui = g,
+            .string = self.scratch_buf.items,
+            .user_id = user_id,
+            .forced = true,
+        });
+    }
+
     fn ioTextboxCb(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const cons = self.getConsPtr() orelse return;
@@ -1174,12 +1189,12 @@ const IoWg = struct {
 
         const names = [6][]const u8{ "Listen", "target", "input", "value", "delay", "fc" };
         const BetterNames = [names.len][]const u8{
-            "My output named",
-            "Target entities named",
-            "Via this input",
-            "With a parameter of",
-            "After a delay is seconds of",
-            "Limit to this many fires",
+            L.lang.inspector.io.output,
+            L.lang.inspector.io.target,
+            L.lang.inspector.io.input,
+            L.lang.inspector.io.param,
+            L.lang.inspector.io.delay,
+            L.lang.inspector.io.fire_count,
         };
 
         _ = Wg.DynamicTable.build(vt, sp[0], win, .{
@@ -1210,31 +1225,37 @@ const IoWg = struct {
                 }
                 _ = switch (i) {
                     0 => self.buildOutputCombo(vt, sp1[1]),
-                    1 => {
-                        self.buildTargetCombo(vt, sp1[1]);
-                        //_ = Wg.Textbox.buildOpts(vt, sp1[1], .{
-                        //    .init_string = li.target.items,
-                        //    .user_id = 1,
-                        //    .commit_vt = &self.cbhandle,
-                        //    .commit_cb = &ioTextboxCb,
-                        //});
-                    },
+                    1 => self.buildTargetCombo(vt, sp1[1]),
                     2 => self.buildInputCombo(vt, sp1[1]),
-                    3 => Wg.Textbox.buildOpts(vt, sp1[1], .{
+                    3 => Wg.Textbox.buildOpts(vt, sp1[1], .{ //Param override
                         .init_string = li.value.items,
                         .user_id = 3,
                         .commit_vt = &self.cbhandle,
                         .commit_cb = &ioTextboxCb,
                     }),
-                    4 => Wg.TextboxNumber.build(vt, sp1[1], li.delay, .{
+                    4 => Wg.StaticSlider.build(vt, sp1[1], null, .{
+                        .min = 0,
+                        .max = 10,
+                        .default = li.delay,
+                        .slide = .{ .snap = 0.1 },
+                        .unit = "seconds",
+
+                        .commit_vt = &self.cbhandle,
+                        .commit_cb = ioStaticSlideCb,
                         .user_id = 4,
-                        .commit_vt = &self.cbhandle,
-                        .commit_cb = &ioTextboxCb,
                     }),
-                    5 => Wg.TextboxNumber.build(vt, sp1[1], li.fire_count, .{
+                    5 => Wg.StaticSlider.build(vt, sp1[1], null, .{
                         .user_id = 5,
+                        .min = -1,
+                        .max = 10,
+                        .default = @floatFromInt(li.fire_count),
+                        .slide = .{ .snap = 1 },
+                        .display_kind = .integer,
+                        .unit = "fires",
+
+                        .truncate = true,
                         .commit_vt = &self.cbhandle,
-                        .commit_cb = &ioTextboxCb,
+                        .commit_cb = ioStaticSlideCb,
                     }),
                     else => {},
                 };

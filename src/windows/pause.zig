@@ -197,7 +197,8 @@ pub const PauseWindow = struct {
         }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
     }
 
-    fn buildTabs(win_vt: *CbHandle, vt: *iArea, tab: []const u8, gui: *Gui, win: *iWindow) void {
+    fn buildTabs(win_vt: *CbHandle, vt: *iArea, tab: []const u8, index: usize, gui: *Gui, win: *iWindow) void {
+        _ = index;
         const self = win_vt.cast(@This(), "cbhandle");
         const eql = std.mem.eql;
         const St = Wg.StaticSlider.build;

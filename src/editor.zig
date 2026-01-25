@@ -30,6 +30,7 @@ const tool_def = @import("tools.zig");
 const util = @import("util.zig");
 const Autosaver = @import("autosave.zig").Autosaver;
 const NotifyCtx = @import("notify.zig").NotifyCtx;
+const L = @import("locale.zig");
 const Selection = @import("selection.zig");
 const autovis = @import("autovis.zig");
 const Layer = @import("layer.zig");
@@ -59,6 +60,11 @@ const Game = @import("game.zig");
 
 const builtin = @import("builtin");
 const WINDOZE = builtin.target.os.tag == .windows;
+
+pub const DrawMode = enum {
+    shaded,
+    lightmap_scale,
+};
 
 pub const Model = struct {
     mesh: ?*vvd.MultiMesh = null,
@@ -159,10 +165,7 @@ pub const Context = struct {
     has_loaded_map: bool = false,
 
     draw_state: struct {
-        mode: enum {
-            shaded,
-            lightmap_scale,
-        } = .shaded,
+        mode: DrawMode = .shaded,
         skybox_textures: ?[6]graph.glID = null,
         frame_time_ms: f32 = 16,
         init_asset_count: usize = 0, //Used to indicate we are loading things
@@ -1468,7 +1471,7 @@ pub const Context = struct {
         var timer = try std.time.Timer.start();
 
         const name = try std.fs.path.join(self.frame_arena.allocator(), &.{ path, try self.printScratch("{s}.ratmap", .{basename}) });
-        self.notify("saving: {s}", .{name}, colors.tentative);
+        self.notify("{s}: {s}", .{ L.lang.saving, name }, colors.tentative);
 
         var jwriter = std.Io.Writer.Allocating.init(self.alloc);
 
@@ -1489,7 +1492,7 @@ pub const Context = struct {
                 .description = self.edit_state.map_description.items,
             });
 
-            self.notify(" saved: {s} in {d:.1}ms", .{ name, timer.read() / std.time.ns_per_ms }, colors.good);
+            self.notify(" {s}: {s} -> {d:.1}{s}", .{ L.lang.saved, name, timer.read() / std.time.ns_per_ms, L.lang.units.ms }, colors.good);
             self.edit_state.saved_at_delta = self.undoctx.delta_counter;
             self.edit_state.was_saved = true;
 
@@ -1596,7 +1599,7 @@ pub const Context = struct {
                 log.err("Autosave failed with error {}", .{err});
                 self.notify("Autosave failed!: {}", .{err}, colors.bad);
             }
-            self.notify("Autosaved: {s}", .{basename}, colors.good);
+            self.notify("{s}: {s}", .{ L.lang.autosaved, basename }, colors.good);
         }
         if (win.isBindState(self.config.keys.save.b, .rising)) {
             try action.trySave(self);

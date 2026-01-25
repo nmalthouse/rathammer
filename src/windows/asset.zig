@@ -140,7 +140,7 @@ pub const AssetBrowser = struct {
         _ = Wg.Tabs.build(lay, inset, &tabs, win, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
     }
 
-    fn buildTabs(user_vt: *CbHandle, vt: *iArea, tab_name: []const u8, gui: *Gui, win: *iWindow) void {
+    fn buildTabs(user_vt: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
         const self = user_vt.cast(@This(), "cbhandle");
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "texture")) {

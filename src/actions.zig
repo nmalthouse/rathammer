@@ -14,12 +14,13 @@ const util3d = graph.util_3d;
 const Lays = @import("layer.zig");
 const LayerId = Lays.Id;
 const colors = @import("colors.zig").colors;
+const L = @import("locale.zig");
 
 pub fn deleteSelected(ed: *Ed) !void {
     const selection = ed.getSelected();
     const vis_mask = ecs.EcsT.getComponentMask(&.{ .invisible, .autovis_invisible });
     if (selection.len > 0) {
-        const ustack = try ed.undoctx.pushNewFmt("deletion of {d} entities", .{selection.len});
+        const ustack = try ed.undoctx.pushNewFmt("{s} n={d}", .{ L.lang.undo.deletion, selection.len });
 
         for (selection) |id| {
             if (ed.ecs.intersects(id, vis_mask))
@@ -78,7 +79,7 @@ pub fn clearSelection(ed: *Ed) !void {
     const count = ed.selection.countSelected();
     if (count == 0)
         return;
-    const ustack = try ed.undoctx.pushNewFmtOpts("clear selection of {d}", .{count}, .{ .soft_change = true });
+    const ustack = try ed.undoctx.pushNewFmtOpts("{s} {d}", .{ L.lang.undo.clear_selection, count }, .{ .soft_change = true });
 
     const old_selection = try ed.selection.createStateSnapshot(ustack.alloc);
     ed.selection.clear();
@@ -194,7 +195,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
         lm,
         .{ .check_solid = false },
     )) {
-        ed.notify("Exported map to vmf", .{}, colors.good);
+        ed.notify("{s}", .{L.lang.notify.exported_vmf}, colors.good);
 
         try async_util.MapCompile.spawn(ed.alloc, &ed.async_asset_load, .{
             .vmf = lm,
@@ -209,7 +210,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
             .user_cmd = ed.game_conf.mapbuilder.user_build_cmd,
         }, if (do_user_script) .user_script else .builtin);
     } else |err| {
-        ed.notify("Failed exporting map to vmf {t}", .{err}, colors.bad);
+        ed.notify("{s} {t}", .{ L.lang.notify.exported_vmf_fail, err }, colors.bad);
     }
 }
 
@@ -245,7 +246,7 @@ pub fn groupSelection(ed: *Ed) !void {
     if (owner_count > 1)
         ed.notify("{d} owned groups selected, merging!", .{owner_count}, 0xfca7_3fff);
 
-    const ustack = try ed.undoctx.pushNewFmt("Grouping of {d} objects", .{selection.len});
+    const ustack = try ed.undoctx.pushNewFmt("{s} {d}", .{ L.lang.undo.group_objects, selection.len });
     const group = if (last_owner) |lo| ed.groups.getGroup(lo) else null;
     var owner: ?ecs.EcsT.Id = null;
     if (last_owner == null) {
@@ -279,13 +280,13 @@ pub fn groupSelection(ed: *Ed) !void {
         });
     }
     ustack.apply(ed);
-    ed.notify("Grouped {d} objects", .{selection.len}, 0x00ff00ff);
+    ed.notify("{s} {d}", .{ L.lang.undo.group_objects, selection.len }, 0x00ff00ff);
 }
 
 const pgen = @import("primitive_gen.zig");
 const Primitive = pgen.Primitive;
 pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, center: Vec3, rot: graph.za.Mat3, select: bool) ![]const ecs.EcsT.Id {
-    const ustack = try ed.undoctx.pushNewFmt("draw cube", .{});
+    const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.create_primitive});
     const old_selection_state = if (select) try ed.selection.createStateSnapshot(ustack.alloc) else null;
     if (select) {
         ed.selection.clear();
@@ -387,7 +388,7 @@ pub fn addSelectionToLayer(ed: *Ed, lay_id: LayerId) !void {
 
 pub fn createLayer(ed: *Ed, parent_layer: LayerId, layer_name: []const u8) !LayerId {
     if (ed.layers.newLayerUnattached(layer_name) catch null) |new_lay| {
-        const ustack = try ed.undoctx.pushNewFmt("Create layer", .{});
+        const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.create_layer});
         const parent = ed.layers.getLayerFromId(parent_layer) orelse return error.invalidParent;
 
         try ustack.append(.{ .attach_layer = try .create(ustack.alloc, new_lay.id, parent_layer, parent.children.items.len, .attach) });
@@ -402,7 +403,7 @@ pub fn deleteLayer(ed: *Ed, layer: LayerId) !LayerId {
 
     const lay = ed.layers.getLayerFromId(layer) orelse return error.invalidLayer;
     if (ed.layers.getParent(ed.layers.root, layer)) |parent| {
-        const ustack = try ed.undoctx.pushNewFmt("delete layer", .{});
+        const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.delete_layer});
 
         try ustack.append(.{ .attach_layer = try .create(ustack.alloc, layer, parent[0].id, parent[1], .detach) });
 
@@ -452,7 +453,7 @@ pub fn dupeLayer(ed: *Ed, layer: LayerId) !void {
                 mask.set(@intFromEnum(item.*));
         }
 
-        const ustack = try ed.undoctx.pushNewFmt("Dupe layer {s}", .{current.name});
+        const ustack = try ed.undoctx.pushNewFmt("{s} {s}", .{ L.lang.undo.dupe_layer, current.name });
         try ustack.append(.{ .attach_layer = try .create(ustack.alloc, new.id, parent[0].id, parent[1] + 1, .attach) });
 
         var it = ed.editIterator(.layer);
@@ -477,7 +478,7 @@ pub fn mergeLayer(ed: *Ed, merge: LayerId, target_id: LayerId) !void {
     const aa = ed.frame_arena.allocator();
     const mask = (try ed.layers.gatherChildren(aa, to_merge))[0];
 
-    const ustack = try ed.undoctx.pushNewFmt("Merge layer {s} into {s}", .{ to_merge.name, target.name });
+    const ustack = try ed.undoctx.pushNewFmt("{s} {s} -> {s}", .{ L.lang.undo.merge_layer, to_merge.name, target.name });
     var it = ed.editIterator(.layer);
     while (it.next()) |item| {
         if (mask.isSet(@intFromEnum(item.id))) {
@@ -497,7 +498,7 @@ pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: 
         const new_parent = ed.layers.getLayerFromId(new_parent_id) orelse return;
 
         const parent = ed.layers.getParent(ed.layers.root, moved.id) orelse return;
-        const ustack = try ed.undoctx.pushNewFmt("Moved layer {s}", .{moved.name});
+        const ustack = try ed.undoctx.pushNewFmt("{s} {s}", .{ L.lang.undo.move_layer, moved.name });
         //first detach, than reattach to new
         try ustack.append(.{ .attach_layer = try .create(ustack.alloc, moved.id, parent[0].id, parent[1], .detach) });
         try ustack.append(.{ .attach_layer = try .create(ustack.alloc, moved.id, new_parent.id, sib_index, .attach) });
@@ -511,7 +512,7 @@ pub const SelectedSide = struct {
 };
 pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
     if (list.len == 0) return;
-    const ustack = try ed.undoctx.pushNewFmt("translated {d} face{s}", .{ list.len, if (list.len > 1) "s" else "" });
+    const ustack = try ed.undoctx.pushNewFmt("{s} {d}", .{ L.lang.undo.translate_face, list.len });
     for (list) |li| {
         try ustack.append(.{ .face_translate = try .create(
             ustack.alloc,
@@ -524,7 +525,7 @@ pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
 }
 
 pub fn createEntity(ed: *Ed, new: editor.EcsT.Id) !void {
-    const ustack = try ed.undoctx.pushNewFmt("create entity", .{});
+    const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.create_ent});
     try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
     ustack.apply(ed);
 }
@@ -536,7 +537,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
     const pnorm = util3d.trianglePlane(.{ p0, p1, p2 }).norm();
 
     const selected = ed.getSelected();
-    const ustack = try ed.undoctx.pushNewFmt("Clip", .{});
+    const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.clip});
     for (selected) |sel_id| {
         const solid = ed.getComponent(sel_id, .solid) orelse continue;
         var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.edit_state.selected_texture_vpk_id);
@@ -568,7 +569,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
     //Map old groups to duped groups
     var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(ed.frame_arena.allocator());
 
-    const ustack = try ed.undoctx.pushNewFmt("{s} of {d} entities", .{ if (dupe) "Dupe" else "Translation", selected.len });
+    const ustack = try ed.undoctx.pushNewFmt("{s} {d}", .{ if (dupe) L.lang.undo.dupe_ents else L.lang.undo.transform_ents, selected.len });
     for (selected) |id| {
         if (dupe) {
             if (ed.groups.getGroup(id)) |_| {
@@ -641,14 +642,14 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
 
 const TexState = Undo.UndoTextureManip.State;
 pub fn manipTexture(ed: *Ed, old: TexState, new: TexState, side: SelectedSide) !void {
-    const ustack = try ed.undoctx.pushNewFmt("texture manip", .{});
+    const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.texture_manip});
     try ustack.append(.{ .texture_manip = try .create(ustack.alloc, old, new, side.id, side.side_i) });
     ustack.apply(ed);
 }
 
 pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
     const selection = ed.getSelected();
-    const ustack = try ed.undoctx.pushNewFmt("texture apply", .{});
+    const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.texture_apply});
     for (selection) |sel_id| {
         if (ed.getComponent(sel_id, .solid)) |solid| {
             for (solid.sides.items, 0..) |*sp, side_id| {

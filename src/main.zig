@@ -251,7 +251,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var draw = graph.ImmediateDrawingContext.init(alloc);
     defer draw.deinit();
     var font = try graph.Font.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{
-        .codepoints_to_load = &(graph.Font.CharMaps.Default),
+        .codepoints_to_load = &(graph.Font.CharMaps.Default ++ [_]graph.Font.CharMapEntry{.{ .range = .{ 0x0300, 0x036F } }}),
     });
     defer font.deinit();
     const splash = graph.Texture.initFromImgFile(alloc, app_cwd.dir, "ratasset/small.png", .{}) catch edit.missingTexture();
@@ -570,37 +570,44 @@ pub fn main() !void {
     defer total_app_profile.end();
     var gpa = std.heap.DebugAllocator(.{ .stack_trace_frames = build_config.stack_trace_frames }){};
 
-    const alloc = if (IS_DEBUG) gpa.allocator() else std.heap.smp_allocator;
-    var arg_it = try std.process.argsWithAllocator(alloc);
-    defer arg_it.deinit();
-    const exe_name = arg_it.next() orelse return error.invalidArgIt;
-    _ = exe_name;
-    var stdout_buf: [128]u8 = undefined;
+    {
+        const alloc = if (IS_DEBUG) gpa.allocator() else std.heap.smp_allocator;
 
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
-    const out = &stdout_writer.interface;
-    defer out.flush() catch {};
-    const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
-    if (args.version != null) {
-        try out.print("{s}\n", .{version.version});
-        return;
+        //const locale = try @import("locale.zig").initJsonFile(std.fs.cwd(), "ratasset/lang/de_DE.json", alloc);
+        //defer locale.deinit();
+        //@import("locale.zig").lang = &locale.value;
+
+        var arg_it = try std.process.argsWithAllocator(alloc);
+        defer arg_it.deinit();
+        const exe_name = arg_it.next() orelse return error.invalidArgIt;
+        _ = exe_name;
+        var stdout_buf: [128]u8 = undefined;
+
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+        const out = &stdout_writer.interface;
+        defer out.flush() catch {};
+        const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
+        if (args.version != null) {
+            try out.print("{s}\n", .{version.version});
+            return;
+        }
+
+        if (args.build != null) {
+            try std.json.Stringify.value(.{
+                .version = version.version,
+                .os = builtin.target.os.tag,
+                .arch = builtin.target.cpu.arch,
+                .mode = builtin.mode,
+                .commit = build_config.commit_hash,
+            }, .{ .whitespace = .indent_2 }, out);
+            out.print("\n", .{}) catch {}; //Json doesn't emit final \n
+            return;
+        }
+
+        try wrappedMain(alloc, args);
+        //TODO we need to wait for async save threads to join!!!!
+
     }
-
-    if (args.build != null) {
-        try std.json.Stringify.value(.{
-            .version = version.version,
-            .os = builtin.target.os.tag,
-            .arch = builtin.target.cpu.arch,
-            .mode = builtin.mode,
-            .commit = build_config.commit_hash,
-        }, .{ .whitespace = .indent_2 }, out);
-        out.print("\n", .{}) catch {}; //Json doesn't emit final \n
-        return;
-    }
-
-    try wrappedMain(alloc, args);
-    //TODO we need to wait for async save threads to join!!!!
-
     // if the application is quit while items are being loaded in the thread pool, we get spammed with memory leaks.
     // There is no benefit to ensuring those items are free'd on exit.
     if (IS_DEBUG)
