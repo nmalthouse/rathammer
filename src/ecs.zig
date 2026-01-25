@@ -1558,7 +1558,7 @@ pub const Displacement = struct {
         return ret;
     }
 
-    fn vertsPerRow(power: u32) u32 {
+    pub fn vertsPerRow(power: u32) u32 {
         return (std.math.pow(u32, 2, power) + 1);
     }
 

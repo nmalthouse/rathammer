@@ -102,10 +102,42 @@ pub fn trySave(ed: *Ed) !void {
     }
 }
 
-//TODO this is a quick and dirty implementation.
-//Remove duplicate v and vt lines
-//Write displacements
 pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
+    const VecMap = @import("csg.zig").VecMap;
+    const Help = struct {
+        alloc: std.mem.Allocator,
+        current_mtl: std.ArrayList(u8) = .{},
+        out_wr: *std.io.Writer,
+        const max_dist = 0.0001;
+        // prefer whole numbers as they take up less bytes
+        fn roundObjVert(vert: f32) f32 {
+            const rounded = @round(vert);
+
+            if (@abs(rounded - vert) < max_dist)
+                return rounded;
+            return vert;
+        }
+
+        fn emitVertex(vert: Vec3, lut: *std.ArrayList(u32), map: *VecMap, out: *std.io.Writer, alloc: std.mem.Allocator, prefix: []const u8, comptime count: usize) !void {
+            const has = map.map.contains(vert);
+            try lut.append(alloc, try map.put(vert));
+            if (!has) {
+                try out.print("{s}", .{prefix});
+                for (0..count) |ci| {
+                    try out.print(" {d}", .{roundObjVert(vert.data[ci])});
+                }
+                try out.print("\n", .{});
+            }
+        }
+
+        fn emitMtl(self: *@This(), mtl: []const u8) !void {
+            if (!std.mem.eql(u8, mtl, self.current_mtl.items)) {
+                self.current_mtl.clearRetainingCapacity();
+                try self.current_mtl.appendSlice(self.alloc, mtl);
+                try self.out_wr.print("usemtl {s}\n", .{mtl});
+            }
+        }
+    };
     const full_name = try std.fs.path.join(ed.frame_arena.allocator(), &.{ path, name });
     const header =
         \\# Obj exported from rathammer {[version]s}
@@ -119,6 +151,13 @@ pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
     defer output.close();
     var writer = output.writer(&write_buf);
     const wr = &writer.interface;
+    var help: Help = .{
+        .out_wr = wr,
+        .alloc = ed.alloc,
+    };
+    defer {
+        help.current_mtl.deinit(help.alloc);
+    }
 
     try wr.print(header, .{
         .version = @import("version.zig").version_string,
@@ -127,8 +166,21 @@ pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
         .uuid = ed.edit_state.map_uuid,
     });
 
-    var vi: usize = 1;
-    var vt_i: usize = 1;
+    var norm_lut = std.ArrayList(u32){};
+    defer norm_lut.deinit(ed.alloc);
+    var norm_map = VecMap.init(ed.alloc);
+    defer norm_map.deinit();
+
+    var vert_lut = std.ArrayList(u32){};
+    defer vert_lut.deinit(ed.alloc);
+    var vert_map = VecMap.init(ed.alloc);
+    defer vert_map.deinit();
+
+    var uv_lut = std.ArrayList(u32){};
+    defer uv_lut.deinit(ed.alloc);
+    var uv_map = VecMap.init(ed.alloc);
+    defer uv_map.deinit();
+
     for (ed.ecs.entities.items, 0..) |ent, id| {
         if (ent.isSet(ecs.EcsT.Types.tombstone_bit))
             continue;
@@ -136,41 +188,96 @@ pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
             continue;
 
         if (try ed.ecs.getOptPtr(@intCast(id), .displacements)) |disps| { //disp has higher priority, so dispsolid is omitted
-            //TODO write the disp
-            _ = disps;
+            const solid = try ed.ecs.getOptPtr(@intCast(id), .solid) orelse continue;
+            try wr.print("o disp_{d}\n", .{id});
+            for (disps.disps.items) |disp| {
+                vert_lut.clearRetainingCapacity();
+                norm_lut.clearRetainingCapacity();
+                uv_lut.clearRetainingCapacity();
+
+                for (disp._verts.items) |vert| {
+                    try Help.emitVertex(vert, &vert_lut, &vert_map, wr, ed.alloc, "v", 3);
+                }
+                for (disp.normals.items) |norm| {
+                    try Help.emitVertex(norm, &norm_lut, &norm_map, wr, ed.alloc, "vn", 3);
+                }
+
+                {
+                    const tex = try ed.getTexture(disp.tex_id);
+                    const side = &solid.sides.items[disp.parent_side_i];
+                    try help.emitMtl(
+                        if (try ed.vpkctx.resolveId(.{ .id = side.tex_id }, false)) |texi| texi.name else side.material,
+                    );
+                    const uvs = try ed.csgctx.calcUVCoordsIndexed(solid.verts.items, side.index.items, side.*, @intCast(tex.w), @intCast(tex.h), Vec3.zero(), null);
+                    const si = disp.vert_start_i;
+                    const uv0 = uvs[si % 4];
+                    const uv1 = uvs[(si + 1) % 4];
+                    const uv2 = uvs[(si + 2) % 4];
+                    const uv3 = uvs[(si + 3) % 4];
+
+                    const vper_row = ecs.Displacement.vertsPerRow(disp.power);
+                    const vper_rowf: f32 = @floatFromInt(vper_row);
+                    const t = 1.0 / (vper_rowf - 1);
+
+                    for (0..disp._verts.items.len) |i| {
+                        const fi: f32 = @floatFromInt(i);
+                        const ri: f32 = @trunc(fi / vper_rowf);
+                        const ci: f32 = @trunc(@mod(fi, vper_rowf));
+
+                        const inter0 = uv0.lerp(uv1, ri * t);
+                        const inter1 = uv3.lerp(uv2, ri * t);
+                        const uv = inter0.lerp(inter1, ci * t);
+
+                        try Help.emitVertex(.new(@mod(uv.x(), 1.0), @mod(uv.y(), 1.0), 0), &uv_lut, &uv_map, wr, ed.alloc, "vt", 2);
+                    }
+                }
+
+                const len = @divExact(disp._index.items.len, 3);
+                for (0..len) |tri_i| {
+                    const ti = tri_i * 3;
+                    try wr.print("f", .{});
+                    for (ti..ti + 3) |i| {
+                        const index = disp._index.items[i];
+                        try wr.print(" {d}/{d}/{d}", .{
+                            vert_lut.items[index] + 1,
+                            uv_lut.items[index] + 1,
+                            norm_lut.items[index] + 1,
+                        });
+                    }
+                    try wr.print("\n", .{});
+                }
+            }
         } else if (try ed.ecs.getOptPtr(@intCast(id), .solid)) |solid| {
+            vert_lut.clearRetainingCapacity();
             try wr.print("o solid_{d}\n", .{id});
-            const v_offset = vi;
             for (solid.verts.items) |item| {
-                vi += 1;
-                try wr.print("v {d} {d} {d}\n", .{ item.x(), item.y(), item.z() });
+                try Help.emitVertex(item, &vert_lut, &vert_map, wr, ed.alloc, "v", 3);
             }
             for (solid.sides.items) |side| {
                 { //face
 
-                    if (try ed.vpkctx.resolveId(.{ .id = side.tex_id }, false)) |tex| {
-                        try wr.print("usemtl {s}\n", .{tex.name});
-                    } else {
-                        //Fallback
-                        try wr.print("usemtl {s}\n", .{side.material});
-                    }
+                    try help.emitMtl(
+                        if (try ed.vpkctx.resolveId(.{ .id = side.tex_id }, false)) |tex| tex.name else side.material,
+                    );
                 }
+
+                uv_lut.clearRetainingCapacity();
 
                 const tw: f32 = @floatFromInt(side.tw);
                 const th: f32 = @floatFromInt(side.th);
-                const vt_offset = vt_i;
-                vt_i += side.index.items.len;
                 for (side.index.items) |index| {
                     const upos = solid.verts.items[index];
 
                     const u = @as(f32, @floatCast(upos.dot(side.u.axis) / (tw * side.u.scale) + side.u.trans / tw));
                     const v = @as(f32, @floatCast(upos.dot(side.v.axis) / (th * side.v.scale) + side.v.trans / th));
-                    try wr.print("vt {d} {d} \n", .{ @mod(u, 1.0), @mod(v, 1.0) });
+
+                    const vec = Vec3.new(@mod(u, 1.0), @mod(v, 1.0), 0);
+                    try Help.emitVertex(vec, &uv_lut, &uv_map, wr, ed.alloc, "vt", 2);
                 }
 
                 try wr.writeByte('f');
                 for (side.index.items, 0..) |index, i| {
-                    try wr.print(" {d}/{d}", .{ index + v_offset, vt_offset + i });
+                    try wr.print(" {d}/{d}", .{ vert_lut.items[index] + 1, uv_lut.items[i] + 1 });
                 }
                 try wr.writeByte('\n');
             }
