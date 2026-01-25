@@ -1799,7 +1799,7 @@ pub const LoadCtx = struct {
             tbox,
             "{s}",
             .{message},
-            .{ .px_size = 15, .color = 0xff, .font = &self.font.font },
+            .{ .px_size = 15, .color = 0xff, .font = self.font },
             .left,
         );
         const p = @min(1, perc);
@@ -1857,7 +1857,7 @@ pub const LoadCtxReal = struct {
     timer: std.time.Timer,
     draw: *graph.ImmediateDrawingContext,
     win: *graph.SDL.Window,
-    font: *graph.Font,
+    font: *graph.FontInterface,
     splash: graph.Texture,
     draw_splash: bool = true,
     gtimer: std.time.Timer,

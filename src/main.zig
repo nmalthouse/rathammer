@@ -90,6 +90,11 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
 }
 pub var INSPECTOR: *InspectorWindow = undefined;
 
+var font: graph.OnlineFont = undefined;
+fn flush_cb() void {
+    font.syncBitmapToGL();
+}
+
 const log = std.log.scoped(.app);
 pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var env = try std.process.getEnvMap(alloc);
@@ -250,15 +255,17 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     basic_prof.start();
     var draw = graph.ImmediateDrawingContext.init(alloc);
     defer draw.deinit();
-    var font = try graph.Font.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{
-        .codepoints_to_load = &(graph.Font.CharMaps.Default ++ [_]graph.Font.CharMapEntry{.{ .range = .{ 0x0300, 0x036F } }}),
-    });
+
+    font = try graph.OnlineFont.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{});
+
+    draw.preflush_cb = flush_cb;
+
     defer font.deinit();
     const splash = graph.Texture.initFromImgFile(alloc, app_cwd.dir, "ratasset/small.png", .{}) catch edit.missingTexture();
 
     var loadctx = edit.LoadCtx{ .opt = .{
         .draw = &draw,
-        .font = &font,
+        .font = &font.font,
         .win = &win,
         .splash = splash,
         .timer = try std.time.Timer.start(),
