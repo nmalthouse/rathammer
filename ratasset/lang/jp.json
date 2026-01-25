@@ -1,0 +1,62 @@
+{
+ "inspector": {
+  "io": {
+   "output": "私の出力名は",
+   "target": "対象エンティティ名",
+   "input": "この入力を介して",
+   "param": "パラメータは",
+   "delay": "数秒の遅延の後",
+   "fire_count": "トリガーの数をこの数に制限する"
+  }
+ },
+ "units": {
+  "hu": "hu",
+  "sec": "秒",
+  "fires": "トリガー",
+  "ms": "ms"
+ },
+ "undo": {
+  "deletion": "deletion",
+  "clear_selection": "clear selection",
+  "group_objects": "group objects",
+  "create_primitive": "create primitive",
+  "delete_layer": "delete layer",
+  "create_layer": "create layer",
+  "dupe_layer": "duplicate layer",
+  "merge_layer": "merge layer",
+  "move_layer": "move layer",
+  "translate_face": "translate face",
+  "create_ent": "create entity",
+  "clip": "clip solid",
+  "dupe_ents": "duplicate entities",
+  "transform_ents": "transform entities",
+  "texture_manip": "manipulate texture",
+  "texture_apply": "texture apply"
+ },
+ "saving": "saving",
+ "saved": "saved",
+ "autosaved": "autosaved",
+ "notify": {
+  "exported_vmf": "Exported map to vmf",
+  "exported_vmf_fail": "Failed exporting map to vmf"
+ },
+ "draw_mode": {
+  "shaded": "shaded",
+  "lightmap_scale": "lightmap scale"
+ },
+ "btn": {
+  "load": "load",
+  "open_help": "Open help",
+  "open_home": "Open homepage",
+  "save": "save",
+  "save_as": "save-as",
+  "build": "build",
+  "build_user": "build-user",
+  "export_obj": "export-obj",
+  "export_obj_as": "export-obj-as",
+  "quit": "quit",
+  "new": "新しい",
+  "delete": "消去",
+  "ignore_groups": "ignore groups"
+ }
+}

@@ -1206,8 +1206,8 @@ const IoWg = struct {
 
         if (ly.getArea()) |btn_ar| {
             var hy = gui.dstate.hlayout(btn_ar, 2);
-            _ = Wg.Button.build(vt, hy.getArea(), "new", .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.new) });
-            _ = Wg.Button.build(vt, hy.getArea(), "delete", .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.delete) });
+            _ = Wg.Button.build(vt, hy.getArea(), L.lang.btn.new, .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.new) });
+            _ = Wg.Button.build(vt, hy.getArea(), L.lang.btn.delete, .{ .cb_vt = &self.cbhandle, .cb_fn = &ioBtnCb, .id = @intFromEnum(IoBtn.delete) });
         }
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index < cons.list.items.len) {
@@ -1238,7 +1238,7 @@ const IoWg = struct {
                         .max = 10,
                         .default = li.delay,
                         .slide = .{ .snap = 0.1 },
-                        .unit = "seconds",
+                        .unit = L.lang.units.sec,
 
                         .commit_vt = &self.cbhandle,
                         .commit_cb = ioStaticSlideCb,
@@ -1251,7 +1251,7 @@ const IoWg = struct {
                         .default = @floatFromInt(li.fire_count),
                         .slide = .{ .snap = 1 },
                         .display_kind = .integer,
-                        .unit = "fires",
+                        .unit = L.lang.units.fires,
 
                         .truncate = true,
                         .commit_vt = &self.cbhandle,

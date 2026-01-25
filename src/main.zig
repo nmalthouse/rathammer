@@ -580,10 +580,6 @@ pub fn main() !void {
     {
         const alloc = if (IS_DEBUG) gpa.allocator() else std.heap.smp_allocator;
 
-        //const locale = try @import("locale.zig").initJsonFile(std.fs.cwd(), "ratasset/lang/de_DE.json", alloc);
-        //defer locale.deinit();
-        //@import("locale.zig").lang = &locale.value;
-
         var arg_it = try std.process.argsWithAllocator(alloc);
         defer arg_it.deinit();
         const exe_name = arg_it.next() orelse return error.invalidArgIt;
@@ -597,6 +593,21 @@ pub fn main() !void {
         if (args.version != null) {
             try out.print("{s}\n", .{version.version});
             return;
+        }
+
+        if (args.dump_lang != null) {
+            try @import("locale.zig").writeJsonTemplate(std.fs.cwd(), "en_US.json");
+            return;
+        }
+
+        var locale: ?std.json.Parsed(@import("locale.zig").Strings) = null;
+        if (args.lang) |lang_path| {
+            locale = try @import("locale.zig").initJsonFile(std.fs.cwd(), lang_path, alloc);
+            @import("locale.zig").lang = &locale.?.value;
+        }
+        defer {
+            if (locale) |l|
+                l.deinit();
         }
 
         if (args.build != null) {

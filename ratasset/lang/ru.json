@@ -1,0 +1,69 @@
+{
+ "inspector": {
+  "io": {
+   "output": "Мой результат называется",
+   "target": "Названия целевых сущностей",
+   "input": "Через этот ввод",
+   "param": "С параметром",
+   "delay": "После задержки в секундах",
+   "fire_count": "Ограничьте количество пожаров этим числом."
+  }
+ },
+ "units": {
+  "hu": "hu",
+  "sec": "секунд",
+  "ms": "ms",
+  "fires": "пожары"
+ },
+ "undo": {
+  "deletion": "deletion",
+  "clear_selection": "clear selection",
+  "group_objects": "group objects",
+  "create_primitive": "create primitive",
+  "delete_layer": "delete layer",
+  "create_layer": "create layer",
+  "dupe_layer": "duplicate layer",
+  "merge_layer": "merge layer",
+  "move_layer": "move layer",
+  "translate_face": "translate face",
+  "create_ent": "create entity",
+  "clip": "clip solid",
+  "dupe_ents": "duplicate entities",
+  "transform_ents": "transform entities",
+  "texture_manip": "manipulate texture",
+  "texture_apply": "texture apply"
+ },
+ "saving": "saving",
+ "saved": "saved",
+ "autosaved": "autosaved",
+ "notify": {
+  "exported_vmf": "Exported map to vmf",
+  "exported_vmf_fail": "Failed exporting map to vmf"
+ },
+ "draw_mode": {
+  "shaded": "shaded",
+  "lightmap_scale": "lightmap scale"
+ },
+ "btn": {
+  "load": "load",
+  "open_help": "Open help",
+  "open_home": "Open homepage",
+  "save": "save",
+  "save_as": "save-as",
+  "build": "build",
+  "build_user": "build-user",
+  "export_obj": "export-obj",
+  "export_obj_as": "export-obj-as",
+  "quit": "quit",
+  "ignore_groups": "игнорировать группы",
+  "new": "новый",
+
+  "file": "файл",
+  "edit": "редактировать",
+  "view": "вид",
+  "options": "параметры",
+  "help": "помощь",
+
+  "delete": "удалить"
+ }
+}

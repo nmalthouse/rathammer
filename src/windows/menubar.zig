@@ -100,10 +100,17 @@ pub const MenuBar = struct {
         var ar = win.area.area;
         if (win.area.children.items.len != 0) @panic("fucked up"); // code assumes
         const pad = gui.dstate.minWidgetWidth("  ");
-        for (menus, 0..) |menu, i| {
-            const b = gui.dstate.minWidgetWidth(menu);
+        const localMenu = [menus.len][]const u8{
+            L.lang.btn.file,
+            L.lang.btn.edit,
+            L.lang.btn.view,
+            L.lang.btn.options,
+            L.lang.btn.help,
+        };
+        for (menus, 0..) |_, i| {
+            const b = gui.dstate.minWidgetWidth(localMenu[i]);
 
-            _ = Wg.Button.build(&win.area, ar.replace(null, null, b + pad, null), menu, .{
+            _ = Wg.Button.build(&win.area, ar.replace(null, null, b + pad, null), localMenu[i], .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),

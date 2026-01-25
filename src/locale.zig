@@ -20,6 +20,7 @@ pub const Strings = struct {
         hu: Str = "hu",
         sec: Str = "seconds",
         ms: Str = "ms",
+        fires: Str = "fires",
     } = .{},
 
     undo: struct {
@@ -74,6 +75,15 @@ pub const Strings = struct {
         quit: Str = "quit",
 
         ignore_groups: Str = "ignore groups",
+
+        new: Str = "new",
+        delete: Str = "delete",
+
+        file: Str = "file",
+        edit: Str = "edit",
+        view: Str = "view",
+        options: Str = "options",
+        help: Str = "help",
     } = .{},
 };
 

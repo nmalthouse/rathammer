@@ -1,0 +1,61 @@
+{
+ "inspector": {
+  "io": {
+   "output": "Meine Ausgabe benannt",
+   "target": "benannte Zielunternehmen",
+   "input": "Über diesen Eingang",
+   "param": "Mit einem Parameter von",
+   "delay": "Nach einer Verzögerung von Sekunden",
+   "fire_count": "Begrenzen Sie die Anzahl der Brände auf diese Anzahl."
+  }
+ },
+ "units": {
+  "hu": "hu",
+  "sec": "Sekunden",
+  "fires": "Feuer",
+  "ms": "ms"
+ },
+ "undo": {
+  "deletion": "deletion",
+  "clear_selection": "clear selection",
+  "group_objects": "group objects",
+  "create_primitive": "create primitive",
+  "delete_layer": "delete layer",
+  "create_layer": "create layer",
+  "dupe_layer": "duplicate layer",
+  "merge_layer": "merge layer",
+  "move_layer": "move layer",
+  "translate_face": "translate face",
+  "create_ent": "create entity",
+  "clip": "clip solid",
+  "dupe_ents": "duplicate entities",
+  "transform_ents": "transform entities",
+  "texture_manip": "manipulate texture",
+  "texture_apply": "texture apply"
+ },
+ "saving": "sparen",
+ "saved": "gespeichert",
+ "autosaved": "automatisch gespeichert",
+ "notify": {
+  "exported_vmf": "exportierte Map nach VMF",
+  "exported_vmf_fail": "Fehler beim Exportieren der Map nach VMF"
+ },
+ "draw_mode": {
+  "shaded": "shaded",
+  "lightmap_scale": "lightmap scale"
+ },
+ "btn": {
+  "load": "laden",
+  "open_help": "Hilfe öffnen",
+  "open_home": "Startseite öffnen",
+  "save": "speichern",
+  "save_as": "Speichern unter",
+  "build": "bauen",
+  "build_user": "Bauen Benutzer",
+  "export_obj": "export-obj",
+  "export_obj_as": "exportieren-obj-als",
+  "new":"neu",
+  "delete":"löschen",
+  "quit": "aufhören"
+ }
+}

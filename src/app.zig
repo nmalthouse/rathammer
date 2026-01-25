@@ -23,6 +23,8 @@ pub const Args = [_]graph.ArgGen.ArgItem{
     Arg("games", .flag, "List available games from config.vdf"),
     Arg("checkhealth", .flag, "Check health of all game configs"),
     Arg("novsync", .flag, "disable vsync/freesync"),
+    Arg("lang", .string, "path to a locale json file to load"),
+    Arg("dump_lang", .flag, "write en_US.json to cwd"),
 };
 
 const EventKindT = u16;
