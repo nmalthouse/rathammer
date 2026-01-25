@@ -52,7 +52,7 @@ pub const VisGroup = struct {
     color: u32,
     id: u16,
     children: []const VisGroup,
-    enabled: bool = true,
+    disabled: bool = false,
     collapse: bool = false,
     locked: bool = false,
     omit_export: bool = false,
@@ -90,6 +90,8 @@ pub const JsonCamera = struct {
 //      * Add optional uuid field (default value 0) 0 values get replaced with a uuid on save
 // 0.1.2 :
 //      * Add optional enabled,collapse,locked,omit_export fields to VisGroup
+// 0.1.3 :
+//      * rename enabled to disabled
 
 pub const CURRENT_MAP_VERSION = "0.1.2";
 

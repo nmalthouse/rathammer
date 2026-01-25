@@ -38,7 +38,7 @@ pub const Layer = struct {
     name: []const u8,
     id: Id,
 
-    enabled: bool = true,
+    disabled: bool = false,
     collapse: bool = false,
     locked: bool = false,
     omit_export: bool = false,
@@ -60,11 +60,14 @@ pub const Context = struct {
     layer_counter: u16 = 0,
 
     /// Bitmask that can be directly tested for visibility.
-    /// Toggling a parent layers "enabled" field doesn't affect child's "enabled" flag but does affect the 'disabled' state
+    /// Toggling a parent layers "disabled" field doesn't affect child's "disabled" flag but does affect the 'disabled' state
     disabled: std.DynamicBitSetUnmanaged = .{},
 
     /// Same function as disabled, locked layer entities are drawn but can't be selected
     locked: std.DynamicBitSetUnmanaged = .{},
+
+    /// Same function as disabled, omit from vmf/obj export
+    omit_export: std.DynamicBitSetUnmanaged = .{},
 
     pub fn init(alloc: std.mem.Allocator) !Self {
         const root = try createLayer(alloc, .none, ROOT_LAYER_NAME);
@@ -72,6 +75,10 @@ pub const Context = struct {
             .alloc = alloc,
             .root = root,
             .disabled = try std.DynamicBitSetUnmanaged.initEmpty(alloc, 1),
+
+            .locked = try std.DynamicBitSetUnmanaged.initEmpty(alloc, 1),
+            .omit_export = try std.DynamicBitSetUnmanaged.initEmpty(alloc, 1),
+
             .map = std.AutoHashMap(Id, *Layer).init(alloc),
             .vmf_id_mapping = std.AutoHashMap(u8, Id).init(alloc),
         };
@@ -90,6 +97,8 @@ pub const Context = struct {
         self.vmf_id_mapping.deinit();
         self.map.deinit();
         self.disabled.deinit(self.alloc);
+        self.locked.deinit(self.alloc);
+        self.omit_export.deinit(self.alloc);
         self.layers.deinit(self.alloc);
     }
 
@@ -154,11 +163,10 @@ pub const Context = struct {
         }
     }
 
-    /// TODO set enabled state of a layer recursively apply to children
     pub fn setEnabledCascade(self: *Self, id: Id, enable: bool) !void {
         if (self.map.get(id)) |lay| {
-            lay.enabled = enable;
-            try self.recurDisable(lay, enable);
+            lay.disabled = !enable;
+            try self.recurDisable(lay, !enable);
         }
     }
 
@@ -170,23 +178,38 @@ pub const Context = struct {
 
     pub fn rebuildMasks(self: *Self) !void {
         self.disabled.unsetAll();
+        self.omit_export.unsetAll();
+        self.locked.unsetAll();
 
-        try self.rebuildDisabledRecur(self.root, self.root.enabled);
+        try self.rebuildDisabledRecur(self.root, self.root.disabled, self.root.omit_export, self.root.locked);
     }
 
-    fn rebuildDisabledRecur(self: *Self, lay: *Layer, enabled: bool) !void {
-        try self.setDisabled(lay.id, enabled);
+    pub fn rebuildDisabledRecur(
+        self: *Self,
+        lay: *Layer,
+        disabled: bool,
+        omit: bool,
+        locked: bool,
+    ) !void {
+        try self.setMask(lay.id, disabled, &self.disabled);
+        try self.setMask(lay.id, locked, &self.locked);
+        try self.setMask(lay.id, omit, &self.omit_export);
         for (lay.children.items) |child| {
-            try self.rebuildDisabledRecur(child, child.enabled and enabled);
+            try self.rebuildDisabledRecur(
+                child,
+                disabled or child.disabled,
+                omit or child.omit_export,
+                locked or child.locked,
+            );
         }
     }
 
-    pub fn recurDisable(self: *Self, layer: *const Layer, enable: bool) !void {
-        //always disable layers, only enable layers if they are enabled
-        const en = if (enable) layer.enabled else false;
-        try self.setDisabled(layer.id, en);
+    pub fn recurDisable(self: *Self, layer: *const Layer, disable: bool) !void {
+        const dis = disable or layer.disabled;
+
+        try self.setDisabled(layer.id, dis);
         for (layer.children.items) |child| {
-            try self.recurDisable(child, enable);
+            try self.recurDisable(child, dis);
         }
     }
 
@@ -195,11 +218,23 @@ pub const Context = struct {
         return self.disabled.isSet(@intFromEnum(id));
     }
 
-    pub fn setDisabled(self: *Self, id: Id, enable: bool) !void {
+    pub fn isOmit(self: *Self, id: Id) bool {
+        if (@intFromEnum(id) >= self.omit_export.bit_length) return false;
+        return self.omit_export.isSet(@intFromEnum(id));
+    }
+
+    pub fn setDisabled(self: *Self, id: Id, disable: bool) !void {
         const idd: u16 = @intFromEnum(id);
         if (idd >= self.disabled.bit_length)
             try self.disabled.resize(self.alloc, @intCast(idd + 1), false);
-        self.disabled.setValue(idd, !enable);
+        self.disabled.setValue(idd, disable);
+    }
+
+    pub fn setMask(self: *Self, id: Id, disable: bool, set: *std.DynamicBitSetUnmanaged) !void {
+        const idd: u16 = @intFromEnum(id);
+        if (idd >= set.bit_length)
+            try set.resize(self.alloc, @intCast(idd + 1), false);
+        set.setValue(idd, disable);
     }
 
     pub fn writeToJson(self: *Self, wr: anytype) !void {
@@ -216,8 +251,8 @@ pub const Context = struct {
         try wr.objectField("color");
         try wr.write(layer.color);
 
-        try wr.objectField("enabled");
-        try wr.write(layer.enabled);
+        try wr.objectField("disabled");
+        try wr.write(layer.disabled);
 
         try wr.objectField("collapse");
         try wr.write(layer.collapse);
@@ -259,7 +294,7 @@ pub const Context = struct {
         self.layer_counter = @max(self.layer_counter, layer.id);
 
         var new = try createLayer(self.alloc, @enumFromInt(layer.id), layer.name);
-        new.enabled = layer.enabled;
+        new.disabled = layer.disabled;
         new.collapse = layer.collapse;
         new.locked = layer.locked;
         new.omit_export = layer.omit_export;
@@ -428,7 +463,9 @@ pub const GuiWidget = struct {
                 .selected = (self.selected_ptr.* == item.ptr.id),
                 .id = item.ptr.id,
                 .parent = self,
-                .enabled = item.ptr.enabled,
+                .enabled = !item.ptr.disabled,
+                .omit = self.ctx.isOmit(item.ptr.id),
+                .locked = item.ptr.locked,
                 .collapse = item.ptr.collapse,
                 .check_color = if (self.ctx.isDisabled(item.ptr.id)) 0x888888_ff else 0xff,
             });
@@ -482,6 +519,8 @@ const LayerWidget = struct {
         parent: *GuiWidget,
         color: u32 = 0xffff00ff,
         enabled: bool,
+        omit: bool,
+        locked: bool,
         collapse: bool,
         check_color: u32 = 0xff,
     };
@@ -522,17 +561,17 @@ const LayerWidget = struct {
                 .user_id = @intFromEnum(opts.id),
                 .cross_color = gui.dstate.nstyle.color.drop_down_arrow,
             }, !opts.collapse);
-        _ = Wg.Text.buildStatic(&self.vt, sp[1], opts.name, 0x0);
+        _ = Wg.Text.build(&self.vt, sp[1], "{s}{s}", .{ if (opts.locked) "[locked] " else "", opts.name }, .{
+            .bg_col = if (opts.locked) gui.dstate.nstyle.color.bg2 else if (opts.omit) gui.dstate.nstyle.color.text_bg else null,
+            .col = if (opts.locked) gui.dstate.nstyle.color.text_disabled else null,
+        });
         return .good;
     }
 
     pub fn draw(vt: *iArea, _: *guis.Gui, d: *guis.DrawState) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        const col: u32 = if (self.opts.selected) 0x6097dbff else d.nstyle.color.bg;
+        const col: u32 = if (self.opts.selected) d.nstyle.color.selection else d.nstyle.color.bg;
         d.ctx.rect(vt.area, col);
-        const thi = 2;
-        const y = vt.area.y + vt.area.h - thi;
-        d.ctx.line(.{ .x = vt.area.x, .y = y }, .{ .x = vt.area.x + vt.area.w, .y = y }, self.opts.color, thi);
     }
 
     pub fn deinit(vt: *iArea, gui: *Gui, window: *iWindow) void {
@@ -572,19 +611,19 @@ const LayerWidget = struct {
                 const allow_move = !self.opts.parent.ctx.isChildOf(self.opts.parent.selected_ptr.*, self.opts.id);
 
                 //const locked = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.locked else false;
-                //const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
+                const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
 
                 btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
-                //btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
                 btns.append(aa, .{ bi("move_selected"), "-> put", .btn }) catch {};
                 btns.append(aa, .{ bi("select_all"), "<- select", .btn }) catch {};
                 btns.append(aa, .{ bi("duplicate"), "duplicate", .btn }) catch {};
                 btns.append(aa, .{ bi("add_child"), "new child", .btn }) catch {};
-                //btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
                 btns.append(aa, .{ bi("noop"), "", .btn }) catch {};
-                if (self.opts.id != .none) { //Root cannot be deleted or merged
+                if (self.opts.id != .none) { //Root cannot be deleted, merged, omitted, or locked
+                    btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
                     btns.append(aa, .{ bi("delete"), "delete layer", .btn }) catch {};
                     btns.append(aa, .{ bi("merge"), "^ merge up", .btn }) catch {};
+                    //btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
                     if (allow_move)
                         btns.append(aa, .{ bi("attach_sib"), "attach as sibling", .btn }) catch {};
                 }
@@ -620,6 +659,12 @@ const LayerWidget = struct {
             },
             else => {},
         }
+
+        if (ed.layers.getLayerFromId(sel_id)) |lay| {
+            ed.layers.rebuildDisabledRecur(lay, lay.disabled, lay.omit_export, lay.locked) catch {};
+        }
+
+        self.opts.win.needs_rebuild = true;
     }
 
     fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {

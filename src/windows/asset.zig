@@ -378,10 +378,10 @@ pub const ModelBrowser = struct {
                 const sp = spa.split(.vertical, spa.w / 2);
                 _ = Wg.Text.build(lay, sp[0], "up: {s}", .{
                     self.ed.config.keys.up_line.b.nameFull(&buf),
-                });
+                }, .{});
                 _ = Wg.Text.build(lay, sp[1], "down: {s}", .{
                     self.ed.config.keys.down_line.b.nameFull(&buf),
-                });
+                }, .{});
             }
             _ = Wg.Button.build(lay, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 });
         }

@@ -76,7 +76,7 @@ pub const NagWindow = struct {
         var ly = gui.dstate.vlayout(inset);
         const Btn = Wg.Button.build;
         const ar = &win.area;
-        _ = Wg.Text.buildStatic(ar, ly.getArea(), "Unsaved changes! ", null);
+        _ = Wg.Text.buildStatic(ar, ly.getArea(), "Unsaved changes! ", .{});
         _ = Btn(ar, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle });
         _ = Btn(ar, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle });
     }

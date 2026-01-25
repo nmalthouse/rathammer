@@ -788,7 +788,7 @@ pub const UndoAttachLayer = struct {
         const child = layers.getLayerFromId(self.layer) orelse return;
         if (self.child_index <= parent.children.items.len) {
             parent.children.insert(layers.alloc, self.child_index, child) catch return;
-            layers.recurDisable(child, child.enabled) catch {};
+            layers.recurDisable(child, child.disabled) catch {};
         }
     }
 

@@ -319,7 +319,7 @@ pub const InspectorWindow = struct {
             }
             if (try ed.ecs.getOptPtr(sel_id, .solid)) |sol| {
                 _ = sol;
-                _ = Wg.Text.build(lay, ly.getArea(), "selected_solid: {d}", .{sel_id});
+                _ = Wg.Text.build(lay, ly.getArea(), "selected_solid: {d}", .{sel_id}, .{});
             }
         }
     }
@@ -344,8 +344,8 @@ pub const InspectorWindow = struct {
 
             {
                 var hy = gui.dstate.hlayout(ly.getArea() orelse return, 2);
-                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.doc_name, null);
-                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.name, null);
+                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.doc_name, .{});
+                _ = Wg.Text.buildStatic(lay, hy.getArea(), field.name, .{});
             }
             if (self.show_help and field.doc_string.len > 0) {
                 ly.pushHeight(Wg.TextView.heightForN(gui, 4));
@@ -360,7 +360,7 @@ pub const InspectorWindow = struct {
                 const label = "Raw edit: ";
                 const width = gui.dstate.minWidgetWidth(label);
                 const sp = edit_tb_ar.split(.vertical, width);
-                _ = Wg.Text.buildStatic(lay, sp[0], label, null);
+                _ = Wg.Text.buildStatic(lay, sp[0], label, .{});
                 _ = Wg.Textbox.buildOpts(lay, sp[1], .{
                     .init_string = val.slice(),
                     .user_id = cb_id,
@@ -1219,9 +1219,9 @@ const IoWg = struct {
                 switch (i) {
                     1 => {
                         const count = self.editor.targetname_track.count(li.target.items, &self.editor.ecs);
-                        _ = Wg.Text.buildStatic(vt, sp1[0], self.editor.printArena("{s} ({d} in map)", .{ n, count }) catch n, null);
+                        _ = Wg.Text.buildStatic(vt, sp1[0], self.editor.printArena("{s} ({d} in map)", .{ n, count }) catch n, .{});
                     },
-                    else => _ = Wg.Text.buildStatic(vt, sp1[0], n, null),
+                    else => _ = Wg.Text.buildStatic(vt, sp1[0], n, .{}),
                 }
                 _ = switch (i) {
                     0 => self.buildOutputCombo(vt, sp1[1]),

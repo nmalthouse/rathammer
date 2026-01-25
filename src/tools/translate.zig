@@ -452,7 +452,7 @@ pub const Translate = struct {
             \\Otherwise, the solid is moved in the plane you clicked on.
         ;
         var ly = gui.dstate.vlayout(area_vt.area);
-        _ = Wg.Text.buildStatic(area_vt, ly.getArea(), "translate tool", null);
+        _ = Wg.Text.buildStatic(area_vt, ly.getArea(), "translate tool", .{});
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
@@ -495,7 +495,7 @@ pub const Translate = struct {
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 6 };
 
-            _ = Wg.Text.build(area_vt, hy.getArea(), "Select Mask", .{});
+            _ = Wg.Text.build(area_vt, hy.getArea(), "Select Mask", .{}, .{});
             const sl = &self.ed.selection.options;
             _ = CB(area_vt, hy.getArea(), "brush", .{ .bool_ptr = &sl.brushes }, null);
             _ = CB(area_vt, hy.getArea(), "prop", .{ .bool_ptr = &sl.props }, null);

@@ -212,7 +212,7 @@ pub const PauseWindow = struct {
                     _ = Wg.Text.build(vt, ly.getArea(), "{s}: {s}", .{
                         field.name,
                         key.b.nameFull(&buf),
-                    });
+                    }, .{});
                 }
             }
         }
@@ -221,7 +221,7 @@ pub const PauseWindow = struct {
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
-            _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", null);
+            _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", .{});
             {
                 ly.pushCount(2);
                 var hy = gui.dstate.tlayout(ly.getArea() orelse return, 2);
@@ -470,7 +470,7 @@ pub const PauseWindow = struct {
             const sp = ar.split(.vertical, ar.h);
 
             var ly = gui.dstate.vlayout(sp[1]);
-            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, null);
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, .{});
             //_ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
             _ = ptext.PollingTexture.build(area, sp[0], self.editor, rec.tex, "", .{}, .{});
             const ld_btn = ly.getArea() orelse return;
@@ -486,7 +486,7 @@ pub const PauseWindow = struct {
                 .commit_cb = gameComboCommit,
                 .name_cb = gameComboName,
             }, i);
-            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, null);
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, .{});
         }
     }
 

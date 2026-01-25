@@ -135,7 +135,7 @@ pub const MenuBar = struct {
             ar.x += b + pad;
 
             const ww = gui.dstate.minWidgetWidth(version.version_short);
-            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{version.version_short});
+            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{version.version_short}, .{});
             ar.x += ww + pad;
         }
     }

@@ -186,6 +186,8 @@ pub fn exportToObj(ed: *Ed, path: []const u8, name: []const u8) !void {
             continue;
         if (ent.isSet(@intFromEnum(ecs.EcsT.Components.deleted)))
             continue;
+        if (try ed.ecs.getOptPtr(@intCast(id), .layer)) |layer|
+            if (ed.layers.isOmit(layer.id)) continue;
 
         if (try ed.ecs.getOptPtr(@intCast(id), .displacements)) |disps| { //disp has higher priority, so dispsolid is omitted
             const solid = try ed.ecs.getOptPtr(@intCast(id), .solid) orelse continue;
@@ -300,6 +302,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
         &ed.vpkctx,
         &ed.groups,
         lm,
+        &ed.layers,
         .{ .check_solid = false },
     )) {
         ed.notify("{s}", .{L.lang.notify.exported_vmf}, colors.good);

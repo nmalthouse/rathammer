@@ -200,8 +200,8 @@ pub const TextureTool = struct {
             const Tb = Wg.TextboxNumber.build;
             ly.pushCount(6);
             var tly = guis.TableLayout{ .columns = 2, .item_height = ly.item_height, .bounds = ly.getArea() orelse return };
-            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "X", null);
-            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "Y", null);
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "X", .{});
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "Y", .{});
             if (guis.label(area_vt, tly.getArea(), "Scale", .{})) |ar|
                 //_ = Tb(area_vt, ar, side.u.scale, win, H.param(self, .uscale));
                 _ = St.build(area_vt, ar, null, H.slide(self, .uscale, 0, 0.125 / 2.0, 1, side.u.scale));

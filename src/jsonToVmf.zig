@@ -4,6 +4,7 @@ const ecs = @import("ecs.zig");
 const vdf_serial = @import("vdf_serial.zig");
 const vmf = @import("vmf.zig");
 const GroupId = ecs.Groups.GroupId;
+const Layer = @import("layer.zig");
 const util = @import("util.zig");
 const csg = @import("csg.zig");
 
@@ -55,6 +56,7 @@ pub fn jsontovmf(
     vpkmapper: anytype,
     groups: *ecs.Groups,
     filename: []const u8,
+    layers: *Layer.Context,
     opts: Opts,
 ) !void {
     const outfile = try std.fs.cwd().createFile(filename, .{});
@@ -110,6 +112,8 @@ pub fn jsontovmf(
         while (solids.next()) |solid| {
             if (ecs_p.intersects(solids.i, delete_mask))
                 continue;
+            if (try ecs_p.getOpt(@intCast(solids.i), .layer)) |layer|
+                if (layers.isOmit(layer.id)) continue;
             if (try ecs_p.getOpt(solids.i, .group)) |g| {
                 // Groups without an owner are serialized as is
                 if (g.id != 0 and groups.getOwner(g.id) != null) {
@@ -130,6 +134,9 @@ pub fn jsontovmf(
         while (ents.next()) |ent| {
             if (ecs_p.intersects(ents.i, delete_mask))
                 continue;
+            if (try ecs_p.getOpt(@intCast(ents.i), .layer)) |layer|
+                if (layers.isOmit(layer.id)) continue;
+
             try vr.writeKey("entity");
             try vr.beginObject();
             const this_group = (groups.getGroup(ents.i));
@@ -248,7 +255,11 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
         const jsonctx = json_map.InitFromJsonCtx{ .alloc = alloc, .str_store = &strings };
         const parsed = try json_map.loadJson(jsonctx, slice, &loadctx, &ecs_p, &vpkmapper, &groups);
 
-        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", .{
+        var layers = try Layer.Context.init(alloc);
+
+        try layers.insertVisgroupsFromJson(parsed.value.visgroup);
+
+        try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", &layers, .{
             .check_solid = !(args.@"no-check" orelse false),
             .pre_optimize_mesh = true,
         });
