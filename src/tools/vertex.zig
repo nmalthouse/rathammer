@@ -11,6 +11,7 @@ const snapV3 = util3d.snapV3;
 const util3d = graph.util_3d;
 const ecs = @import("../ecs.zig");
 const undo = @import("../undo.zig");
+const L = @import("../locale.zig");
 const iArea = guis.iArea;
 const iWindow = guis.iWindow;
 const DrawCtx = graph.ImmediateDrawingContext;
@@ -250,7 +251,7 @@ pub const VertexTranslate = struct {
     }
 
     fn commitDist(self: *Self, dist: Vec3, ed: *Editor) !void {
-        const ustack = try ed.undoctx.pushNewFmt("vertex translate ", .{});
+        const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.vertex_translate});
         for (ed.getSelected()) |id| {
             const manip_verts = self.selected.getPtr(id) orelse continue;
             if (manip_verts.items(.index).len == 0) continue;
@@ -572,10 +573,10 @@ pub const VertexTranslate = struct {
             .mode = .split_on_space,
         });
 
-        if (guis.label(area_vt, ly.getArea(), "Selection mode", .{})) |ar|
+        if (guis.label(area_vt, ly.getArea(), "{s}", .{L.lang.tool.vtx_selection_mode})) |ar|
             _ = Wg.Combo.build(area_vt, ar, &self.selection_mode, .{});
-        _ = Wg.Checkbox.build(area_vt, ly.getArea(), "Modify disps", .{ .bool_ptr = &self.do_displacements }, null);
-        _ = Wg.Button.build(area_vt, ly.getArea(), "snap selected to integer", .{
+        _ = Wg.Checkbox.build(area_vt, ly.getArea(), L.lang.checkbox.modify_displacement, .{ .bool_ptr = &self.do_displacements }, null);
+        _ = Wg.Button.build(area_vt, ly.getArea(), L.lang.btn.snap_selected_to_int, .{
             .cb_vt = &self.cbhandle,
             .cb_fn = &btn_cb,
             .id = @intFromEnum(Btn.snap_selected),

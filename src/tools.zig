@@ -8,6 +8,7 @@ const cubeFromBounds = util3d.cubeFromBounds;
 const vpk = @import("vpk.zig");
 const raycast = @import("raycast_solid.zig");
 const undo = @import("undo.zig");
+const L = @import("locale.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
 const Gui = graph.Gui;
 const Os9Gui = graph.gui_app.Os9Gui;
@@ -593,7 +594,7 @@ const Proportional = struct {
 
     fn commit(self: *Self, ed: *Editor, ctx: TranslateCtx) !void {
         const selection = ed.getSelected();
-        const ustack = try ed.undoctx.pushNewFmt("scale", .{});
+        const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.scale});
         for (selection) |id| {
             const solid = ed.getComponent(id, .solid) orelse continue;
             const temp_verts = try ed.frame_arena.allocator().alloc(Vec3, solid.verts.items.len);

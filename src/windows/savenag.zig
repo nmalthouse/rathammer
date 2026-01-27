@@ -12,6 +12,7 @@ const Wg = guis.Widget;
 const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const async_util = @import("../async.zig");
+const L = @import("../locale.zig");
 pub const NagWindow = struct {
     const Buttons = enum {
         quit,
@@ -76,9 +77,9 @@ pub const NagWindow = struct {
         var ly = gui.dstate.vlayout(inset);
         const Btn = Wg.Button.build;
         const ar = &win.area;
-        _ = Wg.Text.buildStatic(ar, ly.getArea(), "Unsaved changes! ", .{});
-        _ = Btn(ar, ly.getArea(), "Save", .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle });
-        _ = Btn(ar, ly.getArea(), "Quit", .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle });
+        _ = Wg.Text.buildStatic(ar, ly.getArea(), L.lang.unsaved_changes, .{});
+        _ = Btn(ar, ly.getArea(), L.lang.btn.save, .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle });
+        _ = Btn(ar, ly.getArea(), L.lang.btn.quit, .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle });
     }
     pub fn btnCb(cb: *guis.CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));

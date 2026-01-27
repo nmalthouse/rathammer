@@ -19,6 +19,7 @@ const vpk = @import("../vpk.zig");
 const CbHandle = guis.CbHandle;
 const version = @import("../version.zig");
 const ptext = @import("widget_texture.zig");
+const L = @import("../locale.zig");
 
 pub const PauseWindow = struct {
     const Buttons = enum {
@@ -221,7 +222,7 @@ pub const PauseWindow = struct {
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
-            _ = Wg.Text.buildStatic(vt, ly.getArea(), "Welcome ", .{});
+            _ = Wg.Text.buildStatic(vt, ly.getArea(), L.lang.welcome, .{});
             {
                 ly.pushCount(2);
                 var hy = gui.dstate.tlayout(ly.getArea() orelse return, 2);
@@ -233,9 +234,9 @@ pub const PauseWindow = struct {
                     .commit_cb = gameComboCommitNewMap,
                     .name_cb = gameComboName,
                 }, 0);
-                _ = Btn(vt, hy.getArea(), "New", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+                _ = Btn(vt, hy.getArea(), L.lang.btn.new, .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
                 _ = hy.getArea();
-                _ = Btn(vt, hy.getArea(), "Load", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
+                _ = Btn(vt, hy.getArea(), L.lang.btn.load, .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
             }
 
             ly.pushRemaining();
@@ -250,7 +251,7 @@ pub const PauseWindow = struct {
         }
         if (eql(u8, tab, "mapprops")) {
             var ly = gui.dstate.vlayout(vt.area);
-            if (guis.label(vt, ly.getArea(), "Set skybox: ", .{})) |ar|
+            if (guis.label(vt, ly.getArea(), "{s}: ", .{L.lang.set_skybox})) |ar|
                 _ = Wg.Textbox.buildOpts(vt, ar, .{
                     .init_string = "",
                     .commit_cb = &textbox_cb,
@@ -258,7 +259,7 @@ pub const PauseWindow = struct {
                     .user_id = @intFromEnum(Textboxes.set_skyname),
                 });
 
-            if (guis.label(vt, ly.getArea(), "desc: ", .{})) |ar|
+            if (guis.label(vt, ly.getArea(), "{s}: ", .{L.lang.description})) |ar|
                 _ = Wg.Textbox.buildOpts(vt, ar, .{
                     .init_string = self.editor.edit_state.map_description.items,
                     .commit_cb = &textbox_cb,
@@ -338,8 +339,8 @@ pub const PauseWindow = struct {
             if (self.editor.has_loaded_map) {
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                    _ = Btn(vt, hy.getArea(), "Unpause", .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle });
-                    _ = Btn(vt, hy.getArea(), "save as", .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle });
+                    _ = Btn(vt, hy.getArea(), L.lang.btn.unpause, .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle });
+                    _ = Btn(vt, hy.getArea(), L.lang.btn.save_as, .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle });
                 }
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
@@ -354,8 +355,8 @@ pub const PauseWindow = struct {
                 }
             } else {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
-                _ = Btn(vt, hy.getArea(), "New map", .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
-                _ = Btn(vt, hy.getArea(), "Load map", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
+                _ = Btn(vt, hy.getArea(), L.lang.btn.new_map, .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });
+                _ = Btn(vt, hy.getArea(), L.lang.btn.load_map, .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
             }
 
             if (false) {
@@ -367,8 +368,6 @@ pub const PauseWindow = struct {
 
             if (guis.label(vt, ly.getArea(), "Camera move kind", .{})) |ar|
                 _ = Wg.Combo.build(vt, ar, &ds.cam3d.fwd_back_kind, .{});
-            if (guis.label(vt, ly.getArea(), "renderer", .{})) |ar|
-                _ = Wg.Combo.build(vt, ar, &self.editor.renderer.mode, .{});
             if (guis.label(vt, ly.getArea(), "New group type", .{})) |ar|
                 _ = Wg.Combo.build(vt, ar, &self.editor.edit_state.default_group_entity, .{});
             if (guis.label(vt, ly.getArea(), "Entity render distance", .{})) |ar|
@@ -379,7 +378,7 @@ pub const PauseWindow = struct {
                 _ = Wg.Slider.build(vt, hy.getArea(), &ds.cam_far_plane, 512 * 64, 512 * 512, .{ .nudge = 1 });
             }
 
-            _ = Wg.Button.build(vt, ly.getArea(), "Open help in browser", .{
+            _ = Wg.Button.build(vt, ly.getArea(), L.lang.btn.open_help_in_browser, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = Buttons.id(.open_help),
@@ -476,7 +475,7 @@ pub const PauseWindow = struct {
             const ld_btn = ly.getArea() orelse return;
             const ld_ar = ld_btn.replace(null, null, @min(text_bound.x, ld_btn.w), null);
 
-            _ = Wg.Button.build(area, ld_ar, "Load", .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
+            _ = Wg.Button.build(area, ld_ar, L.lang.btn.load, .{ .cb_fn = &loadBtn, .id = i + index, .cb_vt = &self.cbhandle });
 
             _ = Wg.ComboUser(usize).build(area, ly.getArea() orelse continue, .{
                 .user_vt = &self.cbhandle,
@@ -528,66 +527,6 @@ pub const PauseWindow = struct {
         self.editor.paused = false;
     }
 };
-
-fn buildVisGroups(self: *PauseWindow, gui: *Gui, area: *iArea, ar: graph.Rect) void {
-    const Helper = struct {
-        fn recur(vs: void, vg: void.Group, depth: usize, gui_: *Gui, vl: *guis.VerticalLayout, vt: *iArea, win: *iWindow) void {
-            vl.padding.left = @floatFromInt(depth * 20);
-            const the_bool = !vs.disabled.isSet(vg.id);
-
-            var hy = guis.HorizLayout{ .bounds = vl.getArea() orelse return, .count = 2 };
-            _ = Wg.Checkbox.build(
-                vt,
-                hy.getArea(),
-                vg.name,
-                .{ .cb_fn = &commit_cb, .cb_vt = win.area, .user_id = vg.id },
-                the_bool,
-            );
-
-            _ = Wg.Button.build(vt, hy.getArea(), "Select", .{
-                .cb_fn = &select_all_vis,
-                .cb_vt = win.area,
-                .id = vg.id,
-            });
-
-            for (vg.children.items) |id| {
-                recur(
-                    vs,
-                    &vs.groups.items[id],
-                    depth + 2,
-                    gui_,
-                    vl,
-                    vt,
-                    win,
-                );
-            }
-        }
-
-        fn commit_cb(user: *iArea, _: *Gui, val: bool, id: usize) void {
-            const selfl: *PauseWindow = @alignCast(@fieldParentPtr("area", user));
-            if (id > 55) return;
-            selfl.editor.visgroups.setValueCascade(@intCast(id), val);
-            selfl.editor.rebuildVisGroups() catch return;
-            selfl.vt.needs_rebuild = true;
-        }
-
-        fn select_all_vis(user: *iArea, id: usize, _: *Gui, _: *iWindow) void {
-            const selfl: *PauseWindow = @alignCast(@fieldParentPtr("area", user));
-            selfl.editor.selection.setToMulti();
-            const mask = selfl.editor.visgroups.getMask(&.{@as(u8, @intCast(id))});
-            var it = selfl.editor.ecs.iterator(.editor_info);
-            while (it.next()) |item| {
-                if (mask.subsetOf(item.vis_mask))
-                    selfl.editor.selection.addUnchecked(it.i) catch return;
-            }
-        }
-    };
-    var ly = gui.dstate.vlayout(ar);
-
-    if (self.editor.visgroups.getRoot()) |vg| {
-        Helper.recur(&self.editor.visgroups, vg, 0, gui, &ly, area, &self.vt);
-    }
-}
 
 pub const SortHelpText = struct {
     pub fn lessThan(_: void, a: PauseWindow.HelpText, b: PauseWindow.HelpText) bool {

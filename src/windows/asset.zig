@@ -18,6 +18,7 @@ const ArrayList = std.ArrayListUnmanaged;
 const ptext = @import("widget_texture.zig");
 const VpkId = vpk.VpkResId;
 const inspector = @import("inspector.zig");
+const L = @import("../locale.zig");
 
 const log = std.log.scoped(.asset);
 
@@ -194,9 +195,9 @@ const VpkBrowser = struct {
             if (ly.getArea()) |header| {
                 const header_col = 4;
                 var hy = gui.dstate.hlayout(header, header_col);
-                if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
+                if (guis.label(lay, hy.getArea(), "{s}", .{L.lang.search})) |ar|
                     self.list.addTextbox(lay, gui, win, ar);
-                if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+                if (guis.label(lay, hy.getArea(), "{s}: ", .{L.lang.result})) |ar| {
                     _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
                 }
             }
@@ -366,9 +367,9 @@ pub const ModelBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = gui.dstate.hlayout(header, header_col);
-            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar|
+            if (guis.label(lay, hy.getArea(), "{s}", .{L.lang.search})) |ar|
                 self.list.addTextbox(lay, gui, win, ar);
-            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+            if (guis.label(lay, hy.getArea(), "{s}: ", .{L.lang.result})) |ar| {
                 _ = Wg.NumberDisplay.build(lay, ar, &self.list.num_result);
             }
 
@@ -376,14 +377,16 @@ pub const ModelBrowser = struct {
                 var buf: [32]u8 = undefined;
                 const spa = hy.getArea() orelse return;
                 const sp = spa.split(.vertical, spa.w / 2);
-                _ = Wg.Text.build(lay, sp[0], "up: {s}", .{
+                _ = Wg.Text.build(lay, sp[0], "{s}: {s}", .{
+                    L.lang.up,
                     self.ed.config.keys.up_line.b.nameFull(&buf),
                 }, .{});
-                _ = Wg.Text.build(lay, sp[1], "down: {s}", .{
+                _ = Wg.Text.build(lay, sp[1], "{s}: {s}", .{
+                    L.lang.down,
                     self.ed.config.keys.down_line.b.nameFull(&buf),
                 }, .{});
             }
-            _ = Wg.Button.build(lay, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 });
+            _ = Wg.Button.build(lay, hy.getArea(), L.lang.btn.accept, .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 });
         }
         _ = ly.getArea(); //break
 
@@ -572,7 +575,7 @@ const TextureBrowser = struct {
         if (ly.getArea()) |header| {
             const header_col = 4;
             var hy = gui.dstate.hlayout(header, header_col);
-            if (guis.label(lay, hy.getArea(), "Search", .{})) |ar| {
+            if (guis.label(lay, hy.getArea(), "{s}", .{L.lang.search})) |ar| {
                 if (Wg.Textbox.buildOpts(lay, ar, .{
                     .user_id = 0,
                     .commit_vt = &self.cbhandle,
@@ -582,10 +585,10 @@ const TextureBrowser = struct {
                     gui.grabFocus(lay.getLastChild() orelse return, win);
                 }
             }
-            if (guis.label(lay, hy.getArea(), "Results: ", .{})) |ar| {
+            if (guis.label(lay, hy.getArea(), "{s}: ", .{L.lang.result})) |ar| {
                 _ = Wg.NumberDisplay.build(lay, ar, &self.num_result);
             }
-            if (guis.label(lay, hy.getArea(), "Columns", .{})) |ar| {
+            if (guis.label(lay, hy.getArea(), "{s}", .{L.lang.columns})) |ar| {
                 _ = Wg.StaticSlider.build(lay, ar, null, .{
                     .min = MIN_COL,
                     .max = MAX_COL,
@@ -595,7 +598,7 @@ const TextureBrowser = struct {
                     .commit_vt = &self.cbhandle,
                 });
             }
-            _ = Wg.Button.build(lay, hy.getArea(), "accept", .{ .cb_vt = &self.cbhandle, .cb_fn = btnCb, .id = 0 });
+            _ = Wg.Button.build(lay, hy.getArea(), L.lang.btn.accept, .{ .cb_vt = &self.cbhandle, .cb_fn = btnCb, .id = 0 });
         }
         _ = ly.getArea(); //break
 

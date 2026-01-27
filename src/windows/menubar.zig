@@ -225,13 +225,13 @@ pub const MenuBar = struct {
             btn_strid("view") => {
                 const tog = self.ed.draw_state.tog;
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id(.draw_sprite), "Draw Sprites", .{ .checkbox = tog.sprite } },
-                    .{ btn_id(.draw_mod), "Draw Models", .{ .checkbox = tog.models } },
-                    .{ btn_id(.draw_hdr), "HDR", .{ .checkbox = self.ed.renderer.do_hdr_buffer } },
-                    .{ btn_id(.draw_mod_shadow), "Model shadows", .{ .checkbox = !self.ed.renderer.omit_model_shadow } },
-                    .{ btn_id(.draw_outline), "Draw outlines", .{ .checkbox = self.ed.draw_state.draw_outlines } },
-                    .{ btn_id(.draw_skybox), "Draw skybox", .{ .checkbox = tog.skybox } },
-                    .{ btn_id(.draw_debug), "Draw debug stats", .{ .checkbox = tog.debug_stats } },
+                    .{ btn_id(.draw_sprite), L.lang.checkbox.draw_sprite, .{ .checkbox = tog.sprite } },
+                    .{ btn_id(.draw_mod), L.lang.checkbox.draw_model, .{ .checkbox = tog.models } },
+                    .{ btn_id(.draw_hdr), L.lang.checkbox.draw_hdr, .{ .checkbox = self.ed.renderer.do_hdr_buffer } },
+                    .{ btn_id(.draw_mod_shadow), L.lang.checkbox.model_shadow, .{ .checkbox = !self.ed.renderer.omit_model_shadow } },
+                    .{ btn_id(.draw_outline), L.lang.checkbox.draw_outlines, .{ .checkbox = self.ed.draw_state.draw_outlines } },
+                    .{ btn_id(.draw_skybox), L.lang.checkbox.draw_skybox, .{ .checkbox = tog.skybox } },
+                    .{ btn_id(.draw_debug), L.lang.checkbox.draw_debug_stat, .{ .checkbox = tog.debug_stats } },
                 });
             },
             btn_strid("file") => {
@@ -250,8 +250,8 @@ pub const MenuBar = struct {
             },
             btn_strid("edit") => {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
-                    .{ btn_id(.undo), "undo", .btn },
-                    .{ btn_id(.redo), "redo", .btn },
+                    .{ btn_id(.undo), L.lang.btn.undo, .btn },
+                    .{ btn_id(.redo), L.lang.btn.redo, .btn },
                     .{ 0, "testpop", .{ .child = .{
                         .width = 300,
                         .height = 300,

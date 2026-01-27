@@ -18,6 +18,7 @@ const undo = @import("../undo.zig");
 const action = @import("../actions.zig");
 const snapV3 = util3d.snapV3;
 const ArrayList = std.ArrayListUnmanaged;
+const L = @import("../locale.zig");
 
 pub const TextureTool = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -167,10 +168,10 @@ pub const TextureTool = struct {
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space });
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-            _ = Wg.Button.build(area_vt, hy.getArea(), "Reset face world", H.btn(self, .reset_world));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "Reset face norm", H.btn(self, .reset_norm));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "Apply selection", H.btn(self, .apply_selection));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "Apply face", H.btn(self, .apply_faces));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.reset_face_world, H.btn(self, .reset_world));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.reset_face_normal, H.btn(self, .reset_norm));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.apply_to_selected, H.btn(self, .apply_selection));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.apply_to_face, H.btn(self, .apply_faces));
         }
         const tex_w = area_vt.area.w / 2;
         ly.pushHeight(tex_w);
@@ -192,7 +193,7 @@ pub const TextureTool = struct {
 
         if (!has_disp) {
             if (side.index.items.len == 4)
-                _ = Wg.Button.build(area_vt, ly.getArea(), "Make displacment", H.btn(self, .make_disp));
+                _ = Wg.Button.build(area_vt, ly.getArea(), L.lang.tool.texture.make_disp, H.btn(self, .make_disp));
         }
 
         const St = Wg.StaticSlider;
@@ -200,51 +201,51 @@ pub const TextureTool = struct {
             const Tb = Wg.TextboxNumber.build;
             ly.pushCount(6);
             var tly = guis.TableLayout{ .columns = 2, .item_height = ly.item_height, .bounds = ly.getArea() orelse return };
-            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "X", .{});
-            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), "Y", .{});
-            if (guis.label(area_vt, tly.getArea(), "Scale", .{})) |ar|
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), L.lang.tool.texture.x_axis, .{});
+            _ = Wg.Text.buildStatic(area_vt, tly.getArea(), L.lang.tool.texture.y_axis, .{});
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.scale})) |ar|
                 //_ = Tb(area_vt, ar, side.u.scale, win, H.param(self, .uscale));
                 _ = St.build(area_vt, ar, null, H.slide(self, .uscale, 0, 0.125 / 2.0, 1, side.u.scale));
 
-            if (guis.label(area_vt, tly.getArea(), "Scale ", .{})) |ar|
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.scale})) |ar|
                 _ = St.build(area_vt, ar, null, H.slide(self, .vscale, 0, 0.125 / 2.0, 1, side.v.scale));
 
-            if (guis.label(area_vt, tly.getArea(), "Trans ", .{})) |ar|
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.trans})) |ar|
                 _ = St.build(area_vt, ar, null, H.slide(self, .utrans, 1, 0, 512, side.u.trans));
             //_ = Tb(area_vt, ar, side.u.trans, win, H.param(self, .utrans));
 
-            if (guis.label(area_vt, tly.getArea(), "Trans ", .{})) |ar|
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.trans})) |ar|
                 _ = St.build(area_vt, ar, null, H.slide(self, .vtrans, 1, 0, 512, side.v.trans));
 
-            if (guis.label(area_vt, tly.getArea(), "Axis ", .{})) |ar| {
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.axis})) |ar| {
                 var hy = guis.HorizLayout{ .bounds = ar, .count = 3 };
                 const a = side.u.axis;
                 _ = Tb(area_vt, hy.getArea(), a.x(), H.param(self, .un_x));
                 _ = Tb(area_vt, hy.getArea(), a.y(), H.param(self, .un_y));
                 _ = Tb(area_vt, hy.getArea(), a.z(), H.param(self, .un_z));
             }
-            if (guis.label(area_vt, tly.getArea(), "Axis ", .{})) |ar| {
+            if (guis.label(area_vt, tly.getArea(), "{s}", .{L.lang.tool.texture.axis})) |ar| {
                 var hy = guis.HorizLayout{ .bounds = ar, .count = 3 };
                 const a = side.v.axis;
                 _ = Tb(area_vt, hy.getArea(), a.x(), H.param(self, .vn_x));
                 _ = Tb(area_vt, hy.getArea(), a.y(), H.param(self, .vn_y));
                 _ = Tb(area_vt, hy.getArea(), a.z(), H.param(self, .vn_z));
             }
-            _ = Wg.Button.build(area_vt, tly.getArea(), "flip", H.btn(self, .u_flip));
-            _ = Wg.Button.build(area_vt, tly.getArea(), "flip", H.btn(self, .v_flip));
+            _ = Wg.Button.build(area_vt, tly.getArea(), L.lang.tool.texture.flip, H.btn(self, .u_flip));
+            _ = Wg.Button.build(area_vt, tly.getArea(), L.lang.tool.texture.flip, H.btn(self, .v_flip));
 
-            if (guis.label(area_vt, tly.getArea(), "lux scale (hu / luxel): ", .{})) |ar|
+            if (guis.label(area_vt, tly.getArea(), "{s}: ", .{L.lang.tool.texture.lux_scale})) |ar|
                 _ = Tb(area_vt, ar, side.lightmapscale, H.param(self, .lightmap));
         }
-        if (guis.label(area_vt, ly.getArea(), "Justify: ", .{})) |ar| {
+        if (guis.label(area_vt, ly.getArea(), "{s}: ", .{L.lang.tool.texture.justify})) |ar| {
             var hy = guis.HorizLayout{ .bounds = ar, .count = 6 };
-            _ = Wg.Button.build(area_vt, hy.getArea(), "left", H.btn(self, .j_left));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "right", H.btn(self, .j_right));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "fit", H.btn(self, .j_fit));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.left, H.btn(self, .j_left));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.right, H.btn(self, .j_right));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.fit, H.btn(self, .j_fit));
 
-            _ = Wg.Button.build(area_vt, hy.getArea(), "top", H.btn(self, .j_top));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "bot", H.btn(self, .j_bottom));
-            _ = Wg.Button.build(area_vt, hy.getArea(), "cent", H.btn(self, .j_center));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.top, H.btn(self, .j_top));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.bottom, H.btn(self, .j_bottom));
+            _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.center, H.btn(self, .j_center));
         }
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };

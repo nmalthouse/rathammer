@@ -227,7 +227,7 @@ pub const InspectorWindow = struct {
             .ungroup => {
                 const selection = self.editor.getSelected();
                 if (selection.len > 0) {
-                    const ustack = try self.editor.undoctx.pushNewFmt("ungrouping of {d} objects", .{selection.len});
+                    const ustack = try self.editor.undoctx.pushNewFmt("{s} {d}", .{ L.lang.undo.ungroup, selection.len });
                     for (selection) |id| {
                         const old = if (try self.editor.ecs.getOpt(id, .group)) |g| g.id else 0;
                         try ustack.append(.{
@@ -235,7 +235,7 @@ pub const InspectorWindow = struct {
                         });
                     }
                     ustack.apply(self.editor);
-                    self.editor.notify("ungrouped {d} objects", .{selection.len}, 0x00ff00ff);
+                    self.editor.notify("{s} {d}", .{ L.lang.undo.ungroup, selection.len }, 0x00ff00ff);
                 }
             },
         }
@@ -247,12 +247,12 @@ pub const InspectorWindow = struct {
         self.selected_class_id = null;
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
-            _ = Wg.Button.build(lay, hy.getArea(), "Ungroup", .{
+            _ = Wg.Button.build(lay, hy.getArea(), L.lang.btn.ungroup, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = &misc_btn_cb,
                 .id = @intFromEnum(MiscBtn.ungroup),
             });
-            _ = Wg.Checkbox.build(lay, hy.getArea(), "show help", .{
+            _ = Wg.Checkbox.build(lay, hy.getArea(), L.lang.btn.show_help, .{
                 .bool_ptr = &self.show_help,
                 .cb_fn = generic_checkbox_rebuild_cb,
                 .cb_vt = &self.cbhandle,
@@ -271,7 +271,7 @@ pub const InspectorWindow = struct {
                         if (led.selection.getGroupOwnerExclusive(&led.groups)) |lsel_id| {
                             const new_class_name = lself.editor.fgd_ctx.getPtrId(p.index).name;
                             if (led.ecs.getOptPtr(lsel_id, .entity) catch null) |lent| {
-                                const ustack = led.undoctx.pushNewFmt("change class {s} -> {s}", .{ lent.class, new_class_name }) catch return;
+                                const ustack = led.undoctx.pushNewFmt("{s} {s} -> {s}", .{ L.lang.undo.change_class, lent.class, new_class_name }) catch return;
                                 ustack.append(.{ .set_class = undo.UndoSetClass.create(
                                     ustack.alloc,
                                     lsel_id,
@@ -289,7 +289,7 @@ pub const InspectorWindow = struct {
                     }
                 };
                 self.selected_class_id = ed.fgd_ctx.getId(ent.class);
-                if (guis.label(lay, aa, "Ent Class", .{})) |ar|
+                if (guis.label(lay, aa, "{s}", .{L.lang.inspector.class})) |ar|
                     _ = Wg.ComboVoid.build(lay, ar, .{
                         .user_vt = &self.cbhandle,
                         .commit_cb = &ClassCombo.commit,
@@ -319,7 +319,7 @@ pub const InspectorWindow = struct {
             }
             if (try ed.ecs.getOptPtr(sel_id, .solid)) |sol| {
                 _ = sol;
-                _ = Wg.Text.build(lay, ly.getArea(), "selected_solid: {d}", .{sel_id}, .{});
+                _ = Wg.Text.build(lay, ly.getArea(), "{s}: {d}", .{ L.lang.inspector.selected_id, sel_id }, .{});
             }
         }
     }
@@ -466,7 +466,7 @@ pub const InspectorWindow = struct {
                             };
                             const mask: u64 = if (req_f.type == .material) 1 << 63 else 0;
                             const idd: u64 = sel_id | mask;
-                            _ = Wg.Button.build(a, ly.getArea(), "Select", .{
+                            _ = Wg.Button.build(a, ly.getArea(), L.lang.btn.select, .{
                                 .cb_vt = &self.cbhandle,
                                 .cb_fn = &H.btn_cb,
                                 .id = idd,
@@ -536,7 +536,7 @@ pub const InspectorWindow = struct {
             if (kvs.map.getPtr(field_name)) |ptr| {
                 var floats = ptr.getFloats(4);
                 floats[3] = std.fmt.parseFloat(f32, p.string) catch return;
-                const ustack = self.editor.undoctx.pushNewFmt("Set brightness {s}: {d}", .{ field_name, floats[3] }) catch return;
+                const ustack = self.editor.undoctx.pushNewFmt("{s} {s}: {d}", .{ L.lang.undo.set_color, field_name, floats[3] }) catch return;
                 const old = kvs.getString(field_name) orelse "";
                 ustack.append(.{ .set_kv = undo.UndoSetKeyValue.createFloats(
                     self.editor.undoctx.alloc,
@@ -553,7 +553,7 @@ pub const InspectorWindow = struct {
 
     fn setKvStr(self: *Self, field_id: usize, value: []const u8) void {
         if (self.getNameFromId(field_id)) |field_name| {
-            const ustack = self.editor.undoctx.pushNewFmt("Set kv {s}:{s}", .{ field_name, value }) catch return;
+            const ustack = self.editor.undoctx.pushNewFmt("{s} {s}:{s}", .{ L.lang.undo.set_kv, field_name, value }) catch return;
 
             const ent_id = self.getSelId() orelse return;
             const kvs = self.getKvsPtr() orelse return;
@@ -600,7 +600,8 @@ pub const InspectorWindow = struct {
                 floats[1] = @floatFromInt(charc.g);
                 floats[2] = @floatFromInt(charc.b);
 
-                const ustack = self.editor.undoctx.pushNewFmt("Set {s} {d} {d} {d}", .{
+                const ustack = self.editor.undoctx.pushNewFmt("{s} {s} {d} {d} {d}", .{
+                    L.lang.undo.set_color,
                     field_name,
                     floats[0],
                     floats[1],
@@ -791,10 +792,10 @@ const IoWg = struct {
                 const aa = self.editor.frame_arena.allocator();
                 var btns = std.ArrayList(guis.Widget.BtnContextWindow.ButtonMapping){};
 
-                btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
-                btns.append(aa, .{ bi("copy"), "copy io string", .btn }) catch {};
-                btns.append(aa, .{ bi("paste"), "paste new", .btn }) catch {};
-                btns.append(aa, .{ bi("delete"), "delete", .btn }) catch {};
+                btns.append(aa, .{ bi("cancel"), L.lang.btn.cancel, .btn }) catch {};
+                btns.append(aa, .{ bi("copy"), L.lang.btn.copy_io, .btn }) catch {};
+                btns.append(aa, .{ bi("paste"), L.lang.btn.paste_new, .btn }) catch {};
+                btns.append(aa, .{ bi("delete"), L.lang.btn.delete, .btn }) catch {};
 
                 const r_win = guis.Widget.BtnContextWindow.create(mb.gui, pos, .{
                     .buttons = btns.items,
@@ -843,7 +844,7 @@ const IoWg = struct {
                         const index = @min(self.right_click_index orelse cons.list.items.len, cons.list.items.len);
                         const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
 
-                        if (self.editor.undoctx.pushNewFmt("paste io", .{})) |ustack| {
+                        if (self.editor.undoctx.pushNewFmt("{s}", .{L.lang.undo.paste_io})) |ustack| {
                             defer ustack.apply(self.editor);
                             ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
                                 .id = sel_id,
@@ -854,7 +855,7 @@ const IoWg = struct {
                         } else |_| {}
                     }
                 } else |err| {
-                    self.editor.notify("invalid io csv: {t}", .{err}, color.bad);
+                    self.editor.notify("{s}: {t}", .{ L.lang.notify.invalid_io_paste, err }, color.bad);
                 }
             },
             else => {},
@@ -913,7 +914,7 @@ const IoWg = struct {
                 if (self.getConsPtr()) |cons| {
                     if (self.selected_io_index >= cons.list.items.len) return;
                     const sel = cons.list.items[self.selected_io_index];
-                    if (self.editor.undoctx.pushNewFmt("delete io", .{})) |ustack| {
+                    if (self.editor.undoctx.pushNewFmt("{s}", .{L.lang.undo.delete_io})) |ustack| {
                         defer ustack.apply(self.editor);
                         ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
                             .id = sel_id,
@@ -932,7 +933,7 @@ const IoWg = struct {
                     break :blk self.getConsPtr() orelse return;
                 };
                 const index = cons.list.items.len;
-                if (self.editor.undoctx.pushNewFmt("Add io", .{})) |ustack| {
+                if (self.editor.undoctx.pushNewFmt("{s}", .{L.lang.undo.add_io})) |ustack| {
                     defer ustack.apply(self.editor);
                     ustack.append(.{ .connect = undo.UndoConnectionManip.create(ustack.alloc, .{
                         .id = sel_id,
@@ -991,7 +992,7 @@ const IoWg = struct {
             else => return,
         };
 
-        if (self.editor.undoctx.pushNewFmt("edit io {t}", .{delta})) |ustack| {
+        if (self.editor.undoctx.pushNewFmt("{s} {t}", .{ L.lang.undo.edit_io, delta })) |ustack| {
             defer ustack.apply(self.editor);
             ustack.append(.{ .connect_delta = undo.UndoConnectDelta.create(
                 ustack.alloc,

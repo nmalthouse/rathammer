@@ -6,6 +6,7 @@ const json_map = @import("json_map.zig");
 const edit = @import("editor.zig");
 const action = @import("actions.zig");
 const Undo = @import("undo.zig");
+const L = @import("locale.zig");
 
 //LAYER TODO
 //Indicate children are hidden
@@ -418,7 +419,7 @@ pub const GuiWidget = struct {
         {
             var ly = gui.dstate.vlayout(sp[1]);
 
-            _ = Wg.Button.build(vt, ly.getArea(), "New layer", .{
+            _ = Wg.Button.build(vt, ly.getArea(), L.lang.btn.new_layer, .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = bi("new_group"),
@@ -487,7 +488,7 @@ pub const GuiWidget = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
         switch (id) {
             bi("new_group") => {
-                if (action.createLayer(self.editor, self.selected_ptr.*, "new layer") catch null) |new_id| {
+                if (action.createLayer(self.editor, self.selected_ptr.*, L.lang.default_layer_name) catch null) |new_id| {
                     self.selected_ptr.* = new_id;
                     win.needs_rebuild = true;
                 }
@@ -613,22 +614,22 @@ const LayerWidget = struct {
                 //const locked = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.locked else false;
                 const omit = if (self.opts.parent.ctx.getLayerFromId(self.opts.id)) |lay| lay.omit_export else false;
 
-                btns.append(aa, .{ bi("cancel"), "cancel ", .btn }) catch {};
-                btns.append(aa, .{ bi("move_selected"), "-> put", .btn }) catch {};
-                btns.append(aa, .{ bi("select_all"), "<- select", .btn }) catch {};
-                btns.append(aa, .{ bi("duplicate"), "duplicate", .btn }) catch {};
-                btns.append(aa, .{ bi("add_child"), "new child", .btn }) catch {};
+                btns.append(aa, .{ bi("cancel"), L.lang.btn.cancel, .btn }) catch {};
+                btns.append(aa, .{ bi("move_selected"), L.lang.btn.layer_move_selected, .btn }) catch {};
+                btns.append(aa, .{ bi("select_all"), L.lang.btn.layer_select_all, .btn }) catch {};
+                btns.append(aa, .{ bi("duplicate"), L.lang.btn.layer_dupe, .btn }) catch {};
+                btns.append(aa, .{ bi("add_child"), L.lang.btn.layer_new_child, .btn }) catch {};
                 btns.append(aa, .{ bi("noop"), "", .btn }) catch {};
                 if (self.opts.id != .none) { //Root cannot be deleted, merged, omitted, or locked
-                    btns.append(aa, .{ bi("omit"), "don't export", .{ .checkbox = omit } }) catch {};
-                    btns.append(aa, .{ bi("delete"), "delete layer", .btn }) catch {};
-                    btns.append(aa, .{ bi("merge"), "^ merge up", .btn }) catch {};
+                    btns.append(aa, .{ bi("omit"), L.lang.btn.layer_omit_export, .{ .checkbox = omit } }) catch {};
+                    btns.append(aa, .{ bi("delete"), L.lang.btn.layer_delete, .btn }) catch {};
+                    btns.append(aa, .{ bi("merge"), L.lang.btn.layer_merge_up, .btn }) catch {};
                     //btns.append(aa, .{ bi("locked"), "locked", .{ .checkbox = locked } }) catch {};
                     if (allow_move)
-                        btns.append(aa, .{ bi("attach_sib"), "attach as sibling", .btn }) catch {};
+                        btns.append(aa, .{ bi("attach_sib"), L.lang.btn.layer_attach_sibling, .btn }) catch {};
                 }
                 if (allow_move)
-                    btns.append(aa, .{ bi("attach_child"), "attach as child", .btn }) catch {};
+                    btns.append(aa, .{ bi("attach_child"), L.lang.btn.layer_attach_child, .btn }) catch {};
 
                 const r_win = guis.Widget.BtnContextWindow.create(cb.gui, pos, .{
                     .buttons = btns.items,
@@ -692,7 +693,7 @@ const LayerWidget = struct {
                 action.addSelectionToLayer(ed, self.opts.id) catch return;
             },
             bi("add_child") => {
-                if (action.createLayer(ed, sel_id, "new layer") catch null) |new_id| {
+                if (action.createLayer(ed, sel_id, L.lang.default_layer_name) catch null) |new_id| {
                     self.opts.parent.selected_ptr.* = new_id;
                 }
             },

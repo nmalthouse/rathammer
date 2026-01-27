@@ -597,6 +597,7 @@ pub fn main() !void {
 
         if (args.dump_lang != null) {
             try @import("locale.zig").writeJsonTemplate(std.fs.cwd(), "en_US.json");
+            try @import("locale.zig").writeCsv(std.fs.cwd(), "en_US.csv");
             return;
         }
 
