@@ -231,13 +231,7 @@ pub fn writeJsonTemplate(dir: std.fs.Dir, name: []const u8) !void {
     try wr.interface.flush();
 }
 
-pub fn writeCsv(dir: std.fs.Dir, name: []const u8) !void {
-    var out = try dir.createFile(name, .{});
-
-    defer out.close();
-    var out_buf: [4096]u8 = undefined;
-    var wr = out.writer(&out_buf);
-
+pub fn writeCsv(wr: *std.io.Writer) !void {
     const help = struct {
         fn recur(w: *std.io.Writer, comptime T: type, comptime name_space: []const u8, value: ?Str) !void {
             const info = @typeInfo(T);
@@ -268,9 +262,9 @@ pub fn writeCsv(dir: std.fs.Dir, name: []const u8) !void {
         }
     };
 
-    try help.recur(&wr.interface, Strings, "", null);
+    try help.recur(wr, Strings, "", null);
 
-    try wr.interface.flush();
+    try wr.flush();
 }
 
 const edit = @import("editor.zig");

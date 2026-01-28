@@ -277,7 +277,7 @@ const VpkBrowser = struct {
         const tt = self.ed.vpkctx.entries.get(id) orelse return false;
         const dd = vpk.decodeResourceId(id);
         const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
-        var it = std.mem.splitScalar(u8, search, ',');
+        var it = std.mem.splitAny(u8, search, ", ");
         var matched = true;
         while (it.next()) |keyword| {
             matched = matched and (containsSubstring(&.{
