@@ -36,6 +36,10 @@ cp extra/thirdparty_legal.txt "$RATOUT"/thirdparty_legal.txt
 cp LICENSE "$RATOUT"/LICENSE
 cp README.md "$RATOUT"/README.md
 
+
 cd distrib
-zip -r rathammer_linux_x86_x64.zip appimagebuild
+
+dirname=rathammer_$(./appimagebuild/rathammer --version)_linux_amd64
+mv appimagebuild $dirname
+zip -r rathammer_linux_amd64.zip $dirname
 cd ..

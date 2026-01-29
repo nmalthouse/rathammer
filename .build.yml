@@ -1,0 +1,58 @@
+submitter:
+  git.sr.ht:
+    enabled: true
+    allow-refs:
+      - "refs/tags/*"
+image: ubuntu/oldlts
+packages: 
+  - build-essential 
+  - git 
+  - zip
+  - make
+  - pkg-config
+  - cmake
+  - ninja-build
+  - gnome-desktop-testing
+  - libasound2-dev
+  - libpulse-dev
+  - libaudio-dev
+  - libjack-dev
+  - libsndio-dev
+  - libx11-dev
+  - libxext-dev
+  - libxrandr-dev
+  - libxcursor-dev
+  - libxfixes-dev
+  - libxi-dev
+  - libxss-dev
+  - libxtst-dev
+  - libxkbcommon-dev
+  - libdrm-dev
+  - libgbm-dev
+  - libgl1-mesa-dev
+  - libgles2-mesa-dev
+  - libegl1-mesa-dev
+  - libdbus-1-dev
+  - libibus-1.0-dev
+  - libudev-dev
+  - libpipewire-0.3-dev
+  - libwayland-dev
+  - libdecor-0-dev
+  - liburing-dev 
+  - libgl-dev
+  - libegl-dev
+sources:
+  - https://git.sr.ht/~niklasm/rathammer
+  - https://git.sr.ht/~niklasm/ratbuild
+artifacts:
+  - rathammer/distrib/rathammer_linux_amd64.zip
+  - rathammer/distrib/rathammer_windows_amd64.zip
+tasks:
+  - setup: |
+      cd ratbuild
+      ./getzig.sh
+  - buildlinux: |
+      export PATH=$PATH:"$(pwd)/ratbuild/zig"
+      cd rathammer
+      ./distrib/makeappdir.sh
+      ./distrib/makewin.sh
