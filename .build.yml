@@ -55,4 +55,7 @@ tasks:
       export PATH=$PATH:"$(pwd)/ratbuild/zig"
       cd rathammer
       ./distrib/makeappdir.sh
+  - buildwindows: |
+      export PATH=$PATH:"$(pwd)/ratbuild/zig"
+      cd rathammer
       ./distrib/makewin.sh

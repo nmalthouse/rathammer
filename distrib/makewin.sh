@@ -36,7 +36,7 @@ cp extra/antivirus.txt "$RATOUT"/WINDOWS_USERS_README.txt
 
 cd distrib
 
-dirname=rathammer_$(./appimagebuild/rathammer --version)_windows_amd64
+dirname=rathammer_$(./rathammer --version)_windows_amd64
 mv rathammer-windows $dirname
 zip -r rathammer_windows_amd64.zip $dirname
 cd ..

@@ -38,8 +38,9 @@ cp README.md "$RATOUT"/README.md
 
 
 cd distrib
+cp appimagebuild/rathammer rathammer # so ci can get version
 
-dirname=rathammer_$(./appimagebuild/rathammer --version)_linux_amd64
+dirname=rathammer_$(./rathammer --version)_linux_amd64
 mv appimagebuild $dirname
 zip -r rathammer_linux_amd64.zip $dirname
 cd ..
