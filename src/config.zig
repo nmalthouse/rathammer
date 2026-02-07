@@ -127,6 +127,9 @@ pub const GameEntry = struct {
         base_dir: []const u8 = "",
         game_dir: []const u8 = "",
         gameinfo_name: []const u8 = "", //Optional
+
+        u_scale: f32 = 0.25,
+        v_scale: f32 = 0.25,
     };
     pub const MapBuilder = struct {
         game_dir: []const u8 = "",

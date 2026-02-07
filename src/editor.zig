@@ -451,7 +451,16 @@ pub const Context = struct {
             const base_dir_ = util.openDirFatal(games_dir, gamei.base_dir, .{}, custom_cwd_msg);
             const game_dir_ = util.openDirFatal(games_dir, gamei.game_dir, .{}, custom_cwd_msg);
 
-            try gameinfo.loadGameinfo(self.alloc, base_dir_, game_dir_, &self.vpkctx, self.loadctx, if (gamei.gameinfo_name.len != 0) gamei.gameinfo_name else "gameinfo.txt");
+            try gameinfo.loadGameinfo(
+                self.alloc,
+                base_dir_,
+                game_dir_,
+                gamei.game_dir,
+                .{ .u_scale = gamei.u_scale, .v_scale = gamei.v_scale },
+                &self.vpkctx,
+                self.loadctx,
+                if (gamei.gameinfo_name.len != 0) gamei.gameinfo_name else "gameinfo.txt",
+            );
         }
         //if (args.basedir) |bd| {
         //    if (args.gamedir) |gd| {

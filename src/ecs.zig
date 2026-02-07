@@ -755,15 +755,15 @@ pub const Side = struct {
         try jw.endObject();
     }
 
-    pub fn resetUv(self: *@This(), norm: Vec3, face: bool) void {
+    pub fn resetUv(self: *@This(), norm: Vec3, face: bool, u_scale: f32, v_scale: f32) void {
         if (face) {
             const basis = Vec3.new(0, 0, 1);
             const ang = std.math.radiansToDegrees(
                 std.math.acos(basis.dot(norm)),
             );
             const mat = graph.za.Mat3.fromRotation(ang, basis.cross(norm));
-            self.u = .{ .axis = mat.mulByVec3(Vec3.new(1, 0, 0)), .trans = 0, .scale = 0.25 };
-            self.v = .{ .axis = mat.mulByVec3(Vec3.new(0, 1, 0)), .trans = 0, .scale = 0.25 };
+            self.u = .{ .axis = mat.mulByVec3(Vec3.new(1, 0, 0)), .trans = 0, .scale = u_scale };
+            self.v = .{ .axis = mat.mulByVec3(Vec3.new(0, 1, 0)), .trans = 0, .scale = v_scale };
         } else {
             var n: u8 = 0;
             var dist: f32 = 0;
@@ -776,8 +776,8 @@ pub const Side = struct {
                 }
             }
             const b = util3d.getBasis(norm);
-            self.u = .{ .axis = b[0], .trans = 0, .scale = 0.25 };
-            self.v = .{ .axis = b[1], .trans = 0, .scale = 0.25 };
+            self.u = .{ .axis = b[0], .trans = 0, .scale = u_scale };
+            self.v = .{ .axis = b[1], .trans = 0, .scale = v_scale };
         }
     }
 
@@ -918,7 +918,7 @@ pub const Solid = struct {
         //for(new_solid.sides.items, 0..)|ns, i|{ }
     }
 
-    pub fn initFromPrimitive(alloc: std.mem.Allocator, verts: []const Vec3, faces: []const std.ArrayList(u32), tex_id: vpk.VpkResId, offset: Vec3, rot: graph.za.Mat3) !Solid {
+    pub fn initFromPrimitive(alloc: std.mem.Allocator, verts: []const Vec3, faces: []const std.ArrayList(u32), tex_id: vpk.VpkResId, offset: Vec3, rot: graph.za.Mat3, u_scale: f32, v_scale: f32) !Solid {
         var ret = init(alloc);
         for (verts) |v|
             try ret.verts.append(alloc, rot.mulByVec3(v).add(offset));
@@ -939,7 +939,7 @@ pub const Solid = struct {
         try ret.optimizeMesh(.{ .can_reorder = true });
         for (ret.sides.items) |*side| {
             const norm = side.normal(&ret);
-            side.resetUv(norm, true);
+            side.resetUv(norm, true, u_scale, v_scale);
         }
         return ret;
     }
@@ -1072,65 +1072,6 @@ pub const Solid = struct {
             if (to_remove.items.len > 0)
                 std.debug.print("Removed {d} duplicate sides\n", .{to_remove.items.len});
         }
-    }
-
-    pub fn initFromCube(alloc: std.mem.Allocator, v1: Vec3, v2: Vec3, tex_id: vpk.VpkResId) !Solid {
-        var ret = init(alloc);
-        const cc = util3d.cubeFromBounds(v1, v2);
-        const N = Vec3.new;
-        const o = cc[0];
-        const e = cc[1];
-
-        const volume = e.x() * e.y() * e.z();
-        if (volume < limits.min_volume)
-            return error.invalidCube;
-
-        const verts = [8]Vec3{
-            o.add(N(0, 0, 0)),
-            o.add(N(e.x(), 0, 0)),
-            o.add(N(e.x(), e.y(), 0)),
-            o.add(N(0, e.y(), 0)),
-
-            o.add(N(0, 0, e.z())),
-            o.add(N(e.x(), 0, e.z())),
-            o.add(N(e.x(), e.y(), e.z())),
-            o.add(N(0, e.y(), e.z())),
-        };
-        const vis = [6][4]u32{
-            .{ 0, 1, 2, 3 }, //-z
-            .{ 7, 6, 5, 4 }, //+z
-            //
-            .{ 3, 7, 4, 0 }, //-x
-            .{ 5, 6, 2, 1 }, //+x
-            //
-            .{ 4, 5, 1, 0 }, //-y
-            .{ 6, 7, 3, 2 }, //+y
-        };
-        const Uvs = [6][2]Vec3{
-            .{ N(1, 0, 0), N(0, 1, 0) },
-            .{ N(1, 0, 0), N(0, -1, 0) },
-            .{ N(0, -1, 0), N(0, 0, -1) },
-
-            .{ N(0, 1, 0), N(0, 0, -1) },
-            .{ N(1, 0, 0), N(0, 0, -1) },
-            .{ N(-1, 0, 0), N(0, 0, -1) },
-        };
-        try ret.verts.appendSlice(ret._alloc, &verts);
-        for (vis, 0..) |face, i| {
-            var ind = ArrayList(u32){};
-            //try ind.appendSlice(&.{ 1, 2, 0, 2, 3, 0 });
-
-            try ind.appendSlice(ret._alloc, &face);
-            try ret.sides.append(ret._alloc, .{
-                ._alloc = ret._alloc,
-                .index = ind,
-                .u = .{ .axis = Uvs[i][0], .trans = 0, .scale = 0.25 },
-                .v = .{ .axis = Uvs[i][1], .trans = 0, .scale = 0.25 },
-                .material = "",
-                .tex_id = tex_id,
-            });
-        }
-        return ret;
     }
 
     pub fn roundAllVerts(self: *Self, id: EcsT.Id, ed: *Editor) !void {

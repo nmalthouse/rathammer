@@ -404,7 +404,8 @@ pub const TextureTool = struct {
                 .swap => std.mem.swap(Vec3, &new.u.axis, &new.v.axis),
                 .reset_world, .reset_norm => {
                     const norm = side.normal(solid);
-                    side.resetUv(norm, btn_k == .reset_norm);
+                    const game: @import("../vpk.zig").Game = self.ed.vpkctx.getGame(side.tex_id) orelse .Default;
+                    side.resetUv(norm, btn_k == .reset_norm, game.u_scale, game.v_scale);
                     solid.markDirty(sf.id, self.ed) catch return;
                     self.ed.draw_state.meshes_dirty = true;
                     new = undo.UndoTextureManip.State{ .u = side.u, .v = side.v, .tex_id = side.tex_id, .lightmapscale = side.lightmapscale, .smoothing_groups = side.smoothing_groups };

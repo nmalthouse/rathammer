@@ -1,7 +1,8 @@
 const std = @import("std");
 const vdf = @import("vdf.zig");
 const graph = @import("graph");
-const VpkCtx = @import("vpk.zig").Context;
+const vpk = @import("vpk.zig");
+const VpkCtx = vpk.Context;
 const Dir = std.fs.Dir;
 const log = std.log.scoped(.gameinfo);
 
@@ -10,7 +11,16 @@ const log = std.log.scoped(.gameinfo);
 //half life 2 does not tell you if it is omitting a path or why.
 //If I delete all paths from hl2_complete/gameinfo.txt, the game still launches
 
-pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkctx: *VpkCtx, loadctx: anytype, filename: []const u8) !void {
+pub fn loadGameinfo(
+    alloc: std.mem.Allocator,
+    base_dir: Dir,
+    game_dir: Dir,
+    game_dir_string: []const u8,
+    game: vpk.Game,
+    vpkctx: *VpkCtx,
+    loadctx: anytype,
+    filename: []const u8,
+) !void {
     const sl = graph.readFile(alloc, game_dir, filename) catch |err| {
         var out_path_buf: [512]u8 = undefined;
         const rp = game_dir.realpath(".", &out_path_buf) catch return err;
@@ -36,7 +46,6 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
     const fs = try obj.value.recursiveGetFirst(&obj, &.{ "gameinfo", "filesystem", "searchpaths" });
     if (fs != .obj)
         return error.invalidGameInfo;
-    //vdf.printObj(fs.obj.*, 0);
     const startsWith = std.mem.startsWith;
     for (fs.obj.list.items) |entry| {
         const en = obj.stringFromId(entry.key) orelse "";
@@ -64,7 +73,7 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
         if (std.mem.endsWith(u8, path, ".vpk")) {
             loadctx.printCb("mounting: {s}", .{path});
             if ((std.mem.indexOfPos(u8, path, 0, "sound") == null)) {
-                vpkctx.addDir(dir, path, loadctx) catch |err| {
+                vpkctx.addDir(dir, path, loadctx, game_dir_string, game) catch |err| {
                     log.err("Failed to mount vpk {s} with error {}", .{ path, err });
                 };
             }
@@ -74,7 +83,7 @@ pub fn loadGameinfo(alloc: std.mem.Allocator, base_dir: Dir, game_dir: Dir, vpkc
                 continue;
             }
             log.info("Mounting loose dir: {s}", .{path});
-            vpkctx.addLooseDir(dir, path) catch |err| {
+            vpkctx.addLooseDir(dir, path, game_dir_string, game) catch |err| {
                 log.err("Failed to mount loose dir: {s} {t}", .{ path, err });
             };
         }

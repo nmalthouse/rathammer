@@ -52,6 +52,8 @@ pub const Commands = enum {
     create_cube,
 
     rebuild_meshes,
+
+    vpkinfo,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -181,6 +183,15 @@ pub const CommandCtx = struct {
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
+                .vpkinfo => {
+                    try wr.print("{d} entries\n", .{self.ed.vpkctx.entries.count()});
+                    try wr.print("{d} games\n", .{self.ed.vpkctx.gameinfos.count()});
+                    for (self.ed.vpkctx.gameinfos.keys()) |k| {
+                        try wr.print("\t{s}\n", .{k});
+                    }
+                    try wr.print("{d} extensions\n", .{self.ed.vpkctx.extension_map.counter});
+                    try wr.print("{d} paths\n", .{self.ed.vpkctx.path_map.counter});
+                },
                 .rebuild_meshes => {
                     var timer = try std.time.Timer.start();
                     try self.ed.rebuildAllDependentState();

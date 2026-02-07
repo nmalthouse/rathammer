@@ -179,7 +179,7 @@ pub const ClipCtx = struct {
         try self.putOne(1, ind);
     }
 
-    pub fn clipSolid(self: *Self, solid: *const Solid, plane_p0: Vec3, plane_norm: Vec3, tex_id: ?vpk.VpkResId) ![2]Solid {
+    pub fn clipSolid(self: *Self, solid: *const Solid, plane_p0: Vec3, plane_norm: Vec3, tex_id: ?vpk.VpkResId, u_scale: f32, v_scale: f32) ![2]Solid {
         self.reset();
         const w = VertKind.getW(plane_p0, plane_norm);
         for (solid.verts.items) |v| {
@@ -250,7 +250,7 @@ pub const ClipCtx = struct {
             const plane = util_3d.trianglePlane(.{ rv[it[0]], rv[it[1]], rv[it[2]] });
             self.split_side.tex_id = tex_id orelse 0;
 
-            self.split_side.resetUv(plane, false);
+            self.split_side.resetUv(plane, false, u_scale, v_scale);
             try ret[0].sides.append(ret[0]._alloc, try self.split_side.dupe());
             var duped = try self.split_side.dupe();
             duped.flipNormal();

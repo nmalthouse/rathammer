@@ -244,7 +244,7 @@ const VpkBrowser = struct {
             const ext = self.ed.vpkctx.extension_map.getName(@intCast(dd.ext)) orelse "";
             _ = Wg.Button.build(
                 vt,
-                ly.getArea(),
+                ly.getArea() orelse break,
                 self.ed.printScratch("{s}/{s}.{s}", .{ tt.path, tt.name, ext }) catch "err",
                 .{
                     .id = i,
@@ -417,7 +417,7 @@ pub const ModelBrowser = struct {
 
             _ = Wg.Button.build(
                 vt,
-                ly.getArea(),
+                ly.getArea() orelse break,
                 self.ed.printScratch("{s}/{s}", .{ tt.path, tt.name }) catch "err",
                 .{
                     .id = i,
@@ -685,7 +685,7 @@ const TextureBrowser = struct {
         for (self.mat_list_search_a.items[adj_index..]) |mat| {
             const tt = self.ed.vpkctx.entries.get(mat) orelse return;
             const tint: u32 = if (mat == self.ed.edit_state.selected_texture_vpk_id) 0xff8888_ff else 0xffff_ffff;
-            _ = ptext.PollingTexture.build(vt, tly.getArea(), self.ed, mat, "{s}/{s}", .{
+            _ = ptext.PollingTexture.build(vt, tly.getArea() orelse break, self.ed, mat, "{s}/{s}", .{
                 stripPrefix(tt.path, "materials/"), tt.name,
             }, .{
                 .cb_vt = cb,
@@ -716,8 +716,13 @@ const ListSearchCb = struct {
     search_cb: *const fn (*ListSearchCb, VpkId, []const u8) bool,
 };
 const ListSearch = struct {
+    /// The list of matching items
     list_a: ArrayList(VpkId) = .{},
+
+    /// When narrowing a search, used to store the previous search list temporarily
     list_b: ArrayList(VpkId) = .{},
+
+    /// Master list
     master: ArrayList(VpkId) = .{},
     prev_search: ArrayList(u8) = .{},
     alloc: std.mem.Allocator,

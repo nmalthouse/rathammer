@@ -404,8 +404,9 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
     }
     const aa = ed.frame_arena.allocator();
     var id_list = std.ArrayListUnmanaged(ecs.EcsT.Id){};
+    const game: vpk.Game = ed.vpkctx.getGame(tex_id) orelse .Default;
     for (primitive.solids.items) |sol| {
-        if (ecs.Solid.initFromPrimitive(ed.alloc, primitive.verts.items, sol.items, tex_id, center, rot)) |newsolid| {
+        if (ecs.Solid.initFromPrimitive(ed.alloc, primitive.verts.items, sol.items, tex_id, center, rot, game.u_scale, game.v_scale)) |newsolid| {
             const new = try ed.ecs.createEntity();
             try id_list.append(aa, new);
             if (select) {
@@ -650,7 +651,8 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
     const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.clip});
     for (selected) |sel_id| {
         const solid = ed.getComponent(sel_id, .solid) orelse continue;
-        var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.edit_state.selected_texture_vpk_id);
+        const game: vpk.Game = ed.vpkctx.getGame(ed.edit_state.selected_texture_vpk_id orelse 0) orelse .Default;
+        var ret = try ed.clipctx.clipSolid(solid, p0, pnorm, ed.edit_state.selected_texture_vpk_id, game.u_scale, game.v_scale);
 
         ed.selection.clear();
         try ustack.append(.{ .create_destroy = try .create(ustack.alloc, sel_id, .destroy) });

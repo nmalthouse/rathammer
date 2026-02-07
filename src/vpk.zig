@@ -16,6 +16,16 @@ pub const ManagedBuf = struct {
     list: *std.ArrayList(u8),
 };
 
+const GameId = enum(u8) {
+    _,
+};
+
+pub const Game = struct {
+    pub const Default = Game{ .u_scale = 0.25, .v_scale = 0.25 };
+    u_scale: f32,
+    v_scale: f32,
+};
+
 pub const IdOrName = union(enum) {
     id: VpkResId,
     name: []const u8,
@@ -144,6 +154,8 @@ pub const Context = struct {
         name: []const u8,
         res_id: VpkResId,
 
+        game: GameId,
+
         location: union(enum) {
             vpk: VpkEntry,
             loose: LooseEntry,
@@ -171,7 +183,7 @@ pub const Context = struct {
     /// This maps a encodeResourceId id to a vpk entry
     entries: std.AutoArrayHashMapUnmanaged(VpkResId, Entry) = .{},
 
-    loose_dirs: std.ArrayList(std.fs.Dir) = .{},
+    loose_dirs: std.ArrayList(struct { dir: std.fs.Dir, game_id: GameId }) = .{},
     dirs: std.ArrayList(Dir) = .{},
     /// Stores all long lived strings used by vpkctx. Mostly keys into IdMap
     string_storage: StringStorage,
@@ -189,8 +201,11 @@ pub const Context = struct {
 
     mutex: std.Thread.Mutex = .{},
 
+    gameinfos: std.StringArrayHashMap(Game),
+
     pub fn init(alloc: std.mem.Allocator) !Self {
         return .{
+            .gameinfos = .init(alloc),
             .extension_map = IdMap.init(alloc),
             .path_map = IdMap.init(alloc),
             .res_map = IdMap.init(alloc),
@@ -212,8 +227,9 @@ pub const Context = struct {
         self.filebuf.deinit(self.alloc);
         self.split_buf.deinit(self.alloc);
         for (self.loose_dirs.items) |*dir|
-            dir.close();
+            dir.dir.close();
         self.loose_dirs.deinit(self.alloc);
+        self.gameinfos.deinit();
 
         self.name_buf.deinit(self.alloc);
         self.extension_map.deinit();
@@ -282,11 +298,20 @@ pub const Context = struct {
         }
     }
 
-    pub fn addLooseDir(self: *Self, root: std.fs.Dir, path: []const u8) !void {
+    pub fn addLooseDir(self: *Self, root: std.fs.Dir, path: []const u8, game_dir_name: []const u8, game: Game) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        try self.loose_dirs.append(self.alloc, try root.openDir(path, .{}));
+        try self.loose_dirs.append(self.alloc, .{ .dir = try root.openDir(path, .{}), .game_id = try self.getOrPutGame(game_dir_name, game) });
+    }
+
+    pub fn getGame(self: *Self, vpkid: VpkResId) ?Game {
+        self.mutex.lock();
+        defer self.mutex.unlock();
+        if (self.entries.get(vpkid)) |ent| {
+            return self.gameinfos.values()[@intFromEnum(ent.game)];
+        }
+        return null;
     }
 
     pub fn slowIndexOfLooseDirSubPath(self: *Self, subpath: []const u8) !void {
@@ -301,7 +326,7 @@ pub const Context = struct {
         }
         const prefix_len = strbuf.items.len;
         for (self.loose_dirs.items, 0..) |loose_dir, dir_index| {
-            if (loose_dir.openDir(subpath, .{ .iterate = true })) |sub_dir| {
+            if (loose_dir.dir.openDir(subpath, .{ .iterate = true })) |sub_dir| {
                 var walker = try sub_dir.walk(self.alloc);
                 defer walker.deinit();
                 while (try walker.next()) |file| {
@@ -323,6 +348,7 @@ pub const Context = struct {
                             const entry = try self.entries.getOrPut(self.alloc, res_id);
                             if (!entry.found_existing) {
                                 entry.value_ptr.* = Entry{
+                                    .game = loose_dir.game_id,
                                     .res_id = res_id,
                                     .path = path_stored,
                                     .name = fname_stored,
@@ -339,9 +365,17 @@ pub const Context = struct {
 
     /// the vpk_set: hl2_pak.vpk -> hl2_pak_dir.vpk . This matches the way gameinfo.txt does it
     /// The passed in root dir must remain alive.
-    pub fn addDir(self: *Self, root: std.fs.Dir, vpk_set: []const u8, loadctx: anytype) !void {
+    pub fn addDir(
+        self: *Self,
+        root: std.fs.Dir,
+        vpk_set: []const u8,
+        loadctx: anytype,
+        game_dir_name: []const u8,
+        game: Game,
+    ) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
+        const game_id = try self.getOrPutGame(game_dir_name, game);
         if (!std.mem.endsWith(u8, vpk_set, ".vpk")) {
             log.err("Invalid vpk set: {s}", .{vpk_set});
             log.err("Vpk sets should be in the format: 'hl2_pak.vpk' which maps to the files: hl2_pak_xxx.vpk", .{});
@@ -395,7 +429,7 @@ pub const Context = struct {
             1 => {
                 const tree_size = try r.takeInt(u32, .little);
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, true);
+                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, true, game_id);
             },
             2 => {
                 const tree_size = try r.takeInt(u32, .little);
@@ -410,7 +444,7 @@ pub const Context = struct {
                 if (other_md5_sec_size != 48) return error.invalidMd5Size;
 
                 loadctx.addExpected(10);
-                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, false);
+                try parseVpkDirCommon(self, loadctx, r, tree_size, header_size, dir_index, false, game_id);
             },
             else => {
                 log.err("Unsupported vpk version {d}, file: {s}", .{ version, file_name });
@@ -497,7 +531,7 @@ pub const Context = struct {
             try self.strbuf.print(self.alloc, "{s}/{s}.{s}", .{ names.path, names.name, names.ext });
             //std.debug.print("Searching loose dir for {s} \n", .{self.strbuf.items});
             for (self.loose_dirs.items) |ldir| {
-                const infile = ldir.openFile(self.strbuf.items, .{}) catch continue;
+                const infile = ldir.dir.openFile(self.strbuf.items, .{}) catch continue;
                 defer infile.close();
                 buf.list.clearRetainingCapacity();
                 var re = infile.reader(&read_buffer);
@@ -515,7 +549,7 @@ pub const Context = struct {
                 if (lo.dir_index >= self.loose_dirs.items.len) return null;
                 const ldir = self.loose_dirs.items[lo.dir_index];
 
-                const infile = ldir.openFile(self.strbuf.items, .{}) catch return null;
+                const infile = ldir.dir.openFile(self.strbuf.items, .{}) catch return null;
                 defer infile.close();
                 buf.list.clearRetainingCapacity();
                 var re = infile.reader(&read_buffer);
@@ -556,9 +590,18 @@ pub const Context = struct {
         }
         return null;
     }
+
+    /// not thread safe
+    fn getOrPutGame(self: *Self, game_name_user: []const u8, game: Game) !GameId {
+        const game_name = try self.string_storage.store(game_name_user);
+        const res = try self.gameinfos.getOrPut(game_name);
+        res.value_ptr.* = game;
+        if (res.index > std.math.maxInt(@typeInfo(GameId).@"enum".tag_type)) return error.tooManyGames;
+        return @enumFromInt(res.index);
+    }
 };
 
-fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *std.Io.Reader, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool) !void {
+fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *std.Io.Reader, tree_size: u32, header_size: u32, dir_index: usize, do_null_skipping: bool, game_id: GameId) !void {
     while (true) {
         loadctx.printCb("Dir mounted {d:.2}%", .{@as(f32, @floatFromInt(r.seek)) / @as(f32, @floatFromInt(r.end + 1)) * 100});
         const ext = try r.takeDelimiter(0) orelse break;
@@ -611,6 +654,7 @@ fn parseVpkDirCommon(self: *Context, loadctx: anytype, r: *std.Io.Reader, tree_s
                 const entry = try self.entries.getOrPut(self.alloc, res_id);
                 if (!entry.found_existing) {
                     entry.value_ptr.* = Context.Entry{
+                        .game = game_id,
                         .res_id = res_id,
                         .path = path_stored,
                         .name = fname_stored,
