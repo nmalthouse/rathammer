@@ -302,7 +302,7 @@ pub const Context = struct {
         self.mutex.lock();
         defer self.mutex.unlock();
 
-        try self.loose_dirs.append(self.alloc, .{ .dir = try root.openDir(path, .{}), .game_id = try self.getOrPutGame(game_dir_name, game) });
+        try self.loose_dirs.append(self.alloc, .{ .dir = try root.openDir(path, .{}), .game_id = try self.putGameNeedsLoad(game_dir_name, game) orelse return });
     }
 
     pub fn getGame(self: *Self, vpkid: VpkResId) ?Game {
@@ -375,7 +375,7 @@ pub const Context = struct {
     ) !void {
         self.mutex.lock();
         defer self.mutex.unlock();
-        const game_id = try self.getOrPutGame(game_dir_name, game);
+        const game_id = try self.putGameNeedsLoad(game_dir_name, game) orelse return;
         if (!std.mem.endsWith(u8, vpk_set, ".vpk")) {
             log.err("Invalid vpk set: {s}", .{vpk_set});
             log.err("Vpk sets should be in the format: 'hl2_pak.vpk' which maps to the files: hl2_pak_xxx.vpk", .{});
@@ -592,10 +592,12 @@ pub const Context = struct {
     }
 
     /// not thread safe
-    fn getOrPutGame(self: *Self, game_name_user: []const u8, game: Game) !GameId {
+    /// returns null if the game is already loaded
+    fn putGameNeedsLoad(self: *Self, game_name_user: []const u8, game: Game) !?GameId {
         const game_name = try self.string_storage.store(game_name_user);
         const res = try self.gameinfos.getOrPut(game_name);
         res.value_ptr.* = game;
+
         if (res.index > std.math.maxInt(@typeInfo(GameId).@"enum".tag_type)) return error.tooManyGames;
         return @enumFromInt(res.index);
     }

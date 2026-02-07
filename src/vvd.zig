@@ -475,6 +475,8 @@ pub const MultiMesh = struct {
 
         pub fn deinit(self: *@This()) void {
             self.indicies.deinit(self.alloc);
+            graph.gl.DeleteBuffers(1, @ptrCast(&self.ebo));
+            graph.gl.DeleteVertexArrays(1, @ptrCast(&self.vao));
         }
     };
 
@@ -506,7 +508,7 @@ pub const MultiMesh = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("notify_vt", vt));
         for (self.meshes.items) |*mesh| {
             if (mesh.tex_res_id == id) {
-                mesh.texture_id = (editor.textures.get(id) orelse continue).slots[0].id;
+                mesh.texture_id = (editor.materials.get(id) orelse continue).slots[0].id;
             }
         }
     }
@@ -547,6 +549,7 @@ pub const MultiMesh = struct {
             mesh.deinit();
         }
         self.meshes.deinit(self.alloc);
+        graph.gl.DeleteBuffers(1, @ptrCast(&self.vbo));
     }
 
     pub fn drawSimple(self: *Self, view: Mat4, model: Mat4, shader: c_uint) void {

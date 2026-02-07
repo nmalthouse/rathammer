@@ -54,6 +54,8 @@ pub const Commands = enum {
     rebuild_meshes,
 
     vpkinfo,
+
+    unload_map,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -183,6 +185,9 @@ pub const CommandCtx = struct {
         const com_name = args.next() orelse return;
         if (std.meta.stringToEnum(Commands, com_name)) |com| {
             switch (com) {
+                .unload_map => {
+                    try actions.unloadMap(self.ed);
+                },
                 .vpkinfo => {
                     try wr.print("{d} entries\n", .{self.ed.vpkctx.entries.count()});
                     try wr.print("{d} games\n", .{self.ed.vpkctx.gameinfos.count()});

@@ -436,6 +436,12 @@ pub const EntCtx = struct {
         }
     }
 
+    pub fn reset(self: *Self) void {
+        const alloc = self.alloc;
+        self.deinit();
+        self.* = .init(alloc);
+    }
+
     pub fn deinit(self: *Self) void {
         for (self.base.values()) |*val|
             val.deinit();

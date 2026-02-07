@@ -70,6 +70,7 @@ pub const AssetBrowser = struct {
                 self.populate(&self.ed.vpkctx, self.ed.game_conf.asset_browser_exclude.prefix, self.ed.game_conf.asset_browser_exclude.entry.items, self.mod) catch {
                     log.err("populate failed", .{});
                 };
+                self.vt.needs_rebuild = true;
             },
             else => {},
         }
@@ -84,6 +85,11 @@ pub const AssetBrowser = struct {
     ) !void {
         vpkctx.mutex.lock();
         defer vpkctx.mutex.unlock();
+
+        self.tex_browse.mat_list.clearAndFree(self.alloc);
+        mod_browse.list.fullReset();
+        self.vpk_browse.list.fullReset();
+
         const vmt = try vpkctx.extension_map.getPut("vmt");
         const mdl = try vpkctx.extension_map.getPut("mdl");
         const png = try vpkctx.extension_map.getPut("png");
@@ -753,6 +759,13 @@ const ListSearch = struct {
     fn getHash(str: []const u8) u64 {
         const ha = std.hash.Wyhash.hash;
         return ha(0, str);
+    }
+
+    pub fn fullReset(self: *@This()) void {
+        self.master.clearAndFree(self.alloc);
+        self.list_a_built_with_hash = 0;
+        self.list_a.clearAndFree(self.alloc);
+        self.list_b.clearAndFree(self.alloc);
     }
 
     pub fn appendMaster(self: *@This(), slice: []const VpkId) !void {

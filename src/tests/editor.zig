@@ -33,7 +33,7 @@ pub const EditorTestCtx = struct {
         };
 
         var env = std.process.EnvMap.init(alloc);
-        var dirs = try fs.Dirs.open(alloc, app_cwd, .{
+        const dirs = try fs.Dirs.open(alloc, app_cwd, .{
             .config_dir = config_dir,
             .app_cwd = app_cwd,
             .override_games_dir = null,
@@ -41,7 +41,7 @@ pub const EditorTestCtx = struct {
             .override_fgd_dir = null,
             .config_fgd_dir = game_conf.fgd_dir, //TODO
         }, &env);
-        defer dirs.deinit(alloc);
+        //defer dirs.deinit(alloc);
 
         var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
             .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
@@ -60,7 +60,7 @@ pub const EditorTestCtx = struct {
             .editor = undefined,
         };
 
-        var arg_it = std.mem.tokenizeScalar(u8, "rathammer", ' ');
+        var arg_it = std.mem.tokenizeScalar(u8, "", ' ');
         const args = try graph.ArgGen.parseArgs(&app.Args, &arg_it);
 
         const editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &ret.win, &ret.loadctx, dirs);
@@ -72,13 +72,14 @@ pub const EditorTestCtx = struct {
     pub fn blankMap(self: *@This()) !void {
         try self.editor.setMapName("testmap");
 
-        try self.editor.initNewMap("");
+        try self.editor.initNewMap("", "rat_custom");
 
         try self.editor.update(&self.win);
     }
 
     pub fn deinit(self: *@This()) void {
-        self.editor.dirs.app_cwd.free(self.alloc);
+        //self.editor.dirs.app_cwd.free(self.alloc);
+        self.editor.dirs.deinit(self.alloc);
         self.editor.deinit();
         self.win.destroyWindow();
         self.conf.deinit();

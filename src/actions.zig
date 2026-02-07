@@ -92,6 +92,38 @@ pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
     _ = try ed.selection.put(id, ed);
 }
 
+pub fn unloadMap(ed: *Ed) !void {
+    //TODO should we nag on unsaved?
+
+    ed.has_loaded_map = false;
+
+    var it = ed.meshmap.iterator();
+    while (it.next()) |item| {
+        item.value_ptr.*.deinit();
+        ed.alloc.destroy(item.value_ptr.*);
+    }
+    ed.meshmap.clearAndFree();
+
+    try ed.ecs.destroyAll();
+    ed.groups.reset();
+    ed.undoctx.reset();
+    try ed.layers.reset();
+
+    ed.classtrack.reset();
+    ed.targetname_track.reset();
+    ed.draw_state.skybox_textures = null;
+    ed.selection.clear();
+
+    //delete skybox from draw_state
+    //unload games
+    //unload textures
+    //unload models
+    //unload fgd
+    //clear asset_browser?
+    //reset autovis
+    //reset tools?
+}
+
 pub fn trySave(ed: *Ed) !void {
     if (ed.loaded_map_name) |basename| {
         ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {

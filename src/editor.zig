@@ -131,7 +131,7 @@ pub const Context = struct {
     /// These maps map vpkids to their respective resource,
     /// when fetching a resource with getTexture, etc. Something is always returned. If an entry does not exist,
     /// a job is submitted to the load thread pool and a placeholder is inserted into the map and returned
-    textures: std.AutoHashMap(vpk.VpkResId, ecs.Material),
+    materials: std.AutoHashMap(vpk.VpkResId, ecs.Material),
     models: std.AutoHashMap(vpk.VpkResId, Model),
 
     /// Draw colored text messages to the screen for a short time
@@ -376,7 +376,7 @@ pub const Context = struct {
             .ecs = try EcsT.init(alloc),
             .models = std.AutoHashMap(vpk.VpkResId, Model).init(alloc),
             .async_asset_load = try thread_pool.Context.init(alloc, num_threads),
-            .textures = .init(alloc),
+            .materials = .init(alloc),
             .tool_res_map = std.AutoHashMap(vpk.VpkResId, void).init(alloc),
             .shell = try shell.CommandCtx.create(alloc, ret),
             .renderer = try def_render.Renderer.init(alloc, shader_dir),
@@ -439,6 +439,7 @@ pub const Context = struct {
     }
 
     pub fn loadGame(self: *Self, game_name: []const u8) !void {
+        defer self.game_loaded = true;
         const custom_cwd_msg = "Set a custom cwd with --custom_cwd flag";
         const game_conf = self.config.games.map.get(game_name) orelse {
             std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
@@ -514,7 +515,7 @@ pub const Context = struct {
             m.deinit(self.alloc);
         }
         self.models.deinit();
-        self.textures.deinit();
+        self.materials.deinit();
 
         var it = self.meshmap.iterator();
         while (it.next()) |item| {
@@ -1143,10 +1144,47 @@ pub const Context = struct {
         //return error.invalidTarRatmap;
     }
 
+    pub fn unloadGame(self: *Self) !void {
+        if (!self.game_loaded) return;
+        defer self.game_loaded = false;
+
+        self.fgd_ctx.reset();
+        {
+            self.vpkctx.mutex.lock();
+            defer self.vpkctx.mutex.unlock();
+            var it = self.vpkctx.entries.iterator();
+
+            while (it.next()) |item| {
+                if (self.materials.getPtr(item.key_ptr.*)) |tex| {
+                    tex.deinit();
+                    self.async_asset_load.removeNotify(item.key_ptr.*);
+                    _ = self.materials.remove(item.key_ptr.*);
+                }
+                if (self.models.getPtr(item.key_ptr.*)) |model| {
+                    model.deinit(self.alloc);
+                    _ = self.models.remove(item.key_ptr.*);
+                }
+            }
+            self.vpkctx.entries.clearAndFree(self.vpkctx.alloc);
+            for (self.vpkctx.dirs.items) |*dir|
+                dir.deinit();
+            self.vpkctx.dirs.clearAndFree(self.alloc);
+            for (self.vpkctx.loose_dirs.items) |*dir|
+                dir.dir.close();
+            self.vpkctx.loose_dirs.clearAndFree(self.alloc);
+            //Also clear the dirs
+        }
+        //unload texture
+        //unload model
+        //unload vpk entries
+    }
+
     pub fn loadMap(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx, game_name: []const u8) !void {
-        if (!self.game_loaded) {
+        if (self.game_loaded and self.loaded_game_name != null and std.mem.eql(u8, game_name, self.loaded_game_name.?)) {
+            //Do nothing, keep game loaded
+        } else {
+            try self.unloadGame();
             try self.loadGame(game_name);
-            self.game_loaded = true;
         }
         loadctx.printCb("Loading map {s}", .{filename});
         const endsWith = std.mem.endsWith;
@@ -1411,7 +1449,7 @@ pub const Context = struct {
     }
 
     pub fn getMaterial(self: *Self, res_id: vpk.VpkResId) !ecs.Material {
-        if (self.textures.get(res_id)) |tex| return tex;
+        if (self.materials.get(res_id)) |tex| return tex;
 
         try self.loadTexture(res_id);
 
@@ -1419,7 +1457,7 @@ pub const Context = struct {
     }
 
     pub fn getTexture(self: *Self, res_id: vpk.VpkResId) !graph.Texture {
-        if (self.textures.get(res_id)) |tex| return tex.slots[0];
+        if (self.materials.get(res_id)) |tex| return tex.slots[0];
 
         try self.loadTexture(res_id);
 
@@ -1427,7 +1465,7 @@ pub const Context = struct {
     }
 
     pub fn loadTexture(self: *Self, res_id: vpk.VpkResId) !void {
-        if (self.textures.get(res_id)) |_| return;
+        if (self.materials.get(res_id)) |_| return;
 
         { //track tools
             if (self.vpkctx.namesFromId(res_id)) |name| {
@@ -1437,14 +1475,14 @@ pub const Context = struct {
             }
         }
 
-        try self.textures.put(res_id, .default());
+        try self.materials.put(res_id, .default());
         try self.async_asset_load.loadTexture(res_id, &self.vpkctx);
     }
 
     /// 'material' is without materials/ prefix or .vmt suffix
     pub fn loadTextureFromVpk(self: *Self, material: []const u8) !struct { tex: graph.Texture, res_id: vpk.VpkResId } {
         const res_id = try self.vpkctx.getResourceIdFmt("vmt", "materials/{s}", .{material}, true) orelse return .{ .tex = missingTexture(), .res_id = 0 };
-        if (self.textures.get(res_id)) |tex| return .{ .tex = tex.slots[0], .res_id = res_id };
+        if (self.materials.get(res_id)) |tex| return .{ .tex = tex.slots[0], .res_id = res_id };
 
         try self.loadTexture(res_id);
 
@@ -1637,7 +1675,7 @@ pub const Context = struct {
             var num_rm_tex: usize = 0;
             for (self.async_asset_load.completed.items) |*completed| {
                 if (completed.deinitToMaterial(self.async_asset_load.alloc)) |texture| {
-                    try self.textures.put(completed.vpk_res_id, texture);
+                    try self.materials.put(completed.vpk_res_id, texture);
                     self.async_asset_load.notifyTexture(completed.vpk_res_id, self);
                 } else |err| {
                     log.err("texture init failed with : {}", .{err});

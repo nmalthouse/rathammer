@@ -400,7 +400,6 @@ pub const FastFaceManip = struct {
     }
 };
 
-//TODO change this to PlaceEntity
 pub const PlaceEntity = struct {
     pub threadlocal var tool_id: ToolReg = initToolReg;
     vt: i3DTool,
@@ -418,8 +417,18 @@ pub const PlaceEntity = struct {
             .runTool_fn = &@This().runTool,
             .gui_build_cb = &buildGui,
             .tool_icon_fn = &@This().drawIcon,
+            .event_fn = event,
         } };
         return &obj.vt;
+    }
+
+    pub fn event(vt: *i3DTool, ev: ToolEvent, _: *Editor) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+        switch (ev) {
+            .focus => {},
+            else => {},
+        }
     }
 
     pub fn doGui(vt: *i3DTool, os9gui: *Os9Gui, _: *Editor, _: *Gui.VerticalLayout) void {

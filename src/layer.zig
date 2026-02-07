@@ -103,6 +103,12 @@ pub const Context = struct {
         self.layers.deinit(self.alloc);
     }
 
+    pub fn reset(self: *Self) !void {
+        const alloc = self.alloc;
+        self.deinit();
+        self.* = try .init(alloc);
+    }
+
     fn newLayerId(self: *Self) Id {
         self.layer_counter += 1;
         return @enumFromInt(self.layer_counter);

@@ -139,6 +139,12 @@ pub const UndoContext = struct {
         self.last_dependant_map_inv.deinit(self.alloc);
     }
 
+    pub fn reset(self: *Self) void {
+        const alloc = self.alloc;
+        self.deinit();
+        self.* = .init(alloc);
+    }
+
     fn getId(self: *Self) UndoId {
         self.item_counter += 1;
         return @enumFromInt(self.item_counter);

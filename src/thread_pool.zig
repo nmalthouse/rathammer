@@ -149,6 +149,17 @@ pub const Context = struct {
         }
     }
 
+    //Remove all notify for given id without calling any vt functions
+    pub fn removeNotify(self: *@This(), id: vpk.VpkResId) void {
+        self.notify_mutex.lock();
+        defer self.notify_mutex.unlock();
+
+        if (self.texture_notify.getPtr(id)) |list| {
+            list.deinit(self.alloc);
+            _ = self.texture_notify.remove(id);
+        }
+    }
+
     //TODO be really carefull when using this, ensure any added vt's are alive
     pub fn addNotify(self: *@This(), id: vpk.VpkResId, vt: *DeferredNotifyVtable) !void {
         self.notify_mutex.lock();

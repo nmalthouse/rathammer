@@ -515,6 +515,6 @@ pub const QoiDecode = struct {
         defer self.destroy();
 
         if (self.bitmap) |bmp|
-            edit.textures.put(self.id, .albedo(graph.Texture.initFromBitmap(bmp, .{}))) catch {};
+            edit.materials.put(self.id, .albedo(graph.Texture.initFromBitmap(bmp, .{}))) catch {};
     }
 };

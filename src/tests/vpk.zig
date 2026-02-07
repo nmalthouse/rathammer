@@ -11,9 +11,9 @@ test {
     var loadctx = LoadCtx{};
     var extra = try std.fs.cwd().openDir("extra", .{});
     defer extra.close();
-    try ctx.addDir(extra, "vpktest.vpk", &loadctx);
-    try ctx.addLooseDir(std.fs.cwd(), "rat_custom/asset");
-    try ctx.addLooseDir(std.fs.cwd(), ".");
+    try ctx.addDir(extra, "vpktest.vpk", &loadctx, "gamename", .Default);
+    try ctx.addLooseDir(std.fs.cwd(), "rat_custom/asset", "gamename", .Default);
+    try ctx.addLooseDir(std.fs.cwd(), ".", "gamename", .Default);
     try ctx.slowIndexOfLooseDirSubPath("materials");
 
     const f = try ctx.getFileTempFmt("txt", "dir2/test", .{}, false) orelse return error.notFound;

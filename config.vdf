@@ -118,6 +118,7 @@ games {
         gameinfo {
             base_dir "rat_custom"
             game_dir "rat_custom"
+
         }
 
         fgd_dir     "rat_custom"
@@ -141,6 +142,10 @@ games {
             base_dir "Half-Life 2"
             game_dir "Half-Life 2/hl2_complete"
             //gameinfo_name "rathammer_gameinfo.txt" //Specify a custom gameinfo.txt
+
+            //all optional fields follow
+            u_scale 0.25
+            v_scale 0.25
         }
 
         // Used to do a fast compile when pressing F9. 

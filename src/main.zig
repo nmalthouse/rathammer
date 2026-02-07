@@ -353,7 +353,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                             continue;
                         };
 
-                        try editor.textures.put(vpk_id, .default());
+                        try editor.materials.put(vpk_id, .default());
 
                         async.QoiDecode.spawn(alloc, &editor.async_asset_load, qoi_data, vpk_id) catch {
                             alloc.free(qoi_data);

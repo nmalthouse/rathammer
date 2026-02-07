@@ -21,6 +21,12 @@ pub const Tracker = struct {
         return .{ .alloc = alloc, .map = MapT.init(alloc), .get_buf = .{} };
     }
 
+    pub fn reset(self: *Self) void {
+        const alloc = self.alloc;
+        self.deinit();
+        self.* = .init(alloc);
+    }
+
     pub fn deinit(self: *Self) void {
         var it = self.map.iterator();
 

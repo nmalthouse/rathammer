@@ -106,6 +106,12 @@ pub const Groups = struct {
         };
     }
 
+    pub fn reset(self: *Self) void {
+        const alloc = self.group_mapper.allocator;
+        self.deinit();
+        self.* = .init(alloc);
+    }
+
     pub fn deinit(self: *Self) void {
         self.entity_mapper.deinit();
         self.group_mapper.deinit();
@@ -167,6 +173,17 @@ pub const Material = struct {
             .active = .initEmpty(),
             .slots = [_]graph.Texture{edit.missingTexture()} ** num_slots,
         };
+    }
+
+    pub fn deinit(self: *@This()) void {
+        const missing = edit.missingTexture();
+        for (0..num_slots) |i| {
+            if (self.active.isSet(i)) {
+                if (self.slots[i].id == missing.id) continue;
+
+                self.slots[i].deinit();
+            }
+        }
     }
 
     pub fn albedo(tex: graph.Texture) @This() {
@@ -239,6 +256,8 @@ pub const MeshBatch = struct {
         self.lines_index.deinit();
         //self.tex.deinit();
         self.contains.deinit();
+        graph.gl.DeleteBuffers(1, @ptrCast(&self.lines_ebo));
+        graph.gl.DeleteVertexArrays(1, @ptrCast(&self.lines_vao));
     }
 
     pub fn rebuildIfDirty(self: *Self, editor: *Editor) !void {
@@ -251,7 +270,7 @@ pub const MeshBatch = struct {
     pub fn notify(vt: *thread_pool.DeferredNotifyVtable, id: vpk.VpkResId, editor: *Editor) void {
         const self: *@This() = @alignCast(@fieldParentPtr("notify_vt", vt));
         if (id == self.tex_res_id) {
-            self.mat = editor.textures.get(id) orelse return;
+            self.mat = editor.materials.get(id) orelse return;
             self.mesh.diffuse_texture = self.mat.slots[0].id;
             self.is_dirty = true;
         }
