@@ -95,7 +95,7 @@ pub const Console = struct {
 
     fn layout(gui: *Gui, area: Rect) struct { text: Rect, cmdline: Rect } {
         const inset = GuiHelp.insetAreaForWindowFrame(gui, area);
-        const item_height = gui.dstate.style.config.default_item_h;
+        const item_height = gui.dstate.nstyle.item_h;
         const sp = inset.split(.horizontal, inset.h - item_height);
         return .{
             .text = sp[0],

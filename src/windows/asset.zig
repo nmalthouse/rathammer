@@ -215,7 +215,7 @@ const VpkBrowser = struct {
                 .build_vt = &self.cbhandle,
                 .win = win,
                 .count = self.list.count(),
-                .item_h = gui.dstate.style.config.default_item_h,
+                .item_h = gui.dstate.nstyle.item_h,
                 .current_index = self.selected_index,
                 .index_ptr = &self.scroll_index,
             }) == .good) {
@@ -404,7 +404,7 @@ pub const ModelBrowser = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = self.list.count(),
-            .item_h = gui.dstate.style.config.default_item_h,
+            .item_h = gui.dstate.nstyle.item_h,
             .index_ptr = &self.scroll_index,
             .current_index = self.selected_index,
         }) == .good) {

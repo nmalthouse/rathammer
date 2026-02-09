@@ -91,7 +91,7 @@ pub const Main3DView = struct {
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
         self.ed.handleMisc3DKeys();
-        draw3Dview(self, self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.style.config.text_h, gui) catch return;
+        draw3Dview(self, self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.nstyle.text_h, gui) catch return;
     }
 
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {

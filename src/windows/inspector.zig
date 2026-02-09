@@ -148,7 +148,7 @@ pub const InspectorWindow = struct {
         //self.layout.reset(gui, vt);
         //start a vlayout
         //var ly = Vert{ .area = vt.area };
-        //const max_w = gui.style.config.default_item_h * 30;
+        //const max_w = gui.nstyle.item_h * 30;
         const sp1 = vt.area.area;
         //const sp1 = vt.area.area.split(.horizontal, vt.area.area.h * 0.5);
         const inset = GuiHelp.insetAreaForWindowFrame(gui, sp1);
@@ -179,7 +179,7 @@ pub const InspectorWindow = struct {
                 }, self.editor.autovis.enabled.items[i]);
             }
 
-            //var ly = guis.VerticalLayout{ .item_height = gui.style.config.default_item_h, .bounds = vt.area };
+            //var ly = guis.VerticalLayout{ .item_height = gui.nstyle.item_h, .bounds = vt.area };
         }
         if (eql(u8, tab_name, "props")) {
             const sp = vt.area.split(.horizontal, vt.area.h * 0.5);
@@ -195,7 +195,7 @@ pub const InspectorWindow = struct {
                 .build_cb = buildValueEditor,
                 .build_vt = &self.cbhandle,
                 .win = win,
-                .scroll_mul = gui.dstate.style.config.default_item_h * 4,
+                .scroll_mul = gui.dstate.nstyle.item_h * 4,
                 .scroll_y = true,
                 .scroll_x = false,
             });
@@ -313,7 +313,7 @@ pub const InspectorWindow = struct {
                     .build_vt = &self.cbhandle,
                     .win = win,
                     .count = fields.len,
-                    .item_h = gui.dstate.style.config.default_item_h,
+                    .item_h = gui.dstate.nstyle.item_h,
                     .index_ptr = &self.kv_scroll_index,
                 });
             }
@@ -418,7 +418,7 @@ pub const InspectorWindow = struct {
         const gui = vt.win_ptr.gui_ptr;
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         self.resetIds();
-        var ly = guis.TableLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = vt.area, .columns = 2 };
+        var ly = guis.TableLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = vt.area, .columns = 2 };
         const ed = self.editor;
         const a = vt;
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
@@ -759,7 +759,7 @@ const IoWg = struct {
             .build_vt = &self.cbhandle,
             .win = win,
             .count = cons.list.items.len,
-            .item_h = gui.dstate.style.config.default_item_h,
+            .item_h = gui.dstate.nstyle.item_h,
             .index_ptr = &self.io_scroll_index,
         });
     }
@@ -866,7 +866,7 @@ const IoWg = struct {
     fn buildIoTab(self: *@This(), area: Rect, lay: *iArea, index: usize) !void {
         const gui = lay.win_ptr.gui_ptr;
         const cons = self.getConsPtr() orelse return;
-        //const th = gui.style.config.text_h;
+        //const th = gui.nstyle.text_h;
         //const num_w = th * 2;
         //const rem4 = @trunc((area.w - num_w * 2) / 4);
         var widths: [6]f32 = undefined;

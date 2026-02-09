@@ -418,7 +418,7 @@ pub const GuiWidget = struct {
     }
 
     pub fn build(self: *Self, gui: *Gui, win: *iWindow, vt: *iArea, area: graph.Rect) !void {
-        const item_h = gui.dstate.style.config.default_item_h;
+        const item_h = gui.dstate.nstyle.item_h;
         const bot_count = 3;
         const bot_h = item_h * bot_count;
         const sp = area.split(.horizontal, area.h - bot_h);
@@ -459,7 +459,7 @@ pub const GuiWidget = struct {
         list.append(gui.alloc, .{ .ptr = self.ctx.root, .depth = 0 }) catch return;
         countNodes(self.ctx.root, &list, gui.alloc, 1) catch return;
         if (index >= list.items.len) return;
-        const item_h = gui.dstate.style.config.default_item_h;
+        const item_h = gui.dstate.nstyle.item_h;
         var ly = gui.dstate.vlayout(ar.area);
         for (list.items[index..]) |item| {
             const ar_p = ly.getArea() orelse continue;

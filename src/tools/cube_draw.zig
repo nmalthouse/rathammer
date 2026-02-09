@@ -111,7 +111,7 @@ pub const CubeDraw = struct {
             \\Or, hold q and aim at a entity, left click to set this as the new position.
             \\Change the grid size with 'R' and 'F'
         ;
-        var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 7));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
@@ -165,10 +165,10 @@ pub const CubeDraw = struct {
                     .slide = .{ .snap = 15 },
                 });
 
-            if (guis.label(area_vt, tly.getArea(), "stair percf", .{})) |ar|
-                _ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.front_perc, -1, 1, .{ .nudge = 0.1 });
-            if (guis.label(area_vt, tly.getArea(), "stair percb", .{})) |ar|
-                _ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.back_perc, -1, 1, .{ .nudge = 0.1 });
+            //if (guis.label(area_vt, tly.getArea(), "stair percf", .{})) |ar|
+            //_ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.front_perc, -1, 1, .{ .nudge = 0.1 });
+            //if (guis.label(area_vt, tly.getArea(), "stair percb", .{})) |ar|
+            //_ = Wg.Slider.build(area_vt, ar, &self.stairs_setting.back_perc, -1, 1, .{ .nudge = 0.1 });
             if (guis.label(area_vt, tly.getArea(), "theta", .{})) |ar|
                 _ = SSlide.build(area_vt, ar, &self.primitive_settings.theta, .{
                     .min = 0,

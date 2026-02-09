@@ -243,7 +243,7 @@ pub const PauseWindow = struct {
             const SZ = 5;
             _ = Wg.VScroll.build(vt, ly.getArea(), .{
                 .count = self.recents.items.len,
-                .item_h = gui.dstate.style.config.default_item_h * SZ,
+                .item_h = gui.dstate.nstyle.item_h * SZ,
                 .build_cb = buildRecentScroll,
                 .build_vt = &self.cbhandle,
                 .win = win,
@@ -387,7 +387,7 @@ pub const PauseWindow = struct {
             //ly.pushHeight(Wg.TextView.heightForN(gui, 4));
             ly.pushRemaining();
             const help_area = ly.getArea() orelse return;
-            const sp = help_area.split(.vertical, gui.dstate.style.config.text_h * 9);
+            const sp = help_area.split(.vertical, gui.dstate.nstyle.text_h * 9);
 
             if (self.selected_text_i < self.texts.items.len) {
                 _ = Wg.TextView.build(vt, sp[1], &.{self.texts.items[self.selected_text_i].text}, win, .{
@@ -461,9 +461,9 @@ pub const PauseWindow = struct {
     pub fn buildRecentScroll(cb: *CbHandle, area: *iArea, index: usize) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         const gui = area.win_ptr.gui_ptr;
-        var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.style.config.default_item_h * 5, .bounds = area.area };
+        var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.nstyle.item_h * 5, .bounds = area.area };
         if (index >= self.recents.items.len) return;
-        const text_bound = gui.dstate.font.textBounds("_Load_", gui.dstate.style.config.text_h);
+        const text_bound = gui.dstate.font.textBounds("_Load_", gui.dstate.nstyle.text_h);
         for (self.recents.items[index..], 0..) |rec, i| {
             const ar = scrly.getArea() orelse return;
             const sp = ar.split(.vertical, ar.h);

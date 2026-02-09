@@ -375,7 +375,7 @@ pub const FastFaceManip = struct {
             \\Click and drag and click the opposite mouse button to commit changes
             \\If in multi select mode, faces with a common normal will be manipulated
         ;
-        var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
@@ -385,7 +385,7 @@ pub const FastFaceManip = struct {
     }
 
     pub fn guiDoc(_: *i3DTool, os9gui: *Os9Gui, editor: *Editor, vl: *Gui.VerticalLayout) void {
-        const hl = os9gui.style.config.text_h;
+        const hl = os9gui.nstyle.text_h;
         vl.pushHeight(hl * 10);
         if (os9gui.textView(hl, 0xff)) |tvc| {
             var tv = tvc;
@@ -460,7 +460,7 @@ pub const PlaceEntity = struct {
             \\This is the Place Entitytool.
             \\Click in the world to place an entity. Thats it.
         ;
-        var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
@@ -763,7 +763,7 @@ pub const TranslateFace = struct {
             \\Once you drag the gizmo, press right click to commit the change
             \\If you have more than one entity selected, it will do proportional editing instead.
         ;
-        var ly = guis.VerticalLayout{ .item_height = gui.dstate.style.config.default_item_h, .bounds = area_vt.area };
+        var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,

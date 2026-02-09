@@ -59,7 +59,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
     try editor.update(win);
 
     {
-        const max_w = gui.dstate.style.config.default_item_h * 30;
+        const max_w = gui.dstate.nstyle.item_h * 30;
         const area = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
         const w = @min(max_w, area.w);
         const side_l = (area.w - w);
@@ -91,7 +91,7 @@ pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, w
 pub var INSPECTOR: *InspectorWindow = undefined;
 
 var font: graph.OnlineFont = undefined;
-fn flush_cb() void {
+fn flush_cb(_: ?*anyopaque) void {
     font.syncBitmapToGL();
 }
 
@@ -286,10 +286,10 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     loadctx.cb("Loading gui");
     var gui_prof = profile.init();
     gui_prof.start();
-    var gui = try G.Gui.init(alloc, &win, editor.dirs.pref, try app_cwd.dir.openDir("ratgraph", .{}), &font.font, &draw);
+    var gui = try G.Gui.init(alloc, &win, &font.font, &draw);
     defer gui.deinit();
-    gui.dstate.style.config.default_item_h = scaled_item_height;
-    gui.dstate.style.config.text_h = scaled_text_height;
+    gui.dstate.nstyle.item_h = scaled_item_height;
+    gui.dstate.nstyle.text_h = scaled_text_height;
     gui.dstate.scale = gui_scale;
     gui.dstate.tint = config.gui_tint;
     //gui.dstate.nstyle.color = G.DarkColorscheme;
@@ -424,7 +424,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer ws.deinit();
     const main_tab = ws.newArea(.{
         .sub = .{
-            .split = .{ .k = .horiz, .pos = gui.dstate.style.config.default_item_h, .kind = .abs },
+            .split = .{ .k = .horiz, .pos = gui.dstate.nstyle.item_h, .kind = .abs },
 
             .left = ws.newArea(.{ .pane = menu_bar }),
 
