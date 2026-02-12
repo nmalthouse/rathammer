@@ -167,7 +167,7 @@ pub const Splits = struct {
                     }
                 }
             },
-            .high => {
+            .high, .rising_repeat => {
                 if (self.slider_held) |sl| {
                     if (sl < self.tab_handles.items.len) {
                         const tb = self.tab_handles.items[sl];

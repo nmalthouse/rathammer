@@ -372,7 +372,7 @@ pub const Translate = struct {
             const dist = self.grid.snapV3(origin_mut.sub(origin));
             switch (giz_active) {
                 .low, .rising => {},
-                .high => tool._delta = dist,
+                .high, .rising_repeat => tool._delta = dist,
                 .falling => tool._delta = Vec3.zero(),
             }
             if (giz_active == .high) {

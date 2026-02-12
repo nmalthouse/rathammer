@@ -112,7 +112,7 @@ pub const AABBGizmo = struct {
                     }
                 }
             },
-            .high, .falling => {
+            .high, .falling, .rising_repeat => {
                 if (self.active) {
                     if (util3d.planeNormalGizmo(self.start_point, self.start_norm, rc)) |inter| {
                         const sign = self.start_norm.dot(Vec3.set(1));

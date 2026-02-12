@@ -251,6 +251,10 @@ pub const Context = struct {
         selected_texture_vpk_id: ?vpk.VpkResId = null,
 
         map_description: std.ArrayList(u8) = .{},
+
+        marquee: struct {
+            start: graph.Vec2f = .zero,
+        } = .{},
     } = .{},
     grid: grid_stuff.Snap = .{ .s = Vec3.set(16) },
 

@@ -536,6 +536,16 @@ pub const Main3DView = struct {
 
         const off = fh * 5;
         self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
+        //3d marquee only works when mouse is not grabbed, otherwise camera projection changes throughout marquee
+        if (!self.stack_grabbed_mouse and limits.IS_DEBUG) {
+            if (self.isBindState(self.config.keys.marquee_3d.b, .rising)) {
+                self.edit_state.marquee.start = self.edit_state.mpos;
+            } else if (self.isBindState(self.config.keys.marquee_3d.b, .high)) {
+                const end = self.edit_state.mpos;
+
+                draw.rect(.newV(self.edit_state.marquee.start, end.sub(self.edit_state.marquee.start)), 0xffffff_88);
+            }
+        }
         if (self.asset.getRectFromName("crosshair.png")) |cross| {
             const start = screen_area.center().sub(cross.dim().scale(0.5));
             draw.rectTex(graph.Rec(

@@ -85,7 +85,7 @@ pub const Gizmo = struct {
                     return .rising;
                 return .low;
             },
-            .high => {
+            .high, .rising_repeat => {
                 const si = self.selected_index orelse return .low;
                 //const rc = util3d.screenSpaceRay(screen_area, mouse_pos, view);
                 if (util3d.doesRayIntersectPlane(

@@ -142,7 +142,7 @@ pub const Gizmo = struct {
                     return .rising;
                 return .low;
             },
-            .high => {
+            .high, .rising_repeat => {
                 if (self.selected_axis == .none)
                     return .low;
                 const rc = editor.camRay(screen_area, view);

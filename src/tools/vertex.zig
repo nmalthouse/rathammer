@@ -219,7 +219,7 @@ pub const VertexTranslate = struct {
                 .rising => {
                     st.move_start = r[0];
                 },
-                .high => {
+                .high, .rising_repeat => {
                     if (st.move_start) |start| {
                         delta = r[0].sub(start);
                     }
@@ -546,7 +546,7 @@ pub const VertexTranslate = struct {
                             try solid.drawImmediate(td.draw, ed, dist, null, false);
                         },
 
-                        .high => {
+                        .high, .rising_repeat => {
                             try solid.drawImmediate(td.draw, ed, dist, manip_verts.items(.index), false);
                         },
                     }
