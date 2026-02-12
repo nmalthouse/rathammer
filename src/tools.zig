@@ -267,7 +267,7 @@ pub const FastFaceManip = struct {
 
                             if (util3d.planeNormalGizmo(self.start, plane_norm, ray)) |inter_| {
                                 _, const pos = inter_;
-                                const dist = editor.grid.snapV3(pos);
+                                const dist = editor.grid.snapDelta(pos);
 
                                 //Get current bounds of each solid and display delta
                                 if (self.draw_text) {
@@ -295,6 +295,7 @@ pub const FastFaceManip = struct {
                                             );
                                         }
 
+                                        const dist_rounded = toolutil.roundForDrawing(dist);
                                         toolutil.drawText3D(
                                             self.start.add(dist),
                                             &editor.draw_state.screen_space_text_ctx,
@@ -303,9 +304,9 @@ pub const FastFaceManip = struct {
                                             td.view_3d.*,
                                             "[{d} {d} {d}]",
                                             .{
-                                                dist.x(),
-                                                dist.y(),
-                                                dist.z(),
+                                                dist_rounded.x(),
+                                                dist_rounded.y(),
+                                                dist_rounded.z(),
                                             },
                                         );
                                     }

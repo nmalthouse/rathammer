@@ -346,10 +346,6 @@ pub const PauseWindow = struct {
                     _ = Btn(vt, hy.getArea(), L.lang.btn.unpause, .{ .cb_fn = &btnCb, .id = Buttons.id(.unpause), .cb_vt = &self.cbhandle });
                     _ = Btn(vt, hy.getArea(), L.lang.btn.save_as, .{ .cb_fn = &btnCb, .id = Buttons.id(.save_as), .cb_vt = &self.cbhandle });
                 }
-                {
-                    var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
-                    _ = Btn(vt, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.import_vmf), .cb_vt = &self.cbhandle });
-                }
             } else {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
                 _ = Btn(vt, hy.getArea(), L.lang.btn.new_map, .{ .cb_fn = &btnCb, .id = Buttons.id(.new_map), .cb_vt = &self.cbhandle });

@@ -12,7 +12,7 @@ const FMT1D = "{d}";
 //const FMT1D = "{d:.4}";
 const FMT3D = FMT1D ++ " " ++ FMT1D ++ " " ++ FMT1D;
 
-fn roundForDrawing(v: Vec3) Vec3 {
+pub fn roundForDrawing(v: Vec3) Vec3 {
     var ret = v;
     const vv: [3]f32 = v.data;
     for (vv, 0..) |d, i| {

@@ -38,6 +38,17 @@ pub const Snap = struct {
         );
     }
 
+    /// When snap value is same for all basis, set vector v's length to integer multiple of snap without changing normal   (
+    /// otherwise snap each component seperatly (this may change vector's direction).
+    pub fn snapDelta(self: *const @This(), v: Vec3) Vec3 {
+        if (self.isOne()) {
+            const length = snap1(v.length(), self.s.x());
+            return v.norm().scale(length);
+        } else {
+            return self.snapV3(v);
+        }
+    }
+
     pub fn isOne(self: *const @This()) bool {
         return self.s.x() == self.s.y() and self.s.y() == self.s.z();
     }

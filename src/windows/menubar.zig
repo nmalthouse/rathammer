@@ -22,7 +22,7 @@ const MenuBtn = enum(guis.Uid) {
     save,
     saveas,
     save_selection,
-    import_map,
+    import_vmfs,
     build_map,
     build_map_user,
     quit,
@@ -201,6 +201,9 @@ pub const MenuBar = struct {
                 const name = self.ed.last_exported_obj_name orelse return;
                 action.exportToObj(self.ed, path, name) catch {};
             },
+            .import_vmfs => {
+                async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .pick_vmf) catch return;
+            },
             else => self.ed.notify("TODO. item not implemented", .{}, colors.bad),
         }
     }
@@ -240,7 +243,7 @@ pub const MenuBar = struct {
                     .{ btn_id(.save), L.lang.btn.save, .btn },
                     .{ btn_id(.saveas), L.lang.btn.save_as, .btn },
                     //.{ btn_id(.save_selection), "save-selection-as", .btn },
-                    //.{ btn_id(.import_map), "import-map", .btn },
+                    .{ btn_id(.import_vmfs), L.lang.btn.import_vmfs, .btn },
                     .{ btn_id(.build_map), L.lang.btn.build, .btn },
                     .{ btn_id(.build_map_user), L.lang.btn.build_user, .btn },
                     .{ btn_id(.export_obj), L.lang.btn.export_obj, if (has_obj) .btn else .blank },

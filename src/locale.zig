@@ -177,6 +177,8 @@ pub const Strings = struct {
         layer_attach_child: Str = "attach as child",
 
         snap_selected_to_int: Str = "snap selected to integer",
+
+        import_vmfs: Str = "import vmfs",
     } = .{},
 };
 
