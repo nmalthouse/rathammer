@@ -229,11 +229,6 @@ pub const Context = struct {
     selection: Selection,
     renderer: def_render.Renderer,
 
-    hacky_extra_vmf: struct {
-        //Not freed, use static_string
-        override_vis_group: ?[]const u8 = null,
-    } = .{},
-
     edit_state: struct {
         /// destroy 180 billion keyboard worth of pressing ctrl+s to overflow this
         map_version: u64 = 0, //Incremented every save
@@ -1011,9 +1006,7 @@ pub const Context = struct {
     }
 
     ///Given a csg defined solid, convert to mesh and store.
-    pub fn putSolidFromVmf(self: *Self, solid: vmf.Solid, group_id: ?GroupId) !void {
-        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
-        //const vis_mask = if (vis_override) |vo| self.layers.getMask(&.{vo}) else try self.layers.getMaskFromEditorInfo(&solid.editor);
+    pub fn putSolidFromVmf(self: *Self, solid: vmf.Solid, group_id: ?GroupId, vis_override: ?Layer.Id) !void {
         const vis_id = vis_override orelse self.layers.getIdFromEditorInfo(&solid.editor);
         const new = try self.ecs.createEntity();
         if (vis_id) |vm| {
@@ -1197,7 +1190,7 @@ pub const Context = struct {
             try self.loadJsonFile(path, filename, loadctx);
         } else if (endsWith(u8, filename, ".vmf")) {
             ext = ".vmf";
-            try self.loadVmf(path, filename, loadctx);
+            try self.loadVmf(path, filename, loadctx, null);
         } else {
             return error.unknownMapExtension;
         }
@@ -1296,8 +1289,15 @@ pub const Context = struct {
 
     //TODO write a vmf -> json utility like jsonToVmf.zig
     //Then, only have a single function to load serialized data into engine "loadJson"
-    fn loadVmf(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {
-        const vis_override = if (self.hacky_extra_vmf.override_vis_group) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
+    pub fn loadVmf(
+        self: *Self,
+        path: std.fs.Dir,
+        filename: []const u8,
+        loadctx: *LoadCtx,
+        /// If set map's vis groups will be ignored and all objects will be put in a layer with override_vis name
+        override_vis: ?[]const u8,
+    ) !void {
+        const vis_override = if (override_vis) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
         defer self.has_loaded_map = true;
         var timer = try std.time.Timer.start();
 
@@ -1322,7 +1322,7 @@ pub const Context = struct {
             loadctx.addExpected(vmf_.world.solid.len + vmf_.entity.len + 10);
             var gen_timer = try std.time.Timer.start();
             for (vmf_.world.solid, 0..) |solid, si| {
-                try self.putSolidFromVmf(solid, null);
+                try self.putSolidFromVmf(solid, null, vis_override);
                 loadctx.printCb("csg generated {d} / {d}", .{ si, vmf_.world.solid.len });
             }
             for (vmf_.entity, 0..) |ent, ei| {
@@ -1334,7 +1334,7 @@ pub const Context = struct {
                     try self.ecs.attach(new, .layer, .{ .id = vo });
                 }
                 for (ent.solid) |solid|
-                    try self.putSolidFromVmf(solid, group_id);
+                    try self.putSolidFromVmf(solid, group_id, vis_override);
                 {
                     var bb = AABB{ .a = Vec3.new(0, 0, 0), .b = Vec3.new(16, 16, 16), .origin_offset = Vec3.new(8, 8, 8) };
                     if (group_id != 0) //Group owners have no bounds

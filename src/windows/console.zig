@@ -31,6 +31,8 @@ pub const Console = struct {
     cbhandle: guis.CbHandle = .{},
 
     alloc: std.mem.Allocator,
+
+    /// Actual lines data stored inside this arena
     line_arena: std.heap.ArenaAllocator,
     lines: std.ArrayList([]const u8),
     scratch: std.array_list.Managed(u8),

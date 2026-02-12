@@ -47,6 +47,8 @@ pub const SdlFileData = struct {
     pub const Action = enum {
         save_map,
         pick_map,
+
+        pick_vmf, // Distinct from pick map for now. only one json map can be imported but any number of vmfs can be imported
         export_obj,
     };
     const map_filters = [_]graph.c.SDL_DialogFileFilter{
@@ -56,6 +58,10 @@ pub const SdlFileData = struct {
         .{ .name = "RatHammer maps", .pattern = "ratmap" },
         .{ .name = "All files", .pattern = "*" },
     };
+    const map_filters_vmf = [_]graph.c.SDL_DialogFileFilter{
+        .{ .name = "vmf maps", .pattern = "vmf" },
+    };
+
     action: Action,
 
     job: thread_pool.iJob,
@@ -64,13 +70,13 @@ pub const SdlFileData = struct {
     pool_ptr: *thread_pool.Context,
 
     alloc: std.mem.Allocator,
-    name_buffer: std.ArrayList(u8),
+    files: std.ArrayList([]const u8),
 
     pub fn spawn(alloc: std.mem.Allocator, pool: *thread_pool.Context, kind: Action) !void {
         const self = try alloc.create(@This());
         self.* = .{
             .job = .{ .onComplete = &onComplete, .user_id = 0 },
-            .name_buffer = .{},
+            .files = .{},
             .alloc = alloc,
             .pool_ptr = pool,
             .action = kind,
@@ -81,7 +87,9 @@ pub const SdlFileData = struct {
 
     pub fn destroy(self: *@This()) void {
         const alloc = self.alloc;
-        self.name_buffer.deinit(self.alloc);
+        for (self.files.items) |file|
+            self.alloc.free(file);
+        self.files.deinit(self.alloc);
         alloc.destroy(self);
     }
 
@@ -89,16 +97,30 @@ pub const SdlFileData = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
         defer self.destroy();
         if (self.has_file != .has) return;
+        const first = if (self.files.items.len > 0) self.files.items[0] else return;
         switch (self.action) {
+            .pick_vmf => {
+                if (!edit.has_loaded_map) {
+                    log.err("Attempted to import vmf's without a loaded map! ignoring", .{});
+                    return;
+                }
+                edit.loadctx.setDraw(true);
+                edit.loadctx.resetTime();
+                for (self.files.items) |file| {
+                    edit.loadVmf(std.fs.cwd(), file, edit.loadctx, file) catch |err| {
+                        log.err("import vmf failed {t}", .{err});
+                    };
+                }
+            },
             .export_obj => {
-                edit.setObjName(self.name_buffer.items) catch return;
+                edit.setObjName(first) catch return;
 
                 if (edit.last_exported_obj_name) |basename| {
                     actions.exportToObj(edit, edit.last_exported_obj_path orelse ".", basename) catch {};
                 }
             },
             .save_map => {
-                edit.setMapName(self.name_buffer.items) catch return;
+                edit.setMapName(first) catch return;
                 if (edit.loaded_map_name) |basename| {
                     edit.saveAndNotify(basename, edit.loaded_map_path orelse "") catch return;
                 }
@@ -109,7 +131,7 @@ pub const SdlFileData = struct {
                 edit.loadctx.resetTime();
                 edit.loadMap(
                     std.fs.cwd(),
-                    self.name_buffer.items,
+                    first,
                     edit.loadctx,
 
                     edit.loaded_game_name orelse edit.config.default_game,
@@ -122,32 +144,35 @@ pub const SdlFileData = struct {
 
     pub fn workFunc(self: *@This()) void {
         switch (self.action) {
-            .save_map, .export_obj => graph.c.SDL_ShowSaveFileDialog(&saveFileCallback2, self, null, null, 0, null),
-            .pick_map => graph.c.SDL_ShowOpenFileDialog(&saveFileCallback2, self, null, &map_filters, map_filters.len, null, false),
+            .save_map, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
+            .pick_map => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{}),
+            .pick_vmf => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{ .allow_many = true }),
         }
     }
 
-    export fn saveFileCallback2(opaque_self: ?*anyopaque, filelist: [*c]const [*c]const u8, index: c_int) void {
+    export fn saveFileCallback2(opaque_self: ?*anyopaque, filelist: [*c]const [*c]const u8, filter_index: c_int) void {
+        _ = filter_index;
         if (opaque_self) |ud| {
             const self: *SdlFileData = @ptrCast(@alignCast(ud));
             defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
+            self.has_file = .failed; //Default to failed
 
-            if (filelist == 0 or filelist[0] == 0) {
-                self.has_file = .failed;
-                return;
+            if (filelist == null) return;
+
+            const files_sent: [*:0]const [*c]const u8 = @ptrCast(filelist);
+            const files = std.mem.span(files_sent);
+
+            for (files) |file| {
+                const str = std.mem.span(file);
+                if (str.len == 0) break;
+                const duped = self.alloc.dupe(u8, str) catch break;
+                self.files.append(self.alloc, duped) catch break;
             }
 
-            const first = std.mem.span(filelist[0]);
-            if (first.len == 0) {
-                self.has_file = .failed;
-                return;
+            if (self.files.items.len > 0) {
+                self.has_file = .has;
             }
-
-            self.name_buffer.clearRetainingCapacity();
-            self.name_buffer.appendSlice(self.alloc, first) catch return;
-            self.has_file = .has;
         }
-        _ = index;
     }
 };
 

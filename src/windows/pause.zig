@@ -28,6 +28,7 @@ pub const PauseWindow = struct {
         force_autosave,
         new_map,
         pick_map,
+        import_vmf,
         save_as,
         open_help,
 
@@ -44,7 +45,6 @@ pub const PauseWindow = struct {
     };
 
     const Textboxes = enum {
-        set_import_visgroup,
         set_skyname,
         set_desc,
     };
@@ -162,6 +162,10 @@ pub const PauseWindow = struct {
             .save_as => {
                 self.vt.needs_rebuild = true;
                 async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, .save_map) catch return;
+            },
+            .import_vmf => {
+                self.vt.needs_rebuild = true;
+                async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, .pick_vmf) catch return;
             },
             .pick_map => {
                 self.vt.needs_rebuild = true;
@@ -344,14 +348,7 @@ pub const PauseWindow = struct {
                 }
                 {
                     var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 3 };
-                    if (guis.label(vt, hy.getArea(), "Import under visgroup: ", .{})) |ar|
-                        _ = Wg.Textbox.buildOpts(vt, ar, .{
-                            .init_string = self.editor.hacky_extra_vmf.override_vis_group orelse "",
-                            .commit_cb = &textbox_cb,
-                            .commit_vt = &self.cbhandle,
-                            .user_id = @intFromEnum(Textboxes.set_import_visgroup),
-                        });
-                    _ = Btn(vt, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.pick_map), .cb_vt = &self.cbhandle });
+                    _ = Btn(vt, hy.getArea(), "Import vmf", .{ .cb_fn = &btnCb, .id = Buttons.id(.import_vmf), .cb_vt = &self.cbhandle });
                 }
             } else {
                 var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 2 };
@@ -423,9 +420,6 @@ pub const PauseWindow = struct {
             .set_desc => {
                 self.editor.edit_state.map_description.clearRetainingCapacity();
                 self.editor.edit_state.map_description.appendSlice(self.editor.alloc, p.string) catch {};
-            },
-            .set_import_visgroup => {
-                self.editor.hacky_extra_vmf.override_vis_group = str;
             },
         }
     }
