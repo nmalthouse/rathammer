@@ -241,9 +241,15 @@ pub const MapCompile = struct {
         switch (self.status) {
             .failed => {
                 edit.notify("Error building Map", .{}, 0xff0000ff);
+                const path = edit.printScratch("{s}/{s}.lin", .{
+                    edit.game_conf.mapbuilder.tmp_dir,
+                    edit.loaded_map_name orelse "dump",
+                }) catch return;
+                actions.loadPointfile(edit, std.fs.cwd(), path) catch return;
             },
             .built => {
                 edit.notify("built {s} in {d} s", .{ self.map_name, t / std.time.ns_per_s }, 0x00ff00ff);
+                actions.unloadPointfile(edit);
             },
             .nothing => edit.notify("Something bad happend when building the map", .{}, 0xffff_00_ff),
         }

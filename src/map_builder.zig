@@ -2,6 +2,9 @@ const std = @import("std");
 const graph = @import("graph");
 const util = @import("util.zig");
 
+/// search for this string in output of vbsp to determine if leak happened
+const leak_string = "**** leaked ****";
+
 pub fn splitPath(path: []const u8) struct { []const u8, []const u8 } {
     if (std.mem.lastIndexOfAny(u8, path, "/\\")) |index| {
         return .{ path[0..index], path[index + 1 ..] };
@@ -139,6 +142,9 @@ pub fn buildmap(alloc: std.mem.Allocator, args: Paths) !void {
         log.err("failed to open output dir {s}, with {t}", .{ outputdir, err });
         return err;
     };
+
+    working.deleteFile(try catString(alloc, &.{ map_no_extension, ".lin" })) catch {};
+    working.deleteFile(try catString(alloc, &.{ map_no_extension, ".prt" })) catch {};
 
     const game_path = try catString(alloc, &.{ gamedir, "/", args.gamename });
     const start_i = if (DO_WINE) 0 else 1;

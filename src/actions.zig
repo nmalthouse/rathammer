@@ -806,3 +806,14 @@ pub fn applyTextureToSelection(ed: *Ed, tex_id: vpk.VpkResId) !void {
     }
     ustack.apply(ed);
 }
+
+pub fn unloadPointfile(ed: *Ed) void {
+    if (ed.draw_state.pointfile) |pf|
+        pf.verts.deinit();
+    ed.draw_state.pointfile = null;
+}
+
+pub fn loadPointfile(ed: *Ed, dir: std.fs.Dir, path: []const u8) !void {
+    unloadPointfile(ed);
+    ed.draw_state.pointfile = try @import("pointfile.zig").loadPointfile(ed.alloc, dir, path);
+}
