@@ -246,6 +246,7 @@ pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //L
 const SerialBinding = struct {
     mode: graph.SDL.keybinding.FocusMode = .multi,
     button: graph.SDL.keybinding.ButtonBind,
+    repeat: bool = false,
     mod: []const graph.SDL.keybinding.Keymod = &.{},
 
     pub fn Keycode(k: graph.SDL.keycodes.Keycode) @This() {
@@ -292,8 +293,8 @@ pub const Keys = struct {
         build_map: Bind = .{ .button = .{ .keycode = .F9 }, .mode = .exclusive },
         build_map_user: Bind = .{ .button = .{ .keycode = .F10 }, .mode = .exclusive },
 
-        down_line: Bind = SC(.C), // j in dvorak
-        up_line: Bind = SC(.V), // k in dvorak
+        down_line: Bind = .{ .button = .{ .scancode = .C }, .repeat = true }, // j in dvorak
+        up_line: Bind = .{ .button = .{ .scancode = .V }, .repeat = true }, // k in dvorak
         pause: Bind = SC(.ESCAPE),
 
         inspector_tab_0: Bind = SC(.F1),
@@ -301,8 +302,8 @@ pub const Keys = struct {
         inspector_tab_2: Bind = SC(.F3),
         inspector_tab_3: Bind = SC(.F4),
 
-        undo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{.ctrl}, .mode = .exclusive },
-        redo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{ .ctrl, .shift }, .mode = .exclusive },
+        undo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{.ctrl}, .mode = .exclusive, .repeat = true },
+        redo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{ .ctrl, .shift }, .mode = .exclusive, .repeat = true },
 
         quit: Bind = .{ .button = .{ .scancode = .ESCAPE }, .mod = &.{.ctrl} },
     } = .{},
@@ -346,8 +347,8 @@ pub const Keys = struct {
 
         group_selection: Bind = .{ .button = .{ .scancode = .T }, .mod = &.{.ctrl}, .mode = .exclusive },
 
-        grid_inc: Bind = SC(.R),
-        grid_dec: Bind = SC(.F),
+        grid_inc: Bind = .{ .button = .{ .scancode = .R }, .mode = .multi, .repeat = true },
+        grid_dec: Bind = .{ .button = .{ .scancode = .F }, .mode = .multi, .repeat = true },
 
         ignore_groups: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.ctrl} },
     } = .{},
@@ -384,7 +385,7 @@ pub fn registerBindIds(comptime BindingSerialT: type, bindreg: *graph.SDL.keybin
         inline for (ctx_info.fields[0 .. ctx_info.fields.len - 1]) |bf| {
             const bind = @field(@field(serial, field.name), bf.name);
 
-            const bind_id = try bindreg.registerBind(.bind(bind.button, bind.mode, bind.mod, ctx_id), bf.name);
+            const bind_id = try bindreg.registerBind(.bind(bind.button, bind.mode, bind.mod, bind.repeat, ctx_id), bf.name);
 
             @field(@field(ret, field.name), bf.name) = bind_id;
         }

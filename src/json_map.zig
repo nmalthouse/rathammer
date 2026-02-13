@@ -43,7 +43,7 @@ pub const VpkMapper = struct {
 
     pub fn getResource(self: *@This(), id: vpk.VpkResId) ?[]const u8 {
         if (id >= self.strings.items.len) return null;
-        return self.strings.items[id];
+        return self.strings.items[@intCast(id)];
     }
 };
 

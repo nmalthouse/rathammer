@@ -170,7 +170,11 @@ pub fn openXdgDir(alloc: std.mem.Allocator, cwd: WrappedDir, app_cwd: WrappedDir
             // Sometimes it segfaults on INVALID_STATUS
             // Seems to be involve a race condition
             // app_cwd and config_dir are never closed so this makes no sense.
-            .windows => return try app_cwd.openDir(".", .{}, alloc),
+            .windows => {
+                const path = graph.c.SDL_GetPrefPath("rathammer", "rathammer");
+                defer graph.c.SDL_free(path);
+                return try app_cwd.openDir(std.mem.span(path), .{}, alloc);
+            },
             else => {
                 if (env.get("HOME")) |home| {
                     try config_path.print(alloc, "{s}/.config/rathammer", .{home});
