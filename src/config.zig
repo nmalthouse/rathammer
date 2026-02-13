@@ -4,12 +4,12 @@ const graph = @import("graph");
 const StringStorage = @import("string.zig").StringStorage;
 const ArrayList = std.ArrayListUnmanaged;
 
-/// The user's 'config.vdf' maps directly into this structure
+/// The user's 'config.zig' maps directly into this structure
 pub const Config = struct {
     const mask = graph.SDL.keycodes.Keymod.mask;
     enable_version_check: bool = true,
     paths: struct {
-        steam_dir: []const u8 = "/mnt/bigssd/SteamLibrary/steamapps/common",
+        steam_dir: []const u8 = "",
     } = .{},
     autosave: struct {
         enable: bool = true,
@@ -230,9 +230,6 @@ pub fn loadConfigFromFile(alloc: std.mem.Allocator, dir: std.fs.Dir, path: []con
 }
 
 pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //Load config
-    var val = try vdf.parse(alloc, slice, null, .{});
-    defer val.deinit();
-
     const ctx = try alloc.create(ConfigCtx);
 
     ctx.* = ConfigCtx{
@@ -240,15 +237,9 @@ pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //L
         .strings = try StringStorage.init(alloc),
         .config = .{},
     };
-    ////CONF MUST BE copyable IE no alloc
-    //const conf = try vdf.fromValue(
-    //    Config,
-    //    &val,
-    //    &.{ .obj = &val.value },
-    //    alloc,
-    //    &ctx.strings,
-    //);
-    //ctx.config = conf;
+    const parsed = try std.json.parseFromSlice(Config, ctx.alloc, slice, .{ .allocate = .alloc_always });
+    defer parsed.deinit();
+    ctx.config = try dupeStruct(parsed.value, ctx.strings.arena_alloc, &ctx.strings);
     return ctx;
 }
 
@@ -317,11 +308,11 @@ pub const Keys = struct {
     } = .{},
 
     tool: struct {
-        translate: Bind = SC(._1),
-        translate_face: Bind = SC(._2),
+        translate: Bind = .{ .button = .{ .scancode = ._1 }, .mode = .exclusive },
+        translate_face: Bind = .{ .button = .{ .scancode = ._2 }, .mode = .exclusive },
         place_entity: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.shift}, .mode = .exclusive },
         cube_draw: Bind = .{ .button = .{ .scancode = .B }, .mod = &.{.shift}, .mode = .exclusive },
-        fast_face: Bind = SC(._3),
+        fast_face: Bind = .{ .button = .{ .scancode = ._3 }, .mode = .exclusive },
         texture: Bind = .{ .button = .{ .scancode = .T }, .mod = &.{.shift}, .mode = .exclusive },
         vertex: Bind = .{ .button = .{ .scancode = .V }, .mod = &.{.shift}, .mode = .exclusive },
         clip: Bind = .{ .button = .{ .scancode = .X }, .mod = &.{.shift}, .mode = .exclusive },
@@ -454,9 +445,14 @@ fn dupeStruct(input: anytype, alloc: std.mem.Allocator, str: *StringStorage) !@T
     const T = @TypeOf(input);
     const info = @typeInfo(T);
     switch (T) {
+        graph.SDL.keybinding.ButtonBind => return input,
         []const u8 => return try str.store(input),
         else => switch (info) {
-            .float, .int => return input,
+            .float,
+            .int,
+            .bool,
+            .@"enum",
+            => return input,
             .@"struct" => |s| {
                 var ret: T = undefined;
                 inline for (s.fields) |field|

@@ -1,0 +1,22 @@
+
+{
+    "gameinfo":[ {
+        "base_dir":   "Half-Life 1 Source Deathmatch",
+        "game_dir":   "Half-Life 1 Source Deathmatch/hl1mp"
+    }],
+    
+    "fgd_dir":    "Half-Life 1 Source Deathmatch/BIN",
+    "fgd":         "hl1mp.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Half-Life 1 Source Deathmatch",
+        "exe_dir" :    "Half-Life 1 Source Deathmatch/BIN",
+        "game_name":   "hl1mp",
+        "output_dir":  "hl1mp/maps"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

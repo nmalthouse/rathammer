@@ -109,13 +109,20 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     defer config_dir.free(alloc);
     // if user has specified a config, don't copy
     const copy_default_config = args.config == null;
-    const config_name = args.config orelse "config.vdf";
+    const config_name = args.config orelse "config.json";
     if (config_dir.dir.openFile(config_name, .{})) |f| {
         f.close();
     } else |_| {
         if (copy_default_config) {
-            log.info("config.vdf not found in config dir, copying default", .{});
-            try app_cwd.dir.copyFile("config.vdf", config_dir.dir, "config.vdf", .{});
+            log.info("config.json not found in config dir, copying default", .{});
+            { //write out default json
+                var out = try config_dir.dir.createFile("config.json", .{});
+                defer out.close();
+                var out_buf: [1024]u8 = undefined;
+                var out_wr = out.writer(&out_buf);
+                defer out_wr.interface.flush() catch {};
+                try std.json.Stringify.value(Conf.Config{}, .{ .whitespace = .indent_2 }, &out_wr.interface);
+            }
 
             const games_config_dir = try config_dir.dir.makeOpenPath("games", .{});
 
@@ -155,14 +162,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
     };
     const config = loaded_config.config;
-    if (true) { //write out json
-        var out = try std.fs.cwd().createFile("/tmp/config.json", .{});
-        defer out.close();
-        var out_buf: [1024]u8 = undefined;
-        var out_wr = out.writer(&out_buf);
-        defer out_wr.interface.flush() catch {};
-        try std.json.Stringify.value(config, .{ .whitespace = .indent_2 }, &out_wr.interface);
-    }
 
     if (config.default_game.len == 0) {
         std.debug.print("config.vdf must specify a default_game!\n", .{});

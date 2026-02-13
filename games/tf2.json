@@ -1,0 +1,21 @@
+{
+    "gameinfo":[ {
+        "base_dir":   "Team Fortress 2",
+        "game_dir":   "Team Fortress 2/tf"
+    }],
+    
+    "fgd_dir":    "Team Fortress 2/BIN",
+    "fgd":         "tf.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Team Fortress 2",
+        "exe_dir" :    "Team Fortress 2/BIN",
+        "game_name":   "tf",
+        "output_dir":  "tf/maps"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

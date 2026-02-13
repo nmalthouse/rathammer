@@ -1,0 +1,24 @@
+
+{
+    "gameinfo":[ {
+        "base_dir":   "Portal 2",
+        "game_dir":   "Portal 2/portal2",
+        "gameinfo_name": "gameinfo_portal2.txt"
+    }],
+    
+    "fgd_dir":    "Portal 2/BIN",
+    "fgd":         "portal2.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Portal 2",
+        "exe_dir" :    "Portal 2/BIN",
+        "game_name":   "portal2",
+        "output_dir":  "portal2/maps",
+        "tmp_dir": "Portal 2/map_build"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

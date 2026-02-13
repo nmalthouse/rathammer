@@ -1,0 +1,22 @@
+
+{
+    "gameinfo":[ {
+        "base_dir":   "Black Mesa",
+        "game_dir":   "Black Mesa/bms"
+    }],
+    
+    "fgd_dir":    "Black Mesa/BIN",
+    "fgd":         "bms.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Black Mesa",
+        "exe_dir" :    "Black Mesa/BIN",
+        "game_name":   "bms",
+        "output_dir":  "bms/maps"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

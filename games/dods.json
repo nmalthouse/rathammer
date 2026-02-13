@@ -1,0 +1,21 @@
+{
+    "gameinfo":[ {
+        "base_dir":   "Day of Defeat Source",
+        "game_dir":   "Day of Defeat Source/dod"
+    }],
+    
+    "fgd_dir":    "Day of Defeat Source/BIN",
+    "fgd":         "dod.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Day of Defeat Source",
+        "exe_dir" :    "Day of Defeat Source/BIN",
+        "game_name":   "dod",
+        "output_dir":  "dod/maps"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

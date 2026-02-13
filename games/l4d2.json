@@ -1,0 +1,21 @@
+{
+    "gameinfo":[ {
+        "base_dir":   "Left 4 Dead 2",
+        "game_dir":   "Left 4 Dead 2/leaft4dead2"
+    }],
+    
+    "fgd_dir":    "Left 4 Dead 2/BIN",
+    "fgd":         "leaft4dead2.fgd",
+    
+    "mapbuilder": {
+        "game_dir":    "Left 4 Dead 2",
+        "exe_dir" :    "Left 4 Dead 2/BIN",
+        "game_name":   "leaft4dead2",
+        "output_dir":  "leaft4dead2/maps"
+    },
+    
+    "asset_browser_exclude": {
+        "prefix": "materials/",
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+    }
+}

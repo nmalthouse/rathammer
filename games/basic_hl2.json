@@ -1,29 +1,28 @@
 {
-        "gameinfo":[  {
-            "base_dir": "Half-Life 2",
-            "game_dir": "Half-Life 2/ep2"
-        }],
-
-        "mapbuilder": {
-            "game_dir":    "Half-Life 2",
-            "exe_dir" :  "Half-Life 2/bin",
-            "game_name":   "ep2",
-            "output_dir":  "hl2/maps"
-        },
-
-        "fgd_dir":     "Half-Life 2/bin",
-        "fgd":    "halflife2.fgd" ,
-
-        "asset_browser_exclude": {
-            "prefix": "materials/" ,
-
-            "entry": [ "models" ,
-             "gamepadui",
-             "vgui",
-             "particle",
-             "console",
-             "sprites",
-             "backpack"
-            ]
-        }
+  "gameinfo": [
+    {
+      "base_dir": "Half-Life 2",
+      "game_dir": "Half-Life 2/ep2"
+    }
+  ],
+  "mapbuilder": {
+    "game_dir": "Half-Life 2",
+    "exe_dir": "Half-Life 2/bin",
+    "game_name": "ep2",
+    "output_dir": "hl2/maps"
+  },
+  "fgd_dir": "Half-Life 2/bin",
+  "fgd": "halflife2.fgd",
+  "asset_browser_exclude": {
+    "prefix": "materials/",
+    "entry": [
+      "models",
+      "gamepadui",
+      "vgui",
+      "particle",
+      "console",
+      "sprites",
+      "backpack"
+    ]
+  }
 }
