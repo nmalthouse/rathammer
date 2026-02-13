@@ -113,6 +113,7 @@ pub fn unloadMap(ed: *Ed) !void {
     ed.targetname_track.reset();
     ed.draw_state.skybox_textures = null;
     ed.selection.clear();
+    ed.paused = true;
 
     //delete skybox from draw_state
     //unload games

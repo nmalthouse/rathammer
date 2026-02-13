@@ -26,6 +26,8 @@ const MenuBtn = enum(guis.Uid) {
     build_map,
     build_map_user,
     quit,
+    unload_map,
+
     undo,
     redo,
     open_help_url,
@@ -196,6 +198,9 @@ pub const MenuBar = struct {
             .build_map => action.buildMap(self.ed, false) catch {},
             .build_map_user => action.buildMap(self.ed, true) catch {},
             .export_obj_as => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .export_obj) catch return,
+            .unload_map => {
+                action.unloadMap(self.ed) catch {};
+            },
             .export_obj => {
                 const path = self.ed.last_exported_obj_path orelse return;
                 const name = self.ed.last_exported_obj_name orelse return;
@@ -248,6 +253,7 @@ pub const MenuBar = struct {
                     .{ btn_id(.build_map_user), L.lang.btn.build_user, .btn },
                     .{ btn_id(.export_obj), L.lang.btn.export_obj, if (has_obj) .btn else .blank },
                     .{ btn_id(.export_obj_as), L.lang.btn.export_obj_as, .btn },
+                    .{ btn_id(.unload_map), L.lang.btn.unload_map, .btn },
                     .{ btn_id(.quit), L.lang.btn.quit, .btn },
                 });
             },

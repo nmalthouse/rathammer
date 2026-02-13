@@ -328,7 +328,8 @@ pub const Keys = struct {
         cam_up: Bind = SC(.SPACE),
         duplicate: Bind = SC(.Z),
         tool_context: Bind = SC(.G),
-        mouse_capture: Bind = SC(.LSHIFT),
+        //mouse_capture: Bind = SC(.LSHIFT),
+        mouse_capture: Bind = .{ .button = .{ .mouse = .middle } },
 
         cam_slow: Bind = SC(.LCTRL),
 

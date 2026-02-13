@@ -19,6 +19,7 @@ const vpk = @import("../vpk.zig");
 const CbHandle = guis.CbHandle;
 const version = @import("../version.zig");
 const ptext = @import("widget_texture.zig");
+const action = @import("../actions.zig");
 const L = @import("../locale.zig");
 
 pub const PauseWindow = struct {
@@ -222,7 +223,7 @@ pub const PauseWindow = struct {
             }
         }
         if (eql(u8, tab, "recent")) {
-            if (self.editor.has_loaded_map == true) return;
+            //if (self.editor.has_loaded_map == true) return;
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
@@ -498,6 +499,10 @@ pub const PauseWindow = struct {
     pub fn loadBtn(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         if (id >= self.recents.items.len) return;
+
+        if (self.editor.has_loaded_map) {
+            action.unloadMap(self.editor) catch return;
+        }
 
         self.tab_index = 1; //set to main
         self.vt.needs_rebuild = true;

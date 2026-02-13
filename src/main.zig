@@ -221,7 +221,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }, alloc);
     defer win.destroyWindow();
 
-    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &win.bindreg, .{});
+    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &win.bindreg, config.keys);
     win.bindreg.enableAll(true);
 
     _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);

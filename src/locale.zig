@@ -179,6 +179,7 @@ pub const Strings = struct {
         snap_selected_to_int: Str = "snap selected to integer",
 
         import_vmfs: Str = "import vmfs",
+        unload_map: Str = "close map",
     } = .{},
 };
 
