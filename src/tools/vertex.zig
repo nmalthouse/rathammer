@@ -157,7 +157,7 @@ pub const VertexTranslate = struct {
             td.view_3d.*,
         );
         const draw_nd = &ed.draw_state.ctx;
-        const do_marquee = !ed.isBindState(.{ .key = .{ .scancode = .LSHIFT } }, .high);
+        const do_marquee = !ed.isBindState(ed.conf.binds.vertex.do_marquee, .high);
         const had_selection = try self.updateSelection(td, ed, do_marquee, draw_nd, r);
         if (self.dist.length() > 0) {
             var it = self.selected.iterator();

@@ -347,9 +347,9 @@ pub const CubeDraw = struct {
         const ray = self.camRay(td.screen_area, td.view_3d.*);
         switch (tool.state) {
             .start => {
-                const plane_up = self.isBindState(self.config.keys.cube_draw_plane_up.b, .rising);
-                const plane_down = self.isBindState(self.config.keys.cube_draw_plane_down.b, .rising);
-                const send_raycast = self.isBindState(self.config.keys.cube_draw_plane_raycast.b, .high);
+                const plane_up = self.isBindState(self.conf.binds.cube_draw.plane_up, .rising);
+                const plane_down = self.isBindState(self.conf.binds.cube_draw.plane_down, .rising);
+                const send_raycast = self.isBindState(self.conf.binds.cube_draw.plane_raycast, .high);
                 if (plane_up)
                     tool.plane_z += snap.s.z();
                 if (plane_down)

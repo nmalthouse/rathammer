@@ -74,7 +74,7 @@ pub const Ctx2dView = struct {
         }
 
         var capture: bool = false;
-        if (can_grab and (mouse.middle == .high or ed.isBindState(ed.config.keys.cam_pan.b, .high))) {
+        if (can_grab and (mouse.middle == .high)) {
             capture = true;
             self.cam.pan(mouse.delta.scale(ed.config.window.sensitivity_2d));
         }

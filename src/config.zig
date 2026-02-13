@@ -9,7 +9,7 @@ pub const Config = struct {
     const mask = graph.SDL.keycodes.Keymod.mask;
     enable_version_check: bool = true,
     paths: struct {
-        steam_dir: []const u8 = "",
+        steam_dir: []const u8 = "/mnt/bigssd/SteamLibrary/steamapps/common",
     } = .{},
     autosave: struct {
         enable: bool = true,
@@ -19,75 +19,7 @@ pub const Config = struct {
     dot_size: f32 = 16,
     gui_tint: u32 = 0xffff_ffff,
     mouse_grab_when: enum { key_low, key_high, toggle } = .key_low,
-    keys: struct {
-        const SC = graph.SDL.NewBind.Scancode;
-        const KC = graph.SDL.NewBind.Keycode;
-        cam_forward: Keybind = .{ .b = SC(.W, 0) },
-        cam_back: Keybind = .{ .b = SC(.S, 0) },
-        cam_strafe_l: Keybind = .{ .b = SC(.A, 0) },
-        cam_strafe_r: Keybind = .{ .b = SC(.D, 0) },
-        cam_down: Keybind = .{ .b = SC(.C, 0) },
-        cam_up: Keybind = .{ .b = SC(.SPACE, 0) },
-        cam_pan: Keybind = .{ .b = SC(.SPACE, 0) },
-
-        tool_context: Keybind = .{ .b = SC(.G, 0) },
-
-        mouse_capture: Keybind = .{ .b = SC(.LSHIFT, 0) },
-
-        cam_slow: Keybind = .{ .b = SC(.LCTRL, 0) },
-
-        hide_selected: Keybind = .{ .b = SC(.H, 0) },
-        unhide_all: Keybind = .{ .b = SC(.H, mask(&.{.CTRL})) },
-
-        quit: Keybind = .{ .b = SC(.ESCAPE, mask(&.{.CTRL})) },
-        focus_search: Keybind = .{ .b = KC(.f, mask(&.{.CTRL})) },
-
-        focus_prop_tab: Keybind = .{ .b = SC(.G, 0) },
-        focus_tool_tab: Keybind = .{ .b = SC(.T, 0) },
-
-        tool: ArrayList(Keybind) = .{},
-        workspace: ArrayList(Keybind) = .{},
-        save: Keybind = .{ .b = KC(.s, mask(&.{.CTRL})) },
-        save_new: Keybind = .{ .b = KC(.s, mask(&.{ .CTRL, .SHIFT })) },
-
-        marquee_3d: Keybind = .{ .b = SC(._4, 0) },
-        select: Keybind = .{ .b = SC(.E, 0) },
-        delete_selected: Keybind = .{ .b = SC(.D, 0) },
-        toggle_select_mode: Keybind = .{ .b = SC(.TAB, 0) },
-        clear_selection: Keybind = .{ .b = SC(.E, mask(&.{.CTRL})) },
-        marquee: Keybind = .{ .b = SC(.M, 0) },
-
-        group_selection: Keybind = .{ .b = SC(.T, mask(&.{.CTRL})) },
-
-        build_map: Keybind = .{ .b = SC(.F9, 0) },
-        build_map_user: Keybind = .{ .b = SC(.F10, 0) },
-
-        duplicate: Keybind = .{ .b = SC(.Z, 0) },
-
-        down_line: Keybind = .{ .b = SC(.C, 0) }, // j in dvorak
-        up_line: Keybind = .{ .b = SC(.V, 0) }, // k in dvorak
-        grab_far: Keybind = .{ .b = SC(.Q, 0) },
-
-        grid_inc: Keybind = .{ .b = SC(.R, 0) },
-        grid_dec: Keybind = .{ .b = SC(.F, 0) },
-
-        pause: Keybind = .{ .b = SC(.ESCAPE, 0) },
-
-        cube_draw_plane_up: Keybind = .{ .b = SC(.X, 0) },
-        cube_draw_plane_down: Keybind = .{ .b = SC(.Z, 0) },
-        cube_draw_plane_raycast: Keybind = .{ .b = SC(.Q, 0) },
-        texture_eyedrop: Keybind = .{ .b = SC(.Q, 0) },
-        texture_wrap: Keybind = .{ .b = SC(.Z, 0) },
-
-        undo: Keybind = .{ .b = KC(.z, 0) },
-        redo: Keybind = .{ .b = KC(.s, 0) },
-
-        clip_commit: Keybind = .{ .b = SC(.RETURN, 0) },
-
-        inspector_tab: ArrayList(Keybind) = .{},
-
-        ignore_groups: Keybind = .{ .b = SC(.G, mask(&.{.CTRL})) },
-    } = .{},
+    keys: Keys = .{},
     window: struct {
         height_px: i32 = 600,
         width_px: i32 = 800,
@@ -98,25 +30,7 @@ pub const Config = struct {
 
         display_scale: f32 = -1,
     } = .{},
-    default_game: []const u8 = "",
-    games: struct {
-        map: std.StringHashMapUnmanaged(GameEntry) = .{},
-        pub fn parseVdf(p: *vdf.Parsed, v: *const vdf.KV.Value, alloc: std.mem.Allocator, strings_o: ?*StringStorage) !@This() {
-            const strings = strings_o orelse return error.needStrings;
-            var ret = @This(){};
-            if (v.* == .literal)
-                return error.notgood;
-            for (v.obj.list.items) |entry| {
-                const str = p.stringFromId(entry.key) orelse "";
-                try ret.map.put(
-                    alloc,
-                    try strings.store(str),
-                    try vdf.fromValue(GameEntry, p, &entry.val, alloc, strings),
-                );
-            }
-            return ret;
-        }
-    } = .{},
+    default_game: []const u8 = "basic_hl2",
 };
 
 const builtin = @import("builtin");
@@ -141,7 +55,7 @@ pub const GameEntry = struct {
 
         user_build_cmd: []const u8 = "",
     };
-    gameinfo: ArrayList(GameInfo) = .{},
+    gameinfo: []const GameInfo = &.{},
 
     fgd_dir: []const u8 = "",
     fgd: []const u8 = "",
@@ -150,7 +64,7 @@ pub const GameEntry = struct {
 
     asset_browser_exclude: struct {
         prefix: []const u8 = "",
-        entry: ArrayList([]const u8) = .{},
+        entry: []const []const u8 = &.{},
     } = .{},
 };
 
@@ -158,6 +72,8 @@ pub const ConfigCtx = struct {
     config: Config,
     strings: StringStorage,
     alloc: std.mem.Allocator,
+    games: std.StringHashMapUnmanaged(GameEntry) = .{},
+    binds: genBindingIdStruct(Keys) = undefined,
 
     pub fn loadLooseGameConfigs(self: *@This(), dir: std.fs.Dir, dir_name: []const u8) !void {
         var iter = try dir.openDir(dir_name, .{ .iterate = true });
@@ -169,23 +85,25 @@ pub const ConfigCtx = struct {
             switch (item.kind) {
                 else => {},
                 .file => {
-                    if (std.mem.endsWith(u8, item.basename, ".vdf")) {
+                    const extension = ".json";
+                    if (std.mem.endsWith(u8, item.basename, extension)) {
                         const in = try item.dir.openFile(item.basename, .{});
                         defer in.close();
                         var buf: [256]u8 = undefined;
                         var reader = in.reader(&buf);
                         const slice = try reader.interface.allocRemaining(self.alloc, .unlimited);
                         defer self.alloc.free(slice);
-                        var val = try vdf.parse(self.alloc, slice, null, .{});
+                        const val = try std.json.parseFromSlice(GameEntry, self.alloc, slice, .{ .allocate = .alloc_always });
                         defer val.deinit();
-                        const name = item.basename[0 .. item.basename.len - ".vdf".len];
-                        if (self.config.games.map.contains(name)) {
+                        const name = item.basename[0 .. item.basename.len - extension.len];
+                        if (self.games.contains(name)) {
                             std.debug.print("Config already contains game config for {s} ignoring file\n", .{name});
                         } else {
-                            try self.config.games.map.put(
+                            try self.games.put(
                                 self.alloc,
                                 try self.strings.store(name),
-                                try vdf.fromValue(GameEntry, &val, &.{ .obj = &val.value }, self.alloc, &self.strings),
+                                try dupeStruct(val.value, self.strings.arena_alloc, &self.strings),
+                                //try vdf.fromValue(GameEntry, &val, &.{ .obj = &val.value }, self.alloc, &self.strings),
                             );
                         }
                     } else {}
@@ -195,15 +113,16 @@ pub const ConfigCtx = struct {
     }
 
     pub fn deinit(self: *@This()) void {
-        var it = self.config.games.map.valueIterator();
+        var it = self.games.valueIterator();
         while (it.next()) |item| {
-            item.asset_browser_exclude.entry.deinit(self.alloc);
-            item.gameinfo.deinit(self.alloc);
+            _ = item;
+            //item.asset_browser_exclude.entry.deinit(self.alloc);
+            //item.gameinfo.deinit(self.alloc);
         }
-        self.config.games.map.deinit(self.alloc);
-        self.config.keys.workspace.deinit(self.alloc);
-        self.config.keys.tool.deinit(self.alloc);
-        self.config.keys.inspector_tab.deinit(self.alloc);
+        self.games.deinit(self.alloc);
+        //self.config.keys.workspace.deinit(self.alloc);
+        //self.config.keys.tool.deinit(self.alloc);
+        //self.config.keys.inspector_tab.deinit(self.alloc);
         self.strings.deinit();
         self.alloc.destroy(self);
     }
@@ -319,16 +238,242 @@ pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //L
     ctx.* = ConfigCtx{
         .alloc = alloc,
         .strings = try StringStorage.init(alloc),
-        .config = undefined,
+        .config = .{},
     };
-    //CONF MUST BE copyable IE no alloc
-    const conf = try vdf.fromValue(
-        Config,
-        &val,
-        &.{ .obj = &val.value },
-        alloc,
-        &ctx.strings,
-    );
-    ctx.config = conf;
+    ////CONF MUST BE copyable IE no alloc
+    //const conf = try vdf.fromValue(
+    //    Config,
+    //    &val,
+    //    &.{ .obj = &val.value },
+    //    alloc,
+    //    &ctx.strings,
+    //);
+    //ctx.config = conf;
     return ctx;
+}
+
+const SerialBinding = struct {
+    mode: graph.SDL.keybinding.FocusMode = .multi,
+    button: graph.SDL.keybinding.ButtonBind,
+    mod: []const graph.SDL.keybinding.Keymod = &.{},
+
+    pub fn Keycode(k: graph.SDL.keycodes.Keycode) @This() {
+        return .{ .button = .{ .keycode = k } };
+    }
+
+    pub fn Scancode(k: graph.SDL.keycodes.Scancode) @This() {
+        return .{ .button = .{ .scancode = k } };
+    }
+
+    pub fn name(self: @This()) []const u8 {
+        return switch (self.button) {
+            inline else => |k| @tagName(k),
+        };
+    }
+
+    pub fn nameFull(self: @This(), buf: []u8) []const u8 {
+        //const mod_name = graph.keycodes.Keymod.name(self.mod, buf);
+        //if (mod_name.len >= buf.len) return mod_name;
+        const mod_name = "";
+        var fbs = std.io.FixedBufferStream([]u8){ .buffer = buf, .pos = mod_name.len };
+
+        fbs.writer().print("{s}", .{self.name()}) catch {};
+
+        return buf[0..fbs.pos];
+    }
+};
+
+pub const Keys = struct {
+    const mask = graph.SDL.keybinding.Keymod.mask;
+    const Bind = SerialBinding;
+    const SC = SerialBinding.Scancode;
+    const KC = SerialBinding.Keycode;
+    global: struct {
+        focus_search: Bind = .{ .button = .{ .keycode = .f }, .mod = &.{.ctrl} },
+
+        workspace_0: Bind = .{ .button = .{ .scancode = ._1 }, .mod = &.{.alt}, .mode = .exclusive },
+        workspace_texture: Bind = .{ .button = .{ .scancode = .T }, .mod = &.{.alt}, .mode = .exclusive },
+        workspace_model: Bind = .{ .button = .{ .scancode = .M }, .mod = &.{.alt}, .mode = .exclusive },
+        workspace_1: Bind = .{ .button = .{ .scancode = ._2 }, .mod = &.{.alt}, .mode = .exclusive },
+
+        save: Bind = .{ .button = .{ .keycode = .s }, .mod = &.{.ctrl}, .mode = .exclusive },
+        save_new: Bind = .{ .button = .{ .keycode = .s }, .mod = &.{ .ctrl, .shift }, .mode = .exclusive },
+        build_map: Bind = .{ .button = .{ .keycode = .F9 }, .mode = .exclusive },
+        build_map_user: Bind = .{ .button = .{ .keycode = .F10 }, .mode = .exclusive },
+
+        down_line: Bind = SC(.C), // j in dvorak
+        up_line: Bind = SC(.V), // k in dvorak
+        pause: Bind = SC(.ESCAPE),
+
+        inspector_tab_0: Bind = SC(.F1),
+        inspector_tab_1: Bind = SC(.F2),
+        inspector_tab_2: Bind = SC(.F3),
+        inspector_tab_3: Bind = SC(.F4),
+
+        undo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{.ctrl}, .mode = .exclusive },
+        redo: Bind = .{ .button = .{ .scancode = .Z }, .mod = &.{ .ctrl, .shift }, .mode = .exclusive },
+
+        quit: Bind = .{ .button = .{ .scancode = .ESCAPE }, .mod = &.{.ctrl} },
+    } = .{},
+
+    tool: struct {
+        translate: Bind = SC(._1),
+        translate_face: Bind = SC(._2),
+        place_entity: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.shift}, .mode = .exclusive },
+        cube_draw: Bind = .{ .button = .{ .scancode = .B }, .mod = &.{.shift}, .mode = .exclusive },
+        fast_face: Bind = SC(._3),
+        texture: Bind = .{ .button = .{ .scancode = .T }, .mod = &.{.shift}, .mode = .exclusive },
+        vertex: Bind = .{ .button = .{ .scancode = .V }, .mod = &.{.shift}, .mode = .exclusive },
+        clip: Bind = .{ .button = .{ .scancode = .X }, .mod = &.{.shift}, .mode = .exclusive },
+    } = .{},
+
+    view3d: struct { //Context
+        cam_forward: Bind = SC(.W),
+        cam_back: Bind = SC(.S),
+        cam_strafe_l: Bind = SC(.A),
+        cam_strafe_r: Bind = SC(.D),
+        cam_down: Bind = SC(.C),
+        cam_up: Bind = SC(.SPACE),
+        duplicate: Bind = SC(.Z),
+        tool_context: Bind = SC(.G),
+        mouse_capture: Bind = SC(.LSHIFT),
+
+        cam_slow: Bind = SC(.LCTRL),
+
+        hide_selected: Bind = SC(.H),
+        unhide_all: Bind = .{ .button = .{ .scancode = .H }, .mod = &.{.ctrl} },
+
+        focus_prop_tab: Bind = SC(.G),
+        focus_tool_tab: Bind = SC(.T),
+
+        marquee_3d: Bind = SC(._4),
+        select: Bind = .{ .button = .{ .scancode = .E }, .mode = .exclusive },
+        delete_selected: Bind = .{ .button = .{ .scancode = .X }, .mod = &.{.ctrl}, .mode = .exclusive },
+        toggle_select_mode: Bind = SC(.TAB),
+        clear_selection: Bind = .{ .button = .{ .scancode = .E }, .mod = &.{.ctrl}, .mode = .exclusive },
+        marquee: Bind = SC(.M),
+
+        group_selection: Bind = .{ .button = .{ .scancode = .T }, .mod = &.{.ctrl}, .mode = .exclusive },
+
+        grid_inc: Bind = SC(.R),
+        grid_dec: Bind = SC(.F),
+
+        ignore_groups: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.ctrl} },
+    } = .{},
+
+    vertex: struct {
+        do_marquee: Bind = SC(.LSHIFT),
+    } = .{},
+
+    cube_draw: struct {
+        plane_up: Bind = SC(.X),
+        plane_down: Bind = SC(.Z),
+        plane_raycast: Bind = SC(.Q),
+    } = .{},
+
+    clipping: struct {
+        commit: Bind = SC(.RETURN),
+    } = .{},
+
+    texture: struct {
+        eyedrop: Bind = SC(.Q),
+        wrap: Bind = SC(.Z),
+    } = .{},
+};
+
+pub fn registerBindIds(comptime BindingSerialT: type, bindreg: *graph.SDL.keybinding.BindRegistry, serial: BindingSerialT) !genBindingIdStruct(BindingSerialT) {
+    const BindingIdStruct = genBindingIdStruct(BindingSerialT);
+    var ret: BindingIdStruct = undefined;
+    const info = @typeInfo(BindingIdStruct).@"struct";
+    inline for (info.fields) |field| {
+        const ctx_info = @typeInfo(field.type).@"struct";
+        const ctx_id = try bindreg.newContext(field.name);
+        @field(ret, field.name).context_id = ctx_id;
+
+        inline for (ctx_info.fields[0 .. ctx_info.fields.len - 1]) |bf| {
+            const bind = @field(@field(serial, field.name), bf.name);
+
+            const bind_id = try bindreg.registerBind(.bind(bind.button, bind.mode, bind.mod, ctx_id), bf.name);
+
+            @field(@field(ret, field.name), bf.name) = bind_id;
+        }
+    }
+    return ret;
+}
+
+pub const BindIds = genBindingIdStruct(Keys);
+fn genBindingIdStruct(comptime config_mapping: type) type {
+    const info = @typeInfo(config_mapping).@"struct";
+    var main_out: [info.fields.len]std.builtin.Type.StructField = undefined;
+    inline for (info.fields, 0..) |field, f_i| {
+        const binf = @typeInfo(field.type).@"struct";
+        var bind_fields: [binf.fields.len + 1]std.builtin.Type.StructField = undefined;
+        const default: graph.SDL.keybinding.BindId = .none;
+        inline for (binf.fields, 0..) |bind, b_i| {
+            bind_fields[b_i] = .{
+                .name = bind.name,
+                .type = graph.SDL.keybinding.BindId,
+                .default_value_ptr = &default,
+                .is_comptime = false,
+                .alignment = @alignOf(graph.SDL.keybinding.BindId),
+            };
+        }
+        bind_fields[binf.fields.len] = .{
+            .name = "context_id",
+            .type = graph.SDL.keybinding.ContextId,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(graph.SDL.keybinding.ContextId),
+        };
+
+        const T = @Type(.{ .@"struct" = .{
+            .fields = &bind_fields,
+            .layout = .auto,
+            .decls = &.{},
+            .is_tuple = false,
+        } });
+        main_out[f_i] = .{
+            .name = field.name,
+            .type = T,
+            .default_value_ptr = null,
+            .is_comptime = false,
+            .alignment = @alignOf(T),
+        };
+    }
+    return @Type(.{
+        .@"struct" = .{
+            .fields = &main_out,
+            .layout = .auto,
+            .decls = &.{},
+            .is_tuple = false,
+        },
+    });
+}
+
+fn dupeStruct(input: anytype, alloc: std.mem.Allocator, str: *StringStorage) !@TypeOf(input) {
+    const T = @TypeOf(input);
+    const info = @typeInfo(T);
+    switch (T) {
+        []const u8 => return try str.store(input),
+        else => switch (info) {
+            .float, .int => return input,
+            .@"struct" => |s| {
+                var ret: T = undefined;
+                inline for (s.fields) |field|
+                    @field(ret, field.name) = try dupeStruct(@field(input, field.name), alloc, str);
+                return ret;
+            },
+            .pointer => |p| {
+                if (p.size == .slice) {
+                    const new = try alloc.alloc(p.child, input.len);
+                    for (input, 0..) |item, i| {
+                        new[i] = try dupeStruct(item, alloc, str);
+                    }
+                    return new;
+                }
+            },
+            else => {},
+        },
+    }
+    @compileError("borken for " ++ @typeName(T));
 }

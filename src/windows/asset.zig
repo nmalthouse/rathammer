@@ -67,7 +67,7 @@ pub const AssetBrowser = struct {
 
         switch (ev) {
             .gameLoaded => {
-                self.populate(&self.ed.vpkctx, self.ed.game_conf.asset_browser_exclude.prefix, self.ed.game_conf.asset_browser_exclude.entry.items, self.mod) catch {
+                self.populate(&self.ed.vpkctx, self.ed.game_conf.asset_browser_exclude.prefix, self.ed.game_conf.asset_browser_exclude.entry, self.mod) catch {
                     log.err("populate failed", .{});
                 };
                 self.vt.needs_rebuild = true;
@@ -341,13 +341,13 @@ pub const ModelBrowser = struct {
     pub fn update(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
 
-        if (gui.sdl_win.isBindState(self.ed.config.keys.up_line.b, .rising) and self.selected_index > 0) {
+        if (gui.sdl_win.isBindState(self.ed.conf.binds.global.up_line, .rising) and self.selected_index > 0) {
             if (self.scroll_index > 0)
                 self.scroll_index -= 1;
             self.setSelected(self.selected_index - 1);
             vt.needs_rebuild = true;
         }
-        if (gui.sdl_win.isBindState(self.ed.config.keys.down_line.b, .rising) and self.selected_index + 1 < self.list.count()) {
+        if (gui.sdl_win.isBindState(self.ed.conf.binds.global.down_line, .rising) and self.selected_index + 1 < self.list.count()) {
             self.setSelected(self.selected_index + 1);
             self.scroll_index += 1;
             vt.needs_rebuild = true;
@@ -385,11 +385,11 @@ pub const ModelBrowser = struct {
                 const sp = spa.split(.vertical, spa.w / 2);
                 _ = Wg.Text.build(lay, sp[0], "{s}: {s}", .{
                     L.lang.up,
-                    self.ed.config.keys.up_line.b.nameFull(&buf),
+                    self.ed.config.keys.global.up_line.nameFull(&buf),
                 }, .{});
                 _ = Wg.Text.build(lay, sp[1], "{s}: {s}", .{
                     L.lang.down,
-                    self.ed.config.keys.down_line.b.nameFull(&buf),
+                    self.ed.config.keys.global.down_line.nameFull(&buf),
                 }, .{});
             }
             _ = Wg.Button.build(lay, hy.getArea(), L.lang.btn.accept, .{ .cb_vt = &self.cbhandle, .cb_fn = btnAcceptCb, .id = 0 });

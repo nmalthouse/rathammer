@@ -260,6 +260,7 @@ pub const Context = struct {
 
     games: Game.GameList,
     config: Conf.Config,
+    conf: *const Conf.ConfigCtx,
     game_conf: Conf.GameEntry,
     dirs: path_guess.Dirs,
     win: *graph.SDL.Window,
@@ -333,7 +334,7 @@ pub const Context = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         num_threads: ?u32,
-        config: Conf.Config,
+        config: *const Conf.ConfigCtx,
         args: anytype,
         win_ptr: *graph.SDL.Window,
         loadctx: *LoadCtx,
@@ -355,11 +356,12 @@ pub const Context = struct {
             .loadctx = loadctx,
             .win = win_ptr,
             .notifier = NotifyCtx.init(alloc, 4000),
-            .autosaver = try Autosaver.init(config.autosave.interval_min * std.time.ms_per_min, config.autosave.max, config.autosave.enable, alloc),
+            .autosaver = try Autosaver.init(config.config.autosave.interval_min * std.time.ms_per_min, config.config.autosave.max, config.config.autosave.enable, alloc),
             .rayctx = raycast.Ctx.init(alloc),
             .frame_arena = std.heap.ArenaAllocator.init(alloc),
             .groups = ecs.Groups.init(alloc),
-            .config = config,
+            .config = config.config,
+            .conf = config,
             .alloc = alloc,
             .fgd_ctx = fgd.EntCtx.init(alloc),
             .undoctx = undo.UndoContext.init(alloc),
@@ -434,20 +436,20 @@ pub const Context = struct {
                 try async_util.CheckVersionHttp.spawn(self.alloc, &self.async_asset_load);
             }
         }
-        try self.games.createGameList(&self.config.games.map, self.dirs.games_dir);
+        try self.games.createGameList(&self.conf.games, self.dirs.games_dir);
     }
 
     pub fn loadGame(self: *Self, game_name: []const u8) !void {
         defer self.game_loaded = true;
         const custom_cwd_msg = "Set a custom cwd with --custom_cwd flag";
-        const game_conf = self.config.games.map.get(game_name) orelse {
+        const game_conf = self.conf.games.get(game_name) orelse {
             std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
             return error.gameConfigNotFound;
         };
         self.game_conf = game_conf;
         const games_dir = self.dirs.games_dir.dir;
         self.loaded_game_name = try self.storeString(game_name);
-        for (game_conf.gameinfo.items) |gamei| {
+        for (game_conf.gameinfo) |gamei| {
             const base_dir_ = util.openDirFatal(games_dir, gamei.base_dir, .{}, custom_cwd_msg);
             const game_dir_ = util.openDirFatal(games_dir, gamei.game_dir, .{}, custom_cwd_msg);
 
@@ -780,24 +782,25 @@ pub const Context = struct {
         }
     }
 
-    pub fn isBindState(self: *const Self, bind: graph.SDL.NewBind, state: graph.SDL.ButtonState) bool {
-        if (!self.stack_owns_input) return false;
+    pub fn isBindState(self: *const Self, bind: graph.SDL.keybinding.BindId, state: graph.SDL.ButtonState) bool {
+        // if (!self.stack_owns_input) return false;
         return self.win.isBindState(bind, state);
     }
 
     pub fn getCam3DMove(ed: *const Self, do_look: bool) graph.ptypes.Camera3D.MoveState {
         const perc_of_60fps = ed.draw_state.frame_time_ms / 16.0;
+        const bind = &ed.conf.binds.view3d;
 
         return graph.ptypes.Camera3D.MoveState{
-            .down = ed.isBindState(ed.config.keys.cam_down.b, .high),
-            .up = ed.isBindState(ed.config.keys.cam_up.b, .high),
-            .left = ed.isBindState(ed.config.keys.cam_strafe_l.b, .high),
-            .right = ed.isBindState(ed.config.keys.cam_strafe_r.b, .high),
-            .fwd = ed.isBindState(ed.config.keys.cam_forward.b, .high),
-            .bwd = ed.isBindState(ed.config.keys.cam_back.b, .high),
+            .down = ed.isBindState(bind.cam_down, .high),
+            .up = ed.isBindState(bind.cam_up, .high),
+            .left = ed.isBindState(bind.cam_strafe_l, .high),
+            .right = ed.isBindState(bind.cam_strafe_r, .high),
+            .fwd = ed.isBindState(bind.cam_forward, .high),
+            .bwd = ed.isBindState(bind.cam_back, .high),
             .mouse_delta = if (do_look and ed.stack_owns_input) ed.win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .zero,
             .scroll_delta = if (ed.stack_owns_input) ed.win.mouse.wheel_delta.y else 0,
-            .speed_perc = @as(f32, if (ed.win.bindHigh(ed.config.keys.cam_slow.b)) 0.1 else 1) * perc_of_60fps,
+            .speed_perc = @as(f32, if (ed.isBindState(bind.cam_slow, .high)) 0.1 else 1) * perc_of_60fps,
         };
     }
 
@@ -1406,15 +1409,19 @@ pub const Context = struct {
         const start = area.pos();
         const w = fh * 5;
         const tool_index = self.edit_state.__tool_index;
-        for (self.tools.vtables.dense.items, 0..) |tool, i| {
-            const fi: f32 = @floatFromInt(i);
-            const rec = graph.Rec(start.x + fi * w, start.y, w, w);
-            tool.tool_icon_fn(tool, draw, self, rec);
-            var buf: [32]u8 = undefined;
-            const n = if (i < self.config.keys.tool.items.len) self.config.keys.tool.items[i].b.nameFull(&buf) else "NONE";
-            draw.textClipped(rec, "{s}", .{n}, .{ .px_size = fh, .font = font, .color = 0xff }, .left);
-            if (tool_index == i) {
-                draw.rectBorder(rec, 3, colors.selected);
+        const info = @typeInfo(@TypeOf(self.conf.binds.tool)).@"struct".fields;
+        inline for (info[0 .. info.len - 1], 0..) |tool_name, i| {
+            if (i < self.tools.vtables.dense.items.len) {
+                const tool = self.tools.vtables.dense.items[i];
+                const fi: f32 = @floatFromInt(i);
+                const rec = graph.Rec(start.x + fi * w, start.y, w, w);
+                tool.tool_icon_fn(tool, draw, self, rec);
+                var buf: [32]u8 = undefined;
+                const n = @field(self.config.keys.tool, tool_name.name).nameFull(&buf);
+                draw.textClipped(rec, "{s}", .{n}, .{ .px_size = fh, .font = font, .color = 0xff }, .left);
+                if (tool_index == i) {
+                    draw.rectBorder(rec, 3, colors.selected);
+                }
             }
         }
     }
@@ -1652,14 +1659,15 @@ pub const Context = struct {
             }
             self.notify("{s}: {s}", .{ L.lang.autosaved, basename }, colors.good);
         }
-        if (win.isBindState(self.config.keys.save.b, .rising)) {
+        const gbind = &self.conf.binds.global;
+        if (win.isBindState(gbind.save, .rising)) {
             try action.trySave(self);
         }
-        if (win.isBindState(self.config.keys.save_new.b, .rising)) {
+        if (win.isBindState(gbind.save_new, .rising)) {
             try async_util.SdlFileData.spawn(self.alloc, &self.async_asset_load, .save_map);
         }
-        const build_map = win.isBindState(self.config.keys.build_map.b, .rising);
-        const build_map_user = win.isBindState(self.config.keys.build_map_user.b, .rising);
+        const build_map = win.isBindState(gbind.build_map, .rising);
+        const build_map_user = win.isBindState(gbind.build_map_user, .rising);
         if (build_map or build_map_user) {
             try action.buildMap(self, build_map_user);
         }
@@ -1763,35 +1771,37 @@ pub const Context = struct {
     }
 
     pub fn handleTabKeys(ed: *Self, tabs: anytype) void {
-        const config = &ed.config;
         const ds = &ed.draw_state;
-        for (config.keys.workspace.items, 0..) |b, i| {
-            if (ed.win.isBindState(b.b, .rising))
-                ds.tab_index = i;
+        const bb = &ed.conf.binds.global;
+        if (ed.isBindState(bb.workspace_0, .rising)) {
+            ds.tab_index = 0;
+        } else if (ed.isBindState(bb.workspace_texture, .rising)) {
+            ds.tab_index = 1;
+        } else if (ed.isBindState(bb.workspace_model, .rising)) {
+            ds.tab_index = 2;
+        } else if (ed.isBindState(bb.workspace_1, .rising)) {
+            ds.tab_index = 3;
         }
         ds.tab_index = @min(ds.tab_index, tabs.len - 1);
     }
 
     pub fn handleMisc3DKeys(ed: *Self) void {
-        const config = &ed.config;
-
         { //key binding stuff
 
-            if (ed.isBindState(config.keys.grid_inc.b, .rising))
+            if (ed.isBindState(ed.conf.binds.view3d.grid_inc, .rising))
                 ed.grid.double();
-            if (ed.isBindState(config.keys.grid_dec.b, .rising))
+            if (ed.isBindState(ed.conf.binds.view3d.grid_dec, .rising))
                 ed.grid.half();
 
-            if (ed.isBindState(config.keys.ignore_groups.b, .rising)) {
+            if (ed.isBindState(ed.conf.binds.view3d.ignore_groups, .rising)) {
                 ed.selection.ignore_groups = !ed.selection.ignore_groups;
                 ed.eventctx.pushEvent(.{ .menubar_dirty = {} });
             }
 
-            {
-                for (config.keys.tool.items, 0..) |b, i| {
-                    if (ed.isBindState(b.b, .rising)) {
-                        ed.setTool(@intCast(i));
-                    }
+            const fi = @typeInfo(@TypeOf(ed.conf.binds.tool)).@"struct".fields;
+            inline for (fi[0 .. fi.len - 1], 0..) |field, i| {
+                if (ed.isBindState(@field(ed.conf.binds.tool, field.name), .rising)) {
+                    ed.setTool(@intCast(i));
                 }
             }
         }

@@ -50,7 +50,7 @@ pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
 pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool, console: *ConsoleWindow, rising: bool) !enum { cont, exit, unpause } {
     if (!editor.paused)
         return .unpause;
-    if (win.isBindState(editor.config.keys.quit.b, .rising) or should_exit)
+    if (win.isBindState(editor.conf.binds.global.quit, .rising) or should_exit)
         return .exit;
     win.pumpEvents(.wait);
     win.grabMouse(false);
@@ -155,13 +155,21 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         }
     };
     const config = loaded_config.config;
+    if (true) { //write out json
+        var out = try std.fs.cwd().createFile("/tmp/config.json", .{});
+        defer out.close();
+        var out_buf: [1024]u8 = undefined;
+        var out_wr = out.writer(&out_buf);
+        defer out_wr.interface.flush() catch {};
+        try std.json.Stringify.value(config, .{ .whitespace = .indent_2 }, &out_wr.interface);
+    }
 
     if (config.default_game.len == 0) {
         std.debug.print("config.vdf must specify a default_game!\n", .{});
         return error.incompleteConfig;
     }
     const game_name = args.game orelse config.default_game;
-    const game_conf = config.games.map.get(game_name) orelse {
+    const game_conf = loaded_config.games.get(game_name) orelse {
         std.debug.print("{s} is not defined in the \"games\" section\n", .{game_name});
         return error.gameConfigNotFound;
     };
@@ -180,7 +188,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
         {
             try stdout.print("Available game configs: \n", .{});
-            var it = config.games.map.iterator();
+            var it = loaded_config.games.iterator();
             while (it.next()) |item| {
                 try stdout.print("{s}{s}\n", .{
                     if (std.mem.eql(u8, item.key_ptr.*, default_game)) default_string else default_pad,
@@ -188,7 +196,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
                 });
             }
         }
-        if (!config.games.map.contains(default_game)) try stdout.print("{s} is not a defined game", .{default_game});
+        if (!loaded_config.games.contains(default_game)) try stdout.print("{s} is not a defined game", .{default_game});
         try stdout.writeAll(sep);
         try stdout.print("App dir    : {s}\n", .{app_cwd.path});
         try stdout.print("Config dir : {s}\n", .{config_dir.path});
@@ -213,6 +221,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
     }, alloc);
     defer win.destroyWindow();
+
+    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &win.bindreg, .{});
+    win.bindreg.enableAll(true);
 
     _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
 
@@ -278,7 +289,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var edit_prof = profile.init();
     edit_prof.start();
 
-    var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, config, args, &win, &loadctx, dirs);
+    var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, loaded_config, args, &win, &loadctx, dirs);
     defer editor.deinit();
     edit_prof.end();
     edit_prof.log("edit init");
@@ -476,9 +487,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     win.grabMouse(true);
     main_loop: while (!win.should_exit) {
         var just_paused = false;
-        if (win.isBindState(config.keys.quit.b, .rising) or pause_win.should_exit)
+        if (win.isBindState(loaded_config.binds.global.quit, .rising) or pause_win.should_exit)
             break :main_loop;
-        if (win.isBindState(config.keys.pause.b, .rising)) {
+        if (win.isBindState(loaded_config.binds.global.pause, .rising)) {
             editor.paused = !editor.paused;
 
             if (editor.paused) { //Always start with it focused
@@ -522,13 +533,14 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         ws.doTheSliders(win.mouse.pos, win.mouse.delta, win.mouse.left);
         try ws.setWorkspaceAndArea(editor.draw_state.tab_index, winrect);
 
-        for (config.keys.inspector_tab.items, 0..) |bind, ind| {
-            if (ind >= InspectorWindow.tabs.len)
-                break;
+        //for (config.keys.inspector_tab.items, 0..) |bind, ind| {
+        //    if (ind >= InspectorWindow.tabs.len)
+        //        break;
 
-            if (win.isBindState(bind.b, .rising))
-                inspector_win.setTab(ind);
-        }
+        //    _ = bind;
+        //    //if (win.isBindState(bind.b, .rising))
+        //    //inspector_win.setTab(ind);
+        //}
         editor.handleTabKeys(ws.workspaces.items);
 
         try gui.pre_update();

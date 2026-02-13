@@ -48,11 +48,12 @@ pub const Main3DView = struct {
         self.ed.stack_owns_input = can_grab;
         defer self.ed.stack_owns_input = false;
 
+        const mouse_cap = self.ed.conf.binds.view3d.mouse_capture;
         const grab_when = self.ed.config.mouse_grab_when;
         const prev_grab_tog = self.grab_toggled;
         switch (grab_when) {
             .toggle => {
-                if (self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .rising)) {
+                if (self.ed.isBindState(mouse_cap, .rising)) {
                     self.grab_toggled = !self.grab_toggled;
                 }
             },
@@ -61,13 +62,13 @@ pub const Main3DView = struct {
 
         //These are named wrt high shift uncapturing
         const should_grab = can_grab and switch (grab_when) {
-            .key_low => !self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .high),
-            .key_high => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .high),
+            .key_low => !self.ed.isBindState(mouse_cap, .high),
+            .key_high => self.ed.isBindState(mouse_cap, .high),
             .toggle => self.grab_toggled,
         };
         const ungrab_rising = switch (grab_when) {
-            .key_low => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .rising),
-            .key_high => self.ed.isBindState(self.ed.config.keys.mouse_capture.b, .falling),
+            .key_low => self.ed.isBindState(mouse_cap, .rising),
+            .key_high => self.ed.isBindState(mouse_cap, .falling),
             .toggle => !self.grab_toggled and self.grab_toggled != prev_grab_tog,
         };
 
@@ -144,6 +145,7 @@ pub const Main3DView = struct {
         fh: f32,
         gui: *G.Gui,
     ) !void {
+        const bind = &self.conf.binds.view3d;
         graph.gl.PolygonMode(
             graph.gl.FRONT_AND_BACK,
             if (self.draw_state.tog.wireframe) graph.gl.LINE else graph.gl.FILL,
@@ -385,7 +387,7 @@ pub const Main3DView = struct {
             }
         }
 
-        if (self.isBindState(self.config.keys.tool_context.b, .rising) and limits.IS_DEBUG) {
+        if (false and limits.IS_DEBUG) {
             const mpos = if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos.sub(screen_area.pos());
             const aa = self.frame_arena.allocator();
             var btns = std.ArrayList(G.Widget.BtnContextWindow.ButtonMapping){};
@@ -410,37 +412,37 @@ pub const Main3DView = struct {
             gui.setGrabOverride(&window.vt, false, .{ .hide_pointer = false });
             graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, mpos.x, mpos.y);
         }
-        if (self.isBindState(self.config.keys.undo.b, .rising)) {
+        if (self.isBindState(self.conf.binds.global.undo, .rising)) {
             action.undo(self);
         }
-        if (self.isBindState(self.config.keys.redo.b, .rising)) {
+        if (self.isBindState(self.conf.binds.global.redo, .rising)) {
             action.redo(self);
         }
 
-        if (self.isBindState(self.config.keys.toggle_select_mode.b, .rising))
+        if (self.isBindState(bind.toggle_select_mode, .rising))
             self.selection.toggle();
 
-        if (self.isBindState(self.config.keys.hide_selected.b, .rising)) {
+        if (self.isBindState(bind.hide_selected, .rising)) {
             try action.hideSelected(self);
         }
 
-        if (self.isBindState(self.config.keys.unhide_all.b, .rising))
+        if (self.isBindState(bind.unhide_all, .rising))
             try action.unhideAll(self);
 
-        if (self.isBindState(self.config.keys.clear_selection.b, .rising)) {
+        if (self.isBindState(bind.clear_selection, .rising)) {
             try action.clearSelection(self);
             //TODO the keybinding system sucks, if the user hits ctrl+E it matches the binding ctrl+E and just E
             //we have to have fallthrough for binds without modifiers though
             //implement a system which determines which actions happen
-        } else if (self.isBindState(self.config.keys.select.b, .rising)) {
+        } else if (self.isBindState(bind.select, .rising)) {
             try action.selectRaycast(self, screen_area, view_3d);
         }
 
-        if (self.isBindState(self.config.keys.group_selection.b, .rising)) {
+        if (self.isBindState(bind.group_selection, .rising)) {
             try action.groupSelection(self);
         }
 
-        if (self.isBindState(self.config.keys.delete_selected.b, .rising)) {
+        if (self.isBindState(bind.delete_selected, .rising)) {
             try action.deleteSelected(self);
         }
 
@@ -538,9 +540,9 @@ pub const Main3DView = struct {
         self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
         //3d marquee only works when mouse is not grabbed, otherwise camera projection changes throughout marquee
         if (!self.stack_grabbed_mouse and limits.IS_DEBUG) {
-            if (self.isBindState(self.config.keys.marquee_3d.b, .rising)) {
+            if (self.isBindState(bind.marquee_3d, .rising)) {
                 self.edit_state.marquee.start = self.edit_state.mpos;
-            } else if (self.isBindState(self.config.keys.marquee_3d.b, .high)) {
+            } else if (self.isBindState(bind.marquee_3d, .high)) {
                 const end = self.edit_state.mpos;
 
                 draw.rect(.newV(self.edit_state.marquee.start, end.sub(self.edit_state.marquee.start)), 0xffffff_88);

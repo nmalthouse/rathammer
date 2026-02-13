@@ -475,8 +475,8 @@ pub const TextureTool = struct {
             if (editor.edit_state.rmouse == .rising) {
                 if (self.win_ptr) |win|
                     win.needs_rebuild = true;
-                const dupe = editor.isBindState(editor.config.keys.texture_wrap.b, .high);
-                const pick = editor.isBindState(editor.config.keys.texture_eyedrop.b, .high);
+                const dupe = editor.isBindState(editor.conf.binds.texture.wrap, .high);
+                const pick = editor.isBindState(editor.conf.binds.texture.eyedrop, .high);
 
                 const pot = editor.screenRay(td.screen_area, td.view_3d.*);
                 if (pot.len == 0) break :blk;

@@ -26,7 +26,7 @@ pub const GameList = struct {
     }
 
     // clobbers existing list
-    pub fn createGameList(self: *Self, game_map: *std.StringHashMapUnmanaged(Conf.GameEntry), games_dir: fsutil.WrappedDir) !void {
+    pub fn createGameList(self: *Self, game_map: *const std.StringHashMapUnmanaged(Conf.GameEntry), games_dir: fsutil.WrappedDir) !void {
         self.deinit();
         self.* = .init(self.alloc);
 
@@ -43,7 +43,7 @@ pub const GameList = struct {
                 try wr.print("        fgd_dir: {s}\n", .{en.fgd_dir});
                 try wr.print("        fgd    : {s}\n", .{en.fgd});
             };
-            for (en.gameinfo.items, 0..) |ginfo, i| {
+            for (en.gameinfo, 0..) |ginfo, i| {
                 const name = if (ginfo.gameinfo_name.len > 0) ginfo.gameinfo_name else "gameinfo.txt";
 
                 games_dir.doesFileExistInDir(ginfo.game_dir, name) catch |err| {

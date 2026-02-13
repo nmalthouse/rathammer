@@ -149,7 +149,7 @@ pub const Translate = struct {
 
     pub fn runTool(vt: *i3DTool, td: tools.ToolData, editor: *Editor) tools.ToolError!void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        if (editor.isBindState(editor.config.keys.marquee.b, .rising)) {
+        if (editor.isBindState(editor.conf.binds.view3d.marquee, .rising)) {
             self.mode = .marquee;
             self.cube_draw.reset();
         }
@@ -161,9 +161,9 @@ pub const Translate = struct {
                 //TODO draw the selected still!
                 switch (self.cube_draw.state) {
                     else => self.cube_draw.run(.{
-                        .z_up = editor.isBindState(editor.config.keys.cube_draw_plane_up.b, .rising),
-                        .z_down = editor.isBindState(editor.config.keys.cube_draw_plane_down.b, .rising),
-                        .z_raycast = editor.isBindState(editor.config.keys.cube_draw_plane_raycast.b, .high),
+                        .z_up = editor.isBindState(editor.conf.binds.cube_draw.plane_up, .rising),
+                        .z_down = editor.isBindState(editor.conf.binds.cube_draw.plane_down, .rising),
+                        .z_raycast = editor.isBindState(editor.conf.binds.cube_draw.plane_raycast, .high),
                     }, editor, td.screen_area, td.view_3d.*, td.draw),
                     .finished => {
                         const rc = editor.camRay(td.screen_area, td.view_3d.*);
@@ -199,7 +199,7 @@ pub const Translate = struct {
     pub fn rotate(tool: *Translate, self: *Editor, td: tools.ToolData) !void {
         const draw_nd = &self.draw_state.ctx;
         const draw = td.draw;
-        const dupe = self.isBindState(self.config.keys.duplicate.b, .high);
+        const dupe = self.isBindState(self.conf.binds.view3d.duplicate, .high);
         const color: u32 = if (dupe) COLOR_DUPE else COLOR_MOVE;
         tool.vt.selected_solid_edge_color = color;
 
@@ -306,7 +306,7 @@ pub const Translate = struct {
     pub fn translate(tool: *Translate, self: *Editor, td: tools.ToolData) !void {
         const draw_nd = &self.draw_state.ctx;
         const draw = td.draw;
-        const dupe = self.isBindState(self.config.keys.duplicate.b, .high);
+        const dupe = self.isBindState(self.conf.binds.view3d.duplicate, .high);
         const color: u32 = if (dupe) COLOR_DUPE else COLOR_MOVE;
         tool.vt.selected_solid_edge_color = color;
 
