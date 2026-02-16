@@ -6,7 +6,7 @@
     }],
     
     "fgd_dir":    "Half-Life 1 Source Deathmatch/BIN",
-    "fgd":         "hl1mp.fgd",
+    "fgd":         "halflife2.fgd",
     
     "mapbuilder": {
         "game_dir":    "Half-Life 1 Source Deathmatch",
