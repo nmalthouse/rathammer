@@ -20,6 +20,7 @@ const toolutil = @import("../tool_common.zig");
 const grid = @import("../grid.zig");
 const limits = @import("../limits.zig");
 const actions = @import("../actions.zig");
+const L = @import("../locale.zig");
 
 pub const CubeDraw = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
@@ -66,7 +67,12 @@ pub const CubeDraw = struct {
     end: Vec3 = undefined,
     z: f32 = 0,
 
-    snap_new_verts: bool = false,
+    auto_snap_min_volume: f32 = 16 * 16 * 16,
+    new_vert_snap: enum {
+        auto, // primitives above a certain size will be snapped to integer values
+        grid, // all verticies will be snapped to grid
+        off,
+    } = .auto,
     snap_z: bool = false,
 
     plane_z: f32 = 0,
@@ -152,9 +158,9 @@ pub const CubeDraw = struct {
             if (guis.label(area_vt, tly.getArea(), "Axis", .{})) |ar|
                 _ = Wg.Combo.build(area_vt, ar, &self.primitive_settings.axis, .{});
             {
-                var hy = guis.HorizLayout{ .bounds = tly.getArea() orelse return, .count = 2 };
+                var hy = guis.HorizLayout{ .bounds = tly.getArea() orelse return, .count = 2, .paddingh = 0 };
                 _ = Wg.Checkbox.build(area_vt, hy.getArea(), "Invert", .{ .bool_ptr = &self.primitive_settings.invert }, null);
-                _ = Wg.Checkbox.build(area_vt, hy.getArea(), "snap ", .{ .bool_ptr = &self.snap_new_verts }, null);
+                _ = Wg.Combo.build(area_vt, hy.getArea(), &self.new_vert_snap, .{ .label = L.lang.label.snap });
             }
             _ = Wg.Checkbox.build(area_vt, tly.getArea(), "archbox", .{ .bool_ptr = &self.primitive_settings.archbox }, null);
             if (guis.label(area_vt, tly.getArea(), "angle", .{})) |ar|
@@ -225,8 +231,14 @@ pub const CubeDraw = struct {
         const set = tool.primitive_settings;
         const rot = set.axis.getMat(set.invert, set.angle);
         const rc = ed.camRay(td.screen_area, td.view_3d.*);
-        const snap = if (tool.snap_new_verts) ed.grid else grid.Snap.zero();
         const bounds = tool.bb_gizmo.aabbGizmo(&tool.start, &tool.end, rc, ed.edit_state.lmouse, ed.grid, draw_nd);
+        const bb = util3d.cubeFromBounds(bounds[0], bounds[1]);
+        const volume = bb[1].x() * bb[1].y() * bb[1].z();
+        const snap = switch (tool.new_vert_snap) {
+            .auto => if (volume >= tool.auto_snap_min_volume) grid.Snap.one else grid.Snap.zero,
+            .grid => ed.grid,
+            .off => grid.Snap.zero,
+        };
 
         {
             var tp = td.text_param;
@@ -240,7 +252,6 @@ pub const CubeDraw = struct {
                 td.view_3d.*,
             );
         }
-        const bb = util3d.cubeFromBounds(bounds[0], bounds[1]);
         const x_basis = rot.mulByVec3(Vec3.new(1, 0, 0));
         const y_basis = rot.mulByVec3(Vec3.new(0, 1, 0));
         const z_basis = rot.mulByVec3(Vec3.new(0, 0, 1));

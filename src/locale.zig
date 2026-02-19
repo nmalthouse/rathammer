@@ -116,6 +116,10 @@ pub const Strings = struct {
         .lightmap_scale = "lightmap scale",
     },
 
+    label: struct {
+        snap: Str = "snap: ",
+    } = .{},
+
     checkbox: struct {
         draw_sprite: Str = "draw sprites",
         draw_model: Str = "draw models",

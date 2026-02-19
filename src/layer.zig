@@ -644,7 +644,7 @@ const LayerWidget = struct {
                     .btn_vt = &self.cbhandle,
                 }) catch return;
                 self.right_click_id = self.opts.id;
-                cb.gui.setTransientWindow(r_win);
+                cb.gui.setTransientWindow(r_win, vt);
             },
         }
     }

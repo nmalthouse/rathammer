@@ -803,7 +803,7 @@ const IoWg = struct {
                     .btn_vt = &self.cbhandle,
                 }) catch return;
                 self.right_click_index = real_id;
-                mb.gui.setTransientWindow(r_win);
+                mb.gui.setTransientWindow(r_win, &self.win_ptr.area);
             },
         }
     }

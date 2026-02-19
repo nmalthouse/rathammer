@@ -7,6 +7,9 @@ const util3d = graph.util_3d;
 //Get on the grid
 
 pub const Snap = struct {
+    pub const zero: Snap = .{ .s = Vec3.zero() };
+    pub const one: Snap = .{ .s = Vec3.new(1, 1, 1) };
+
     s: Vec3,
 
     min: Vec3 = Vec3.set(limits.min_grid),
@@ -15,10 +18,6 @@ pub const Snap = struct {
     pub fn double(self: *@This()) void {
         self.s = self.s.scale(2);
         self.s.data = std.math.clamp(self.s.data, self.min.data, self.max.data);
-    }
-
-    pub fn zero() @This() {
-        return .{ .s = Vec3.zero() };
     }
 
     pub fn half(self: *@This()) void {

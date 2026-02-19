@@ -178,7 +178,7 @@ pub const MenuBar = struct {
                 .btn_vt = &self.cbhandle,
             },
         ) catch return;
-        dat.gui.setTransientWindow(r_win);
+        dat.gui.setTransientWindow(r_win, &self.vt.area);
     }
 
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
