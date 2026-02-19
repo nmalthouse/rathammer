@@ -272,6 +272,9 @@ There is some bug with wine, where the first time you run vbsp it will hang inde
 
 When you try to close the editor, you will have to force kill it as that old vbsp is still hanging. `killall -9 rathammer`
 
+#### On Linux, trying to open or save files does nothing.
+Make sure that xdg-desktop-portal is functioning. You can test if it is functioning by installing zenity and running `zenity --file-selection` If the command exits without a window popping up it means your xdg-desktop-portal provider is not configured properly.
+
 #### Error building map
 Look through the terminal output. You may have a leak -> press ~ and run the command `pointfile` to trace the leak.
 

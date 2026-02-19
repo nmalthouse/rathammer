@@ -4,7 +4,6 @@ echo "run this script from the repo directory not distrib/"
 
 RATOUT=distrib/appimagebuild
 
-
 rm -rf "$RATOUT"
 mkdir "$RATOUT"
 
@@ -14,7 +13,6 @@ cp zig-out/bin/rathammer "$RATOUT"
 #cp zig-out/bin/jsonmaptovmf "$RATOUT"
 cp zig-out/bin/ratremote "$RATOUT"
 cp -r ratasset "$RATOUT"
-cp  config.vdf "$RATOUT"
 cp -r doc "$RATOUT"
 
 #cp -r ratgraph "$RATOUT"

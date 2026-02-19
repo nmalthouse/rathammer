@@ -12,7 +12,6 @@ cp zig-out/bin/rathammer.exe "$RATOUT"
 #cp zig-out/bin/mapbuilder.exe "$RATOUT"
 cp zig-out/bin/ratremote.exe "$RATOUT"
 cp -r ratasset "$RATOUT"
-cp  config.vdf "$RATOUT"
 cp -r doc "$RATOUT"
 
 mkdir "$RATOUT"/ratgraph

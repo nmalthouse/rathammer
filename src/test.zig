@@ -1,4 +1,5 @@
 const std = @import("std");
+//pub const bsp = @import("bsp.zig");
 pub const clip_solid = @import("clip_solid.zig");
 pub const prim_gen = @import("primitive_gen.zig");
 pub const autosave = @import("autosave.zig");
