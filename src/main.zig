@@ -335,9 +335,13 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), default_rect, .{});
 
-    const main_2d_id = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .y), .Empty, .{ .put_fbo = false });
-    const main_2d_id2 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .x), .Empty, .{ .put_fbo = false });
-    const main_2d_id3 = try gui.addWindow(try Ctx2dView.create(editor, &gui, &draw, .z), .Empty, .{ .put_fbo = false });
+    const main_2d_0 = try Ctx2dView.create(editor, &gui, &draw, .y);
+    const main_2d_1 = try Ctx2dView.create(editor, &gui, &draw, .x);
+    const main_2d_2 = try Ctx2dView.create(editor, &gui, &draw, .z);
+
+    const main_2d_id = try gui.addWindow(main_2d_0, .Empty, .{ .put_fbo = false });
+    const main_2d_id2 = try gui.addWindow(main_2d_1, .Empty, .{ .put_fbo = false });
+    const main_2d_id3 = try gui.addWindow(main_2d_2, .Empty, .{ .put_fbo = false });
 
     gui_prof.end();
     gui_prof.log("gui init");
@@ -395,7 +399,21 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         recent_prof.log("recent build");
     }
 
-    const main_3d_id = try gui.addWindow(try editor_view.Main3DView.create(editor, &gui, &draw), .Empty, .{ .put_fbo = false });
+    const main_3d_view = try editor_view.Main3DView.create(editor, &gui, &draw);
+    const main_3d_id = try gui.addWindow(main_3d_view, .Empty, .{ .put_fbo = false });
+    { //Set up key contexts
+        inspector_win.vt.key_ctx_mask = .empty;
+        main_3d_view.key_ctx_mask.setValue(loaded_config.binds.view3d.context_id, true);
+        main_3d_view.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+
+        main_2d_0.key_ctx_mask.setValue(loaded_config.binds.view2d.context_id, true);
+        main_2d_1.key_ctx_mask.setValue(loaded_config.binds.view2d.context_id, true);
+        main_2d_2.key_ctx_mask.setValue(loaded_config.binds.view2d.context_id, true);
+
+        main_2d_0.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+        main_2d_1.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+        main_2d_2.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+    }
 
     loadctx.cb("Loading");
 
@@ -483,7 +501,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
     var frame_timer = try std.time.Timer.start();
     var frame_time: u64 = 0;
-    win.grabMouse(true);
+    //win.grabMouse(true);
     main_loop: while (!win.should_exit) {
         var just_paused = false;
         if (win.isBindState(loaded_config.binds.global.quit, .rising) or pause_win.should_exit)
@@ -540,17 +558,29 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         //    //if (win.isBindState(bind.b, .rising))
         //    //inspector_win.setTab(ind);
         //}
-        editor.handleTabKeys(ws.workspaces.items);
+
+        //Do this last
+        defer editor.handleTabKeys(ws.workspaces.items);
+
+        win.bindreg.enableAll(false); //Remove all keybinding contexts
+        win.bindreg.enableContext(loaded_config.binds.global.context_id, true);
 
         try gui.pre_update();
         gui.active_windows.clearRetainingCapacity();
         for (ws.getTab()) |out| {
             const pane_area = out[0];
             if (gui.getWindowId(out[1])) |win_vt| {
+                if (gui.canGrabMouseOverride(win_vt)) win.bindreg.enableContexts(win_vt.key_ctx_mask);
                 try gui.active_windows.append(gui.alloc, win_vt);
                 try gui.updateWindowSize(win_vt, pane_area);
             }
         }
+
+        editor.handleMisc3DKeys();
+        if (editor.getCurrentTool()) |tool_vt| {
+            win.bindreg.enableContexts(tool_vt.key_ctx_mask);
+        }
+
         try gui.update();
 
         try gui.draw(false);

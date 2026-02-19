@@ -80,7 +80,7 @@ pub const CubeDraw = struct {
 
     bb_gizmo: toolutil.AABBGizmo = .{},
 
-    pub fn create(alloc: std.mem.Allocator) !*i3DTool {
+    pub fn create(alloc: std.mem.Allocator, ed: *Editor) !*i3DTool {
         var obj = try alloc.create(@This());
         obj.* = .{ .vt = .{
             .deinit_fn = &@This().deinit,
@@ -89,6 +89,7 @@ pub const CubeDraw = struct {
             .gui_build_cb = &buildGui,
             .event_fn = &event,
         } };
+        obj.vt.key_ctx_mask.setValue(ed.conf.binds.cube_draw.context_id, true);
         return &obj.vt;
     }
 

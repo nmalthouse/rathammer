@@ -24,6 +24,7 @@ const gridutil = @import("grid.zig");
 const toolutil = @import("tool_common.zig");
 const action = @import("actions.zig");
 const colors = @import("colors.zig").colors;
+const keybinding = graph.keybinding;
 
 pub const CubeDraw = @import("tools/cube_draw.zig").CubeDraw;
 pub const TextureTool = @import("tools/texture.zig").TextureTool;
@@ -53,6 +54,7 @@ pub const i3DTool = struct {
     gui_build_cb: ?*const fn (*@This(), *Inspector, *iArea, *RGui, *iWindow) void = null,
     event_fn: ?*const fn (*@This(), ToolEvent, *Editor) void = null,
 
+    key_ctx_mask: keybinding.ContextMask = .empty,
     selected_solid_edge_color: u32 = 0xff00ff,
     selected_solid_point_color: u32 = 0,
     selected_bb_color: u32 = 0xff00ff,

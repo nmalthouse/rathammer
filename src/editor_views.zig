@@ -91,7 +91,7 @@ pub const Main3DView = struct {
         self.ed.draw_state.cam3d.updateDebugMove(cam_state);
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
-        self.ed.handleMisc3DKeys();
+        //self.ed.handleMisc3DKeys();
         draw3Dview(self, self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.nstyle.text_h, gui) catch return;
     }
 

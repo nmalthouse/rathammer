@@ -417,11 +417,11 @@ pub const Context = struct {
         try self.tools.register(tool_def.Translate, try tool_def.Translate.create(self.alloc, self));
         try self.tools.register(tool_def.TranslateFace, try tool_def.TranslateFace.create(self.alloc));
         try self.tools.register(tool_def.PlaceEntity, try tool_def.PlaceEntity.create(self.alloc));
-        try self.tools.register(tool_def.CubeDraw, try tool_def.CubeDraw.create(self.alloc));
+        try self.tools.register(tool_def.CubeDraw, try tool_def.CubeDraw.create(self.alloc, self));
         try self.tools.register(tool_def.FastFaceManip, try tool_def.FastFaceManip.create(self.alloc));
         try self.tools.register(tool_def.TextureTool, try tool_def.TextureTool.create(self.alloc, self));
         try self.tools.register(tool_def.VertexTranslate, try tool_def.VertexTranslate.create(self.alloc, self));
-        try self.tools.register(tool_def.Clipping, try tool_def.Clipping.create(self.alloc));
+        try self.tools.register(tool_def.Clipping, try tool_def.Clipping.create(self.alloc, self));
 
         try self.autovis.add(.{ .name = "props", .filter = "prop_", .kind = .class, .match = .startsWith });
         try self.autovis.add(.{ .name = "trigger", .filter = "trigger_", .kind = .class, .match = .startsWith });
@@ -783,7 +783,6 @@ pub const Context = struct {
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.keybinding.BindId, state: graph.SDL.ButtonState) bool {
-        // if (!self.stack_owns_input) return false;
         return self.win.isBindState(bind, state);
     }
 
@@ -1791,6 +1790,11 @@ pub const Context = struct {
             if (ed.isBindState(ed.conf.binds.view3d.grid_inc, .rising))
                 ed.grid.double();
             if (ed.isBindState(ed.conf.binds.view3d.grid_dec, .rising))
+                ed.grid.half();
+
+            if (ed.isBindState(ed.conf.binds.view2d.grid_inc, .rising))
+                ed.grid.double();
+            if (ed.isBindState(ed.conf.binds.view2d.grid_dec, .rising))
                 ed.grid.half();
 
             if (ed.isBindState(ed.conf.binds.view3d.ignore_groups, .rising)) {

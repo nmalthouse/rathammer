@@ -192,7 +192,7 @@ pub const Splits = struct {
 pub fn flattenTree(
     root_area: R,
     tree: *Area,
-    output_list: *std.array_list.Managed(struct { R, G.WindowId }),
+    output_list: *std.array_list.Managed(Splits.Output),
     output_handles: *std.array_list.Managed(ResizeHandle),
 ) !void {
     switch (tree.*) {

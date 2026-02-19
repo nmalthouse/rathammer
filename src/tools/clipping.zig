@@ -37,7 +37,7 @@ pub const Clipping = struct {
 
     grabbed: ?struct { ptr: *Vec3, init: Vec3, plane: Vec3, p0: Vec3 } = null,
 
-    pub fn create(alloc: std.mem.Allocator) !*tools.i3DTool {
+    pub fn create(alloc: std.mem.Allocator, ed: *Editor) !*tools.i3DTool {
         var clip = try alloc.create(@This());
         clip.* = .{
             .vt = .{
@@ -49,6 +49,7 @@ pub const Clipping = struct {
             },
             .points = undefined,
         };
+        clip.vt.key_ctx_mask.setValue(ed.conf.binds.clipping.context_id, true);
         return &clip.vt;
     }
 

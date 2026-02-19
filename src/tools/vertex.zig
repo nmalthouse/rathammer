@@ -89,6 +89,7 @@ pub const VertexTranslate = struct {
             .ed = ed,
             .selected = std.AutoHashMap(ecs.EcsT.Id, Sel).init(alloc),
         };
+        self.vt.key_ctx_mask.setValue(ed.conf.binds.vertex.context_id, true);
         return &self.vt;
     }
 

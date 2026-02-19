@@ -92,6 +92,7 @@ pub const TextureTool = struct {
             .ed = ed,
             .alloc = alloc,
         };
+        obj.vt.key_ctx_mask.setValue(ed.conf.binds.texture.context_id, true);
         return &obj.vt;
     }
 

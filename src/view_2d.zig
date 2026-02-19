@@ -78,7 +78,7 @@ pub const Ctx2dView = struct {
             capture = true;
             self.cam.pan(mouse.delta.scale(ed.config.window.sensitivity_2d));
         }
-        ed.handleMisc3DKeys();
+        //ed.handleMisc3DKeys();
 
         gui.setGrabOverride(&self.vt, capture, .{ .hide_pointer = capture });
         self.ed.stack_grabbed_mouse = capture;

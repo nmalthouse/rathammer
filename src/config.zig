@@ -354,6 +354,11 @@ pub const Keys = struct {
         ignore_groups: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.ctrl} },
     } = .{},
 
+    view2d: struct {
+        grid_inc: Bind = .{ .button = .{ .scancode = .R }, .mode = .multi, .repeat = true },
+        grid_dec: Bind = .{ .button = .{ .scancode = .F }, .mode = .multi, .repeat = true },
+    } = .{},
+
     vertex: struct {
         do_marquee: Bind = SC(.LSHIFT),
     } = .{},
