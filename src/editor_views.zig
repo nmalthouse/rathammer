@@ -34,6 +34,8 @@ pub const Main3DView = struct {
     ev_vt: app.iEvent = .{ .cb = event_cb },
     cbhandle: G.CbHandle = .{},
 
+    enabled_tool_bind: graph.keybinding.ContextMask = .empty,
+
     // only used when grab_when == .toggle
     grab_toggled: bool = false,
 
@@ -106,6 +108,7 @@ pub const Main3DView = struct {
 
         if (ed.eventctx.registerListener(&self.ev_vt)) |listener| {
             ed.eventctx.subscribe(listener, @intFromEnum(app.EventKind.selection_changed)) catch {};
+            ed.eventctx.subscribe(listener, @intFromEnum(app.EventKind.tool_changed)) catch {};
         } else |_| {}
 
         return &self.vt;
@@ -130,9 +133,16 @@ pub const Main3DView = struct {
     pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
         const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
 
-        _ = self;
         switch (ev) {
             .selection_changed => {},
+            .tool_changed => {
+                self.vt.key_ctx_mask.set.toggleSet(self.enabled_tool_bind.set);
+                self.enabled_tool_bind = .empty;
+                if (self.ed.getCurrentTool()) |tvt| {
+                    self.enabled_tool_bind = tvt.key_ctx_mask;
+                    self.vt.key_ctx_mask.set.toggleSet(self.enabled_tool_bind.set);
+                }
+            },
             else => {},
         }
     }
@@ -527,7 +537,7 @@ pub const Main3DView = struct {
                 mt.textFmt("dcall {d}    ", .{self.renderer.last_frame_draw_call_count}, fh, col);
             }
             {
-                const notify_slice = try self.notifier.getSlice(self.draw_state.frame_time_ms);
+                const notify_slice = try self.notifier.getSlice(self.gapp.frame_took_ms);
                 for (notify_slice) |n| {
                     mt.text(n.msg, fh, n.color);
                 }

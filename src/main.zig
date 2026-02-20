@@ -193,7 +193,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         if (args.nthread) |nt| @intFromFloat(nt) else null,
         loaded_config,
         args,
-        &gapp.main_window,
         &loadctx,
         dirs,
         gapp,
@@ -236,7 +235,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_win = try gui.addWindow(&model_browse.vt, default_rect, .{});
     const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, gui, &gapp.drawctx), default_rect, .{});
-    //try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
 
     const menu_bar = try gui.addWindow(try MenuBar.create(gui, editor), default_rect, .{});
 
@@ -256,46 +254,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         recent_prof.start();
         if (util.readFile(alloc, config_dir.dir, "recent_maps.txt")) |slice| {
             defer alloc.free(slice);
-            var it = std.mem.tokenizeScalar(u8, slice, '\n');
-            while (it.next()) |filename| {
-                const EXT = ".ratmap";
-                if (std.mem.endsWith(u8, filename, EXT)) {
-                    if (std.fs.cwd().openFile(filename, .{})) |recent_map| {
-                        defer recent_map.close();
-                        const qoi_data = util.getFileFromTar(alloc, recent_map, "thumbnail.qoi") catch continue;
-
-                        const info_data = util.getFileFromTar(alloc, recent_map, "info.json") catch try alloc.alloc(u8, 0);
-                        defer alloc.free(info_data);
-
-                        const vpk_id = (editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, false) catch null) orelse {
-                            alloc.free(qoi_data);
-                            continue;
-                        };
-
-                        try editor.materials.put(vpk_id, .default());
-
-                        async.QoiDecode.spawn(alloc, &editor.async_asset_load, qoi_data, vpk_id) catch {
-                            alloc.free(qoi_data);
-                            continue;
-                        };
-
-                        var rec = PauseWindow.Recent{
-                            .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
-                            .tex = vpk_id,
-                            .game_config_index = editor.games.id(args.game orelse config.default_game),
-                            .description = try alloc.alloc(u8, 0),
-                        };
-                        if (std.json.parseFromSlice(json_map.JsonInfo, alloc, info_data, .{})) |info| {
-                            defer info.deinit();
-                            alloc.free(rec.description);
-                            rec.description = try alloc.dupe(u8, info.value.description);
-                            rec.game_config_index = editor.games.id(info.value.game_config_name);
-                        } else |_| {}
-
-                        try pause_win.recents.append(pause_win.alloc, rec);
-                    } else |_| {}
-                }
-            }
+            try pause_win.buildRecentList(slice, args.game orelse config.default_game);
         } else |_| {
             log.err("failed to open recent_maps.txt", .{});
         }
@@ -331,7 +290,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     editor.draw_state.cam3d.fov = config.window.cam_fov;
     loadctx.setTime();
 
-    gapp.main_window.forcePoll(); // ensure first draw is fast on eventWait
     if (args.blank) |blank| {
         try editor.setMapName(blank);
         try editor.initNewMap("sky_day01_01", args.game orelse editor.config.default_game);
@@ -411,55 +369,13 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
     }
 
-    //var last_frame_group_owner: ?edit.EcsT.Id = null;
-
-    //var frame_timer = try std.time.Timer.start();
-    //var frame_time: u64 = 0;
     try gapp.run();
-
-    //    frame_time = frame_timer.read();
-    //    frame_timer.reset();
-    //    editor.draw_state.frame_time_ms = @as(f32, @floatFromInt(frame_time)) / std.time.ns_per_ms;
 
     //    graph.gl.Enable(graph.gl.BLEND);
     //    try editor.update(&win);
     //    //TODO move this back to POSONE once we can render 3dview to any fb
     //    //this is here so editor.update can create a thumbnail from backbuffer before its cleared
     //    try draw.begin(colors.clear, win.screen_dimensions.toF());
-
-    //    { //Hacks to update gui
-    //        const new_id = editor.selection.getGroupOwnerExclusive(&editor.groups);
-    //        if (new_id != last_frame_group_owner) {
-    //            inspector_win.vt.needs_rebuild = true;
-    //        }
-    //        last_frame_group_owner = new_id;
-    //    }
-
-    //    editor.handleMisc3DKeys();
-    //    if (editor.getCurrentTool()) |tool_vt| {
-    //        win.bindreg.enableContexts(tool_vt.key_ctx_mask);
-    //    }
-
-    //    try gui.update();
-
-    //    try gui.draw(false);
-    //    gui.drawFbos();
-
-    //if (editor.edit_state.saved_at_delta != editor.undoctx.delta_counter) {
-    //    win.should_exit = false;
-    //    win.pumpEvents(.poll); //Clear quit keys
-    //    editor.paused = true; //Needed for pause loop, hacky
-    //    while (!win.should_exit) {
-    //        if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
-    //            break; //The map has been saved async
-    //        }
-    //        switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, console_win, false)) {
-    //            .exit => break,
-    //            .unpause => break,
-    //            .cont => continue,
-    //        }
-    //    }
-    //}
 
     //DON'T clean exit. We need editor.deinit to get called so the thread pool is deinit
     //std.process.cleanExit();

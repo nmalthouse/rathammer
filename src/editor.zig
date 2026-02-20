@@ -169,7 +169,6 @@ pub const Context = struct {
     draw_state: struct {
         mode: DrawMode = .shaded,
         skybox_textures: ?[6]graph.glID = null,
-        frame_time_ms: f32 = 16,
         init_asset_count: usize = 0, //Used to indicate we are loading things
 
         active_lights: usize = 0,
@@ -272,7 +271,6 @@ pub const Context = struct {
     gapp: *RGui.app.GuiApp,
     game_conf: Conf.GameEntry,
     dirs: path_guess.Dirs,
-    win: *graph.SDL.Window,
 
     /// These are currently only used for baking all tool icons into an atlas.
     asset: graph.AssetBake.AssetMap,
@@ -303,7 +301,7 @@ pub const Context = struct {
         fbs.writer().writeByte(0) catch {
             WINDOW_TITLE_BUFFER[0] = 0;
         };
-        if (!graph.c.SDL_SetWindowTitle(self.win.win, &WINDOW_TITLE_BUFFER[0])) {
+        if (!graph.c.SDL_SetWindowTitle(self.gapp.main_window.win, &WINDOW_TITLE_BUFFER[0])) {
             log.err("Failed to set window title", .{});
         }
     }
@@ -345,13 +343,12 @@ pub const Context = struct {
         num_threads: ?u32,
         config: *const Conf.ConfigCtx,
         args: anytype,
-        win_ptr: *graph.SDL.Window,
         loadctx: *LoadCtx,
         dirs: path_guess.Dirs,
         gapp: *RGui.app.GuiApp,
     ) !*Self {
-        app.EventCtx.SdlEventId = try win_ptr.addUserEventCb(app.EventCtx.graph_event_cb);
-        shell.RpcEventId = try win_ptr.addUserEventCb(shell.rpc_cb);
+        app.EventCtx.SdlEventId = try gapp.main_window.addUserEventCb(app.EventCtx.graph_event_cb);
+        shell.RpcEventId = try gapp.main_window.addUserEventCb(shell.rpc_cb);
         const shader_dir = try dirs.app_cwd.dir.openDir("ratgraph/asset/shader", .{});
         var ret = try alloc.create(Context);
         ret.* = .{
@@ -365,7 +362,6 @@ pub const Context = struct {
             .classtrack = .init(alloc),
             .targetname_track = .init(alloc),
             .loadctx = loadctx,
-            .win = win_ptr,
             .notifier = NotifyCtx.init(alloc, 4000),
             .autosaver = try Autosaver.init(config.config.autosave.interval_min * std.time.ms_per_min, config.config.autosave.max, config.config.autosave.enable, alloc),
             .rayctx = raycast.Ctx.init(alloc),
@@ -794,11 +790,11 @@ pub const Context = struct {
     }
 
     pub fn isBindState(self: *const Self, bind: graph.SDL.keybinding.BindId, state: graph.SDL.ButtonState) bool {
-        return self.win.isBindState(bind, state);
+        return self.gapp.main_window.isBindState(bind, state);
     }
 
     pub fn getCam3DMove(ed: *const Self, do_look: bool) graph.ptypes.Camera3D.MoveState {
-        const perc_of_60fps = ed.draw_state.frame_time_ms / 16.0;
+        const perc_of_60fps = ed.gapp.frame_took_ms / 16.6666;
         const bind = &ed.conf.binds.view3d;
 
         return graph.ptypes.Camera3D.MoveState{
@@ -808,15 +804,15 @@ pub const Context = struct {
             .right = ed.isBindState(bind.cam_strafe_r, .high),
             .fwd = ed.isBindState(bind.cam_forward, .high),
             .bwd = ed.isBindState(bind.cam_back, .high),
-            .mouse_delta = if (do_look and ed.stack_owns_input) ed.win.mouse.delta.scale(ed.config.window.sensitivity_3d) else .zero,
-            .scroll_delta = if (ed.stack_owns_input) ed.win.mouse.wheel_delta.y else 0,
+            .mouse_delta = if (do_look and ed.stack_owns_input) ed.gapp.main_window.mouse.delta.scale(ed.config.window.sensitivity_3d) else .zero,
+            .scroll_delta = if (ed.stack_owns_input) ed.gapp.main_window.mouse.wheel_delta.y else 0,
             .speed_perc = @as(f32, if (ed.isBindState(bind.cam_slow, .high)) 0.1 else 1) * perc_of_60fps,
         };
     }
 
     pub fn mouseState(self: *const Self) graph.SDL.MouseState {
         if (!self.stack_owns_input) return .{};
-        return self.win.mouse;
+        return self.gapp.main_window.mouse;
     }
 
     pub fn writeToJson(self: *Self, writer: *std.Io.Writer) !void {
@@ -1106,7 +1102,7 @@ pub const Context = struct {
             log.warn("tring to set invalid tool, ignoring", .{});
             return;
         }
-        self.eventctx.pushEvent(.{ .tool_changed = {} });
+        defer self.eventctx.pushEvent(.{ .tool_changed = {} });
         if (self.edit_state.__tool_index == new_tool) {
             if (self.getCurrentTool()) |vt| {
                 if (vt.event_fn) |evf|
@@ -1653,13 +1649,14 @@ pub const Context = struct {
     pub fn preUpdate(vt: *RGui.app.iUpdate) void {
         const self: *Self = @alignCast(@fieldParentPtr("app_update", vt));
 
-        self.update(self.win) catch |err| {
+        self.update() catch |err| {
             std.debug.print("err {t}\n", .{err});
             @panic("totally fucked");
         };
     }
 
-    pub fn update(self: *Self, win: *graph.SDL.Window) !void {
+    pub fn update(self: *Self) !void {
+        const win = &self.gapp.main_window;
         self.edit_state.mpos = win.mouse.pos;
         self.handleMisc3DKeys();
         self.handleTabKeys();
@@ -1926,7 +1923,7 @@ pub const LoadCtx = struct {
             if (colors.splash_tint > 0)
                 self.draw.rect(graph.Rec(0, 0, self.draw.screen_dimensions.x, self.draw.screen_dimensions.y), colors.splash_tint);
             oself.drawSplash(1.0, fbs.getWritten());
-            if (self.win.keys.len > 0 or self.win.mouse.left != .low or self.win.mouse.right != .low)
+            if (self.gapp.main_window.keys.len > 0 or self.gapp.main_window.mouse.left != .low or self.gapp.main_window.mouse.right != .low)
                 self.draw_splash = false;
         }
     }

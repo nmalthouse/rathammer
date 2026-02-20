@@ -186,7 +186,7 @@ pub const MenuBar = struct {
         switch (@as(MenuBtn, @enumFromInt(id))) {
             .save => action.trySave(self.ed) catch {},
             .saveas => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
-            .quit => self.ed.win.should_exit = true,
+            .quit => self.ed.gapp.main_window.should_exit = true,
             .undo => action.undo(self.ed),
             .redo => action.redo(self.ed),
             .open_help_url => {

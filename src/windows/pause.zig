@@ -521,6 +521,51 @@ pub const PauseWindow = struct {
         };
         self.editor.setPaused(false);
     }
+
+    pub fn buildRecentList(self: *PauseWindow, recent_maps_slice: []const u8, default_game: []const u8) !void {
+        const json_map = @import("../json_map.zig");
+        var it = std.mem.tokenizeScalar(u8, recent_maps_slice, '\n');
+        const alloc = self.editor.alloc;
+        while (it.next()) |filename| {
+            const EXT = ".ratmap";
+            if (std.mem.endsWith(u8, filename, EXT)) {
+                if (std.fs.cwd().openFile(filename, .{})) |recent_map| {
+                    defer recent_map.close();
+                    const qoi_data = util.getFileFromTar(alloc, recent_map, "thumbnail.qoi") catch continue;
+
+                    const info_data = util.getFileFromTar(alloc, recent_map, "info.json") catch try alloc.alloc(u8, 0);
+                    defer alloc.free(info_data);
+
+                    const vpk_id = (self.editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, false) catch null) orelse {
+                        alloc.free(qoi_data);
+                        continue;
+                    };
+
+                    try self.editor.materials.put(vpk_id, .default());
+
+                    async_util.QoiDecode.spawn(alloc, &self.editor.async_asset_load, qoi_data, vpk_id) catch {
+                        alloc.free(qoi_data);
+                        continue;
+                    };
+
+                    var rec = PauseWindow.Recent{
+                        .name = try alloc.dupe(u8, filename[0 .. filename.len - EXT.len]),
+                        .tex = vpk_id,
+                        .game_config_index = self.editor.games.id(default_game),
+                        .description = try alloc.alloc(u8, 0),
+                    };
+                    if (std.json.parseFromSlice(json_map.JsonInfo, alloc, info_data, .{})) |info| {
+                        defer info.deinit();
+                        alloc.free(rec.description);
+                        rec.description = try alloc.dupe(u8, info.value.description);
+                        rec.game_config_index = self.editor.games.id(info.value.game_config_name);
+                    } else |_| {}
+
+                    try self.recents.append(self.alloc, rec);
+                } else |_| {}
+            }
+        }
+    }
 };
 
 pub const SortHelpText = struct {

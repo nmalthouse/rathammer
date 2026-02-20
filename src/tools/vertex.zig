@@ -151,7 +151,7 @@ pub const VertexTranslate = struct {
 
     fn tool2d(self: *Self, td: tools.ToolData, ed: *Editor) !void {
         const cam = td.cam2d orelse return;
-        const new_pos = ed.win.mouse.pos.sub(cam.screen_area.pos());
+        const new_pos = ed.gapp.main_window.mouse.pos.sub(cam.screen_area.pos());
         const r = util3d.screenSpaceRay(
             td.screen_area.dim(),
             new_pos,

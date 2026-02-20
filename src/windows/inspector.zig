@@ -27,7 +27,6 @@ const IoBtn = enum(usize) {
     _,
 };
 
-// DJ smokey recommends you read this source file from start to finish. Thank you for not skipping.
 pub const InspectorWindow = struct {
     pub const tabs = [_][]const u8{ "props", "io", "tool", "layer" };
     const Self = @This();
@@ -60,6 +59,8 @@ pub const InspectorWindow = struct {
 
     io: IoWg,
 
+    built_for_group: ?ecs.EcsT.Id = null,
+
     pub fn create(gui: *Gui, editor: *Context) *InspectorWindow {
         const self = gui.create(@This());
         self.* = .{
@@ -80,6 +81,7 @@ pub const InspectorWindow = struct {
             editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.undo)) catch {};
             editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.redo)) catch {};
             editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.tool_changed)) catch {};
+            editor.eventctx.subscribe(listener, @intFromEnum(app.EventKind.selection_changed)) catch {};
         } else |_| {}
 
         return self;
@@ -102,6 +104,12 @@ pub const InspectorWindow = struct {
         switch (ev) {
             .undo, .redo, .tool_changed => {
                 self.vt.needs_rebuild = true;
+            },
+            .selection_changed => {
+                const new_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups);
+                if (new_id != self.built_for_group) {
+                    self.vt.needs_rebuild = true;
+                }
             },
             else => {},
         }
@@ -258,7 +266,9 @@ pub const InspectorWindow = struct {
                 .cb_vt = &self.cbhandle,
             }, null);
         }
+        self.built_for_group = null;
         if (ed.selection.getGroupOwnerExclusive(&ed.groups)) |sel_id| {
+            self.built_for_group = sel_id;
             if (try ed.ecs.getOptPtr(sel_id, .entity)) |ent| {
                 const aa = ly.getArea() orelse return;
                 const ClassCombo = struct {
