@@ -99,7 +99,7 @@ pub fn rpc_cb(ev: graph.c.SDL_UserEvent) void {
                         }
                     },
                     ha(0, "pause") => {
-                        ed.paused = !ed.paused;
+                        ed.setPaused(!ed._paused);
                         ed.rpcserv.respond(&wr.interface, .{
                             .id = msg.id,
                             .result = .{ .null = {} },

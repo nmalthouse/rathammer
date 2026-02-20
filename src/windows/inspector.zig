@@ -457,11 +457,10 @@ pub const InspectorWindow = struct {
                                     std.debug.print("is mat {any}\n", .{is_mat});
                                     lself.editor.asset_browser.dialog_state = .{
                                         .target_id = @intCast(idd),
-                                        .previous_pane_index = lself.editor.draw_state.tab_index,
+                                        .previous_pane_index = lself.editor.gapp.workspaces.active_ws,
                                         .kind = if (is_mat) .texture else .model,
                                     };
-                                    const ds = &lself.editor.draw_state;
-                                    lself.editor.draw_state.tab_index = if (is_mat) ds.texture_browser_tab_index else ds.model_browser_tab_index;
+                                    lself.editor.gapp.workspaces.active_ws = if (is_mat) lself.editor.workspaces.asset else lself.editor.workspaces.model;
                                 }
                             };
                             const mask: u64 = if (req_f.type == .material) 1 << 63 else 0;

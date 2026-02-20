@@ -14,7 +14,6 @@ const edit = @import("editor.zig");
 const Editor = @import("editor.zig").Context;
 const Vec3 = V3f;
 const Gui = graph.Gui;
-const Split = @import("splitter.zig");
 const editor_view = @import("editor_views.zig");
 const G = graph.RGui;
 const ConfigCheckWindow = @import("windows/config_check.zig").ConfigCheck;
@@ -33,67 +32,6 @@ const async = @import("async.zig");
 const build_config = @import("config");
 const Conf = @import("config.zig");
 const version = @import("version.zig");
-
-// Event system?
-// events gui needs to be aware of
-// selection changed
-// tool changed
-// something undone
-
-pub fn dpiDetect(win: *graph.SDL.Window) !f32 {
-    const sc = graph.c.SDL_GetWindowDisplayScale(win.win);
-    if (sc == 0)
-        return error.sdl;
-    return sc;
-}
-
-pub fn pauseLoop(win: *graph.SDL.Window, draw: *graph.ImmediateDrawingContext, win_vt: *G.iWindow, gui: *G.Gui, loadctx: *edit.LoadCtx, editor: *Editor, should_exit: bool, console: *ConsoleWindow, rising: bool) !enum { cont, exit, unpause } {
-    if (!editor.paused)
-        return .unpause;
-    if (win.isBindState(editor.conf.binds.global.quit, .rising) or should_exit)
-        return .exit;
-    win.pumpEvents(.wait);
-    win.grabMouse(false);
-    try draw.begin(colors.clear, win.screen_dimensions.toF());
-    draw.real_screen_dimensions = win.screen_dimensions.toF();
-    try editor.update(win);
-
-    {
-        const max_w = gui.dstate.nstyle.item_h * 30;
-        const area = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
-        const w = @min(max_w, area.w);
-        const side_l = (area.w - w);
-        const sp = area.split(.vertical, side_l);
-        const win_rect = sp[1];
-        const other_rect = sp[0];
-        try gui.pre_update();
-        gui.active_windows.clearRetainingCapacity();
-        try gui.active_windows.append(gui.alloc, win_vt);
-        if (other_rect.w > 0)
-            try gui.active_windows.append(gui.alloc, &console.vt);
-        if (rising) {
-            console.focus(gui);
-        }
-        if (other_rect.w > 0)
-            try gui.updateWindowSize(&console.vt, other_rect);
-        try gui.updateWindowSize(win_vt, win_rect);
-        try gui.update();
-        try gui.draw(false);
-        gui.drawFbos();
-    }
-    try draw.flush(null, null);
-    try loadctx.loadedSplash();
-
-    try draw.end(editor.draw_state.cam3d);
-    win.swap();
-    return .cont;
-}
-pub var INSPECTOR: *InspectorWindow = undefined;
-
-var font: graph.OnlineFont = undefined;
-fn flush_cb(_: ?*anyopaque) void {
-    font.syncBitmapToGL();
-}
 
 const log = std.log.scoped(.app);
 pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
@@ -211,72 +149,34 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }, &env);
     defer dirs.deinit(alloc);
 
-    var win = try graph.SDL.Window.createWindow("Rat Hammer", .{
-        .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
-        .frame_sync = if (args.novsync != null) .immediate else .adaptive_vsync,
-        .gl_major_version = 4,
-        .gl_minor_version = 5,
-        .enable_debug = IS_DEBUG,
-        .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
-    }, alloc);
-    defer win.destroyWindow();
+    var gapp = try G.app.GuiApp.initDefault(alloc, .{
+        .window_title = "Rat Hammer",
+        .window_opts = .{
+            .window_size = .{ .x = config.window.width_px, .y = config.window.height_px },
+            .frame_sync = if (args.novsync != null) .immediate else .adaptive_vsync,
+            .gl_major_version = 4,
+            .gl_minor_version = 5,
+            .enable_debug = IS_DEBUG,
+            .gl_flags = if (IS_DEBUG) &[_]u32{graph.c.SDL_GL_CONTEXT_DEBUG_FLAG} else &[_]u32{},
+        },
+        .display_scale = args.display_scale orelse if (config.window.display_scale > 0) config.window.display_scale else null,
+        .item_height = args.gui_item_height,
+        .font_size = args.gui_font_size,
+        .gui_scale = args.gui_scale,
+    });
+    defer gapp.deinit();
 
-    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &win.bindreg, config.keys);
-    win.bindreg.enableAll(true);
-
-    _ = graph.c.SDL_SetWindowMinimumSize(win.win, 800, 600);
-
-    const Preset = struct {
-        dpi: f32 = 1,
-        fh: f32 = 25,
-        ih: f32 = 14,
-        scale: f32 = 2,
-
-        pub fn distance(_: void, item: @This(), key: @This()) f32 {
-            return @abs(item.dpi - key.dpi);
-        }
-    };
-
-    const DPI_presets = [_]Preset{
-        .{ .dpi = 1, .fh = 14, .ih = 25, .scale = 1 },
-        .{ .dpi = 1.7, .fh = 18, .ih = 28, .scale = 1 },
-    };
-    const config_display_scale = if (config.window.display_scale > 0) config.window.display_scale else null;
-    const sc = args.display_scale orelse config_display_scale orelse try dpiDetect(&win);
-    edit.log.info("Detected a display scale of {d}", .{sc});
-    const dpi_preset = blk: {
-        const default_scaled = Preset{ .fh = 20 * sc, .ih = 25 * sc, .scale = 1 };
-        const max_dpi_diff = 0.3;
-        const index = util.nearest(Preset, &DPI_presets, {}, Preset.distance, .{ .dpi = sc }) orelse break :blk default_scaled;
-        const p = DPI_presets[index];
-        if (@abs(p.dpi - sc) > max_dpi_diff)
-            break :blk default_scaled;
-        edit.log.info("Matching dpi preset number: {d}, display scale: {d}, font_height {d}, item_height {d},", .{ index, p.dpi, p.fh, p.ih });
-        break :blk p;
-    };
-
-    const scaled_item_height = args.gui_item_height orelse @trunc(dpi_preset.ih);
-    const scaled_text_height = args.gui_font_size orelse @trunc(dpi_preset.fh);
-    const gui_scale = args.gui_scale orelse dpi_preset.scale;
-    edit.log.info("gui Size, text: {d} item: {d} ", .{ scaled_text_height, scaled_item_height });
+    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &gapp.main_window.bindreg, config.keys);
 
     if (!graph.SDL.Window.glHasExtension("GL_EXT_texture_compression_s3tc")) return error.glMissingExt;
     var basic_prof = profile.init();
     basic_prof.start();
-    var draw = graph.ImmediateDrawingContext.init(alloc);
-    defer draw.deinit();
-
-    font = try graph.OnlineFont.init(alloc, app_cwd.dir, args.fontfile orelse "ratasset/roboto.ttf", scaled_text_height, .{});
-
-    draw.preflush_cb = flush_cb;
-
-    defer font.deinit();
     const splash = graph.Texture.initFromImgFile(alloc, app_cwd.dir, "ratasset/small.png", .{}) catch edit.missingTexture();
 
     var loadctx = edit.LoadCtx{ .opt = .{
-        .draw = &draw,
-        .font = &font.font,
-        .win = &win,
+        .draw = &gapp.drawctx,
+        .font = &gapp.font.font,
+        .win = &gapp.main_window,
         .splash = splash,
         .timer = try std.time.Timer.start(),
         .gtimer = load_timer,
@@ -288,29 +188,34 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     var edit_prof = profile.init();
     edit_prof.start();
 
-    var editor = try Editor.init(alloc, if (args.nthread) |nt| @intFromFloat(nt) else null, loaded_config, args, &win, &loadctx, dirs);
+    var editor = try Editor.init(
+        alloc,
+        if (args.nthread) |nt| @intFromFloat(nt) else null,
+        loaded_config,
+        args,
+        &gapp.main_window,
+        &loadctx,
+        dirs,
+        gapp,
+    );
     defer editor.deinit();
     edit_prof.end();
     edit_prof.log("edit init");
 
+    try gapp.registerUpdateVt(&editor.app_update);
+
     loadctx.cb("Loading gui");
     var gui_prof = profile.init();
     gui_prof.start();
-    var gui = try G.Gui.init(alloc, &win, &font.font, &draw);
-    defer gui.deinit();
-    gui.dstate.nstyle.item_h = scaled_item_height;
-    gui.dstate.nstyle.text_h = scaled_text_height;
-    gui.dstate.scale = gui_scale;
-    gui.dstate.tint = config.gui_tint;
+    const gui = &gapp.gui;
     //gui.dstate.nstyle.color = G.DarkColorscheme;
     const default_rect = Rec(0, 0, 1000, 1000);
-    const inspector_win = InspectorWindow.create(&gui, editor);
-    INSPECTOR = inspector_win;
-    const pause_win = try PauseWindow.create(&gui, editor, app_cwd.dir);
-    _ = try gui.addWindow(&pause_win.vt, default_rect, .{});
+    const inspector_win = InspectorWindow.create(gui, editor);
+    const pause_win = try PauseWindow.create(gui, editor, app_cwd.dir);
+    const pause_win_id = try gui.addWindow(&pause_win.vt, default_rect, .{});
 
-    const console_win = try ConsoleWindow.create(&gui, editor, &editor.shell.iconsole);
-    _ = try gui.addWindow(&console_win.vt, default_rect, .{});
+    const console_win = try ConsoleWindow.create(gui, editor, &editor.shell.iconsole);
+    const console_id = try gui.addWindow(&console_win.vt, default_rect, .{});
     if (builtin.target.os.tag == .linux) {
         try console_win.printLine("On linux, you have to install the game with proton first and copy the bin folder to BIN\ncd Half-Life 2; cp -r bin BIN\n", .{});
     }
@@ -324,20 +229,20 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
-    const nag_win = try NagWindow.create(&gui, editor);
+    const nag_win = try NagWindow.create(gui, editor);
     _ = try gui.addWindow(&nag_win.vt, default_rect, .{});
-    const model_browse = try AssetBrowser.ModelBrowser.create(&gui, editor);
-    const asset_win = try AssetBrowser.AssetBrowser.create(&gui, editor, model_browse);
+    const model_browse = try AssetBrowser.ModelBrowser.create(gui, editor);
+    const asset_win = try AssetBrowser.AssetBrowser.create(gui, editor, model_browse);
     const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_win = try gui.addWindow(&model_browse.vt, default_rect, .{});
-    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, &gui, &draw), default_rect, .{});
+    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, gui, &gapp.drawctx), default_rect, .{});
     //try asset_win.populate(&editor.vpkctx, game_conf.asset_browser_exclude.prefix, game_conf.asset_browser_exclude.entry.items, model_browse);
 
-    const menu_bar = try gui.addWindow(try MenuBar.create(&gui, editor), default_rect, .{});
+    const menu_bar = try gui.addWindow(try MenuBar.create(gui, editor), default_rect, .{});
 
-    const main_2d_0 = try Ctx2dView.create(editor, &gui, &draw, .y);
-    const main_2d_1 = try Ctx2dView.create(editor, &gui, &draw, .x);
-    const main_2d_2 = try Ctx2dView.create(editor, &gui, &draw, .z);
+    const main_2d_0 = try Ctx2dView.create(editor, gui, &gapp.drawctx, .y);
+    const main_2d_1 = try Ctx2dView.create(editor, gui, &gapp.drawctx, .x);
+    const main_2d_2 = try Ctx2dView.create(editor, gui, &gapp.drawctx, .z);
 
     const main_2d_id = try gui.addWindow(main_2d_0, .Empty, .{ .put_fbo = false });
     const main_2d_id2 = try gui.addWindow(main_2d_1, .Empty, .{ .put_fbo = false });
@@ -399,7 +304,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         recent_prof.log("recent build");
     }
 
-    const main_3d_view = try editor_view.Main3DView.create(editor, &gui, &draw);
+    const main_3d_view = try editor_view.Main3DView.create(editor, gui, &gapp.drawctx);
     const main_3d_id = try gui.addWindow(main_3d_view, .Empty, .{ .put_fbo = false });
     { //Set up key contexts
         inspector_win.vt.key_ctx_mask = .empty;
@@ -413,6 +318,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         main_2d_0.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
         main_2d_1.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
         main_2d_2.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+
+        gui.key_ctx_mask.setValue(loaded_config.binds.global.context_id, true);
     }
 
     loadctx.cb("Loading");
@@ -424,21 +331,13 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     editor.draw_state.cam3d.fov = config.window.cam_fov;
     loadctx.setTime();
 
-    win.forcePoll(); // ensure first draw is fast on eventWait
+    gapp.main_window.forcePoll(); // ensure first draw is fast on eventWait
     if (args.blank) |blank| {
         try editor.setMapName(blank);
         try editor.initNewMap("sky_day01_01", args.game orelse editor.config.default_game);
     } else {
         if (args.map) |mapname| {
             try editor.loadMap(app_cwd.dir, mapname, &loadctx, args.game orelse editor.config.default_game);
-        } else {
-            while (!win.should_exit) {
-                switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, console_win, false)) {
-                    .exit => break,
-                    .unpause => break,
-                    .cont => continue,
-                }
-            }
         }
     }
 
@@ -448,164 +347,119 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     graph.gl.Enable(graph.gl.CULL_FACE);
     graph.gl.CullFace(graph.gl.BACK);
 
-    var ws = Split.Splits.init(alloc);
-    defer ws.deinit();
-    const main_tab = ws.newArea(.{
-        .sub = .{
-            .split = .{ .k = .horiz, .pos = gui.dstate.nstyle.item_h, .kind = .abs },
+    editor.workspaces.main_2d = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .horizontal } });
+    {
+        const ih = gui.dstate.nstyle.item_h;
+        var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.main_2d) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{
+            .window = .{ .id = menu_bar, .max_width = ih, .min_width = ih },
+        });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .vertical } });
 
-            .left = ws.newArea(.{ .pane = menu_bar }),
+        wsp = &wsp.split.children.items[wsp.split.children.items.len - 1];
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .horizontal } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .horizontal } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = inspector_pane, .min_width = ih } });
+        wsp.split.area = .{ .x1 = 1000, .y1 = 1000 };
+        try wsp.split.handles.append(gapp.workspaces.alloc, 330);
+        try wsp.split.handles.append(gapp.workspaces.alloc, 660);
 
-            .right = ws.newArea(.{
-                .sub = .{
-                    .split = .{ .k = .vert, .pos = 0.67 },
-                    .left = ws.newArea(.{ .pane = main_3d_id }),
-                    .right = ws.newArea(.{ .pane = inspector_pane }),
-                },
-            }),
-        },
-    });
+        const wsm0 = &wsp.split.children.items[0];
+        try wsm0.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = main_3d_id } });
+        try wsm0.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = main_2d_id3 } });
 
-    const main_2d_tab = ws.newArea(.{
-        .sub = .{
-            .split = .{ .k = .vert, .pos = 0.5 },
-            .left = ws.newArea(.{ .sub = .{
-                .split = .{ .k = .horiz, .pos = 0.5 },
-                .left = ws.newArea(.{ .pane = main_3d_id }),
-                .right = ws.newArea(.{ .pane = main_2d_id3 }),
-            } }),
-            .right = ws.newArea(.{ .sub = .{
-                .split = .{ .k = .vert, .pos = 0.5 },
-                .left = ws.newArea(.{ .sub = .{
-                    .split = .{ .k = .horiz, .pos = 0.5 },
-                    .left = ws.newArea(.{ .pane = main_2d_id }),
-                    .right = ws.newArea(.{ .pane = main_2d_id2 }),
-                } }),
-                .right = ws.newArea(.{ .pane = inspector_pane }),
-            } }),
-        },
-    });
-    try ws.workspaces.append(main_tab);
-
-    try ws.workspaces.append(ws.newArea(.{ .pane = asset_pane }));
-    try ws.workspaces.append(ws.newArea(.{
-        .sub = .{
-            .split = .{ .k = .vert, .pos = 0.4 },
-            .left = ws.newArea(.{ .pane = model_win }),
-            .right = ws.newArea(.{ .pane = model_prev }),
-        },
-    }));
-    try ws.workspaces.append(main_2d_tab);
-
-    var last_frame_group_owner: ?edit.EcsT.Id = null;
-
-    var frame_timer = try std.time.Timer.start();
-    var frame_time: u64 = 0;
-    //win.grabMouse(true);
-    main_loop: while (!win.should_exit) {
-        var just_paused = false;
-        if (win.isBindState(loaded_config.binds.global.quit, .rising) or pause_win.should_exit)
-            break :main_loop;
-        if (win.isBindState(loaded_config.binds.global.pause, .rising)) {
-            editor.paused = !editor.paused;
-
-            if (editor.paused) { //Always start with it focused
-                just_paused = true;
-            }
-        }
-
-        if (editor.paused) {
-            switch (try pauseLoop(&win, &draw, &pause_win.vt, &gui, &loadctx, editor, pause_win.should_exit, console_win, just_paused)) {
-                .cont => continue :main_loop,
-                .exit => break :main_loop,
-                .unpause => editor.paused = false,
-            }
-        }
-        draw.real_screen_dimensions = win.screen_dimensions.toF();
-
-        win.pumpEvents(.poll);
-        //POSONE please and thank you.
-        frame_time = frame_timer.read();
-        frame_timer.reset();
-        editor.draw_state.frame_time_ms = @as(f32, @floatFromInt(frame_time)) / std.time.ns_per_ms;
-
-        editor.edit_state.mpos = win.mouse.pos;
-
-        const winrect = graph.Rec(0, 0, draw.screen_dimensions.x, draw.screen_dimensions.y);
-        gui.clamp_window = winrect;
-        graph.gl.Enable(graph.gl.BLEND);
-        try editor.update(&win);
-        //TODO move this back to POSONE once we can render 3dview to any fb
-        //this is here so editor.update can create a thumbnail from backbuffer before its cleared
-        try draw.begin(colors.clear, win.screen_dimensions.toF());
-
-        { //Hacks to update gui
-            const new_id = editor.selection.getGroupOwnerExclusive(&editor.groups);
-            if (new_id != last_frame_group_owner) {
-                inspector_win.vt.needs_rebuild = true;
-            }
-            last_frame_group_owner = new_id;
-        }
-
-        ws.doTheSliders(win.mouse.pos, win.mouse.delta, win.mouse.left);
-        try ws.setWorkspaceAndArea(editor.draw_state.tab_index, winrect);
-
-        //for (config.keys.inspector_tab.items, 0..) |bind, ind| {
-        //    if (ind >= InspectorWindow.tabs.len)
-        //        break;
-
-        //    _ = bind;
-        //    //if (win.isBindState(bind.b, .rising))
-        //    //inspector_win.setTab(ind);
-        //}
-
-        //Do this last
-        defer editor.handleTabKeys(ws.workspaces.items);
-
-        win.bindreg.enableAll(false); //Remove all keybinding contexts
-        win.bindreg.enableContext(loaded_config.binds.global.context_id, true);
-
-        try gui.pre_update();
-        gui.active_windows.clearRetainingCapacity();
-        for (ws.getTab()) |out| {
-            const pane_area = out[0];
-            if (gui.getWindowId(out[1])) |win_vt| {
-                if (gui.canGrabMouseOverride(win_vt)) win.bindreg.enableContexts(win_vt.key_ctx_mask);
-                try gui.active_windows.append(gui.alloc, win_vt);
-                try gui.updateWindowSize(win_vt, pane_area);
-            }
-        }
-
-        editor.handleMisc3DKeys();
-        if (editor.getCurrentTool()) |tool_vt| {
-            win.bindreg.enableContexts(tool_vt.key_ctx_mask);
-        }
-
-        try gui.update();
-
-        try gui.draw(false);
-        gui.drawFbos();
-
-        draw.setViewport(null);
-        try loadctx.loadedSplash();
-        try draw.end(editor.draw_state.cam3d);
-        win.swap();
+        const wsm1 = &wsp.split.children.items[1];
+        try wsm1.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = main_2d_id } });
+        try wsm1.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = main_2d_id2 } });
     }
-    if (editor.edit_state.saved_at_delta != editor.undoctx.delta_counter) {
-        win.should_exit = false;
-        win.pumpEvents(.poll); //Clear quit keys
-        editor.paused = true; //Needed for pause loop, hacky
-        while (!win.should_exit) {
-            if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
-                break; //The map has been saved async
-            }
-            switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, console_win, false)) {
-                .exit => break,
-                .unpause => break,
-                .cont => continue,
-            }
-        }
+
+    editor.workspaces.main = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .horizontal } });
+    {
+        const ih = gui.dstate.nstyle.item_h;
+        var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.main) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{
+            .window = .{ .id = menu_bar, .max_width = ih, .min_width = ih },
+        });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .vertical } });
+
+        wsp = &wsp.split.children.items[wsp.split.children.items.len - 1];
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = main_3d_id, .min_width = ih } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = inspector_pane, .min_width = ih } });
+        wsp.split.area = .{ .x1 = 1000, .y1 = 1000 };
+        try wsp.split.handles.append(gapp.workspaces.alloc, 670);
     }
+
+    editor.workspaces.pause = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .vertical } });
+    gapp.workspaces.active_ws = editor.workspaces.pause;
+    editor.workspaces.pre_pause = editor.workspaces.main;
+    {
+        const ih = gui.dstate.nstyle.item_h;
+        var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.pause) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = console_id, .min_width = ih } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = pause_win_id, .min_width = ih } });
+        wsp.split.area = .{ .x1 = 1000, .y1 = 1000 };
+        try wsp.split.handles.append(gapp.workspaces.alloc, 670);
+    }
+
+    editor.workspaces.asset = try gapp.workspaces.addWorkspace(.{ .window = .{ .id = asset_pane } });
+
+    editor.workspaces.model = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .vertical } });
+    {
+        const ih = gui.dstate.nstyle.item_h;
+        var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.model) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_win, .min_width = ih } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
+    }
+
+    //var last_frame_group_owner: ?edit.EcsT.Id = null;
+
+    //var frame_timer = try std.time.Timer.start();
+    //var frame_time: u64 = 0;
+    try gapp.run();
+
+    //    frame_time = frame_timer.read();
+    //    frame_timer.reset();
+    //    editor.draw_state.frame_time_ms = @as(f32, @floatFromInt(frame_time)) / std.time.ns_per_ms;
+
+    //    graph.gl.Enable(graph.gl.BLEND);
+    //    try editor.update(&win);
+    //    //TODO move this back to POSONE once we can render 3dview to any fb
+    //    //this is here so editor.update can create a thumbnail from backbuffer before its cleared
+    //    try draw.begin(colors.clear, win.screen_dimensions.toF());
+
+    //    { //Hacks to update gui
+    //        const new_id = editor.selection.getGroupOwnerExclusive(&editor.groups);
+    //        if (new_id != last_frame_group_owner) {
+    //            inspector_win.vt.needs_rebuild = true;
+    //        }
+    //        last_frame_group_owner = new_id;
+    //    }
+
+    //    editor.handleMisc3DKeys();
+    //    if (editor.getCurrentTool()) |tool_vt| {
+    //        win.bindreg.enableContexts(tool_vt.key_ctx_mask);
+    //    }
+
+    //    try gui.update();
+
+    //    try gui.draw(false);
+    //    gui.drawFbos();
+
+    //if (editor.edit_state.saved_at_delta != editor.undoctx.delta_counter) {
+    //    win.should_exit = false;
+    //    win.pumpEvents(.poll); //Clear quit keys
+    //    editor.paused = true; //Needed for pause loop, hacky
+    //    while (!win.should_exit) {
+    //        if (editor.edit_state.saved_at_delta == editor.undoctx.delta_counter) {
+    //            break; //The map has been saved async
+    //        }
+    //        switch (try pauseLoop(&win, &draw, &nag_win.vt, &gui, &loadctx, editor, nag_win.should_exit, console_win, false)) {
+    //            .exit => break,
+    //            .unpause => break,
+    //            .cont => continue,
+    //        }
+    //    }
+    //}
 
     //DON'T clean exit. We need editor.deinit to get called so the thread pool is deinit
     //std.process.cleanExit();

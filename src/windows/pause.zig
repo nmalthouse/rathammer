@@ -149,7 +149,7 @@ pub const PauseWindow = struct {
     pub fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(Buttons, @enumFromInt(id))) {
-            .unpause => self.editor.paused = false,
+            .unpause => self.editor.setPaused(false),
             .quit => self.should_exit = true,
             .force_autosave => self.editor.autosaver.force = true,
             .new_map => {
@@ -158,7 +158,7 @@ pub const PauseWindow = struct {
                 ed.initNewMap("sky_day01_01", ed.games.getName(self.new_map_game_config) orelse ed.config.default_game) catch {
                     std.debug.print("ERROR INIT NEW MAP\n", .{});
                 };
-                self.editor.paused = false;
+                self.editor.setPaused(false);
             },
             .save_as => {
                 self.vt.needs_rebuild = true;
@@ -519,7 +519,7 @@ pub const PauseWindow = struct {
             std.debug.print("Can't load map {s} with {t}\n", .{ name, err });
             return;
         };
-        self.editor.paused = false;
+        self.editor.setPaused(false);
     }
 };
 

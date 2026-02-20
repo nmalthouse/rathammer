@@ -127,7 +127,7 @@ pub const SdlFileData = struct {
             },
             .pick_map => {
                 edit.loadctx.setDraw(true); // Renable it
-                edit.paused = false;
+                edit.setPaused(false);
                 edit.loadctx.resetTime();
                 edit.loadMap(
                     std.fs.cwd(),

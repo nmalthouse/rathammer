@@ -16,7 +16,7 @@ const uuid = @import("uuidlib");
 const clipper = @import("clip_solid.zig");
 const gameinfo = @import("gameinfo.zig");
 const profile = @import("profile.zig");
-const Gui = graph.Gui;
+const RGui = graph.RGui;
 const StringStorage = @import("string.zig").StringStorage;
 const Gizmo = @import("gizmo.zig").Gizmo;
 const raycast = @import("raycast_solid.zig");
@@ -95,6 +95,8 @@ pub const Context = struct {
     const Self = @This();
     const ButtonState = graph.SDL.ButtonState;
 
+    app_update: RGui.app.iUpdate = .{ .pre_update = preUpdate },
+
     /// Only real state is a timer, has helper functions for naming and pruning autosaves.
     autosaver: Autosaver,
 
@@ -161,7 +163,7 @@ pub const Context = struct {
     stack_grabbed_mouse: bool = false,
 
     tools: tool_def.ToolRegistry,
-    paused: bool = true,
+    _paused: bool = true,
     has_loaded_map: bool = false,
 
     draw_state: struct {
@@ -184,13 +186,7 @@ pub const Context = struct {
         planes: [4]f32 = [4]f32{ 462, 1300, 4200, 16400 },
         pointfile: ?pointfile.PointFile = null,
         portalfile: ?pointfile.PortalFile = null,
-        tab_index: usize = 0,
         meshes_dirty: bool = false,
-
-        //TODO remove this once we have a decent split system
-        //Used by inspector when clicking select on a texture or model kv
-        texture_browser_tab_index: usize = 1,
-        model_browser_tab_index: usize = 2,
 
         /// This should be replaced with visgroups, for the most part.
         tog: struct {
@@ -229,6 +225,18 @@ pub const Context = struct {
     selection: Selection,
     renderer: def_render.Renderer,
 
+    workspaces: struct {
+        const WsId = RGui.workspaces.WorkspaceId;
+
+        pause: WsId = .none,
+        main: WsId = .none,
+        asset: WsId = .none,
+        model: WsId = .none,
+        main_2d: WsId = .none,
+
+        pre_pause: WsId = .none, //Save ws before we paused
+    } = .{},
+
     edit_state: struct {
         /// destroy 180 billion keyboard worth of pressing ctrl+s to overflow this
         map_version: u64 = 0, //Incremented every save
@@ -261,6 +269,7 @@ pub const Context = struct {
     games: Game.GameList,
     config: Conf.Config,
     conf: *const Conf.ConfigCtx,
+    gapp: *RGui.app.GuiApp,
     game_conf: Conf.GameEntry,
     dirs: path_guess.Dirs,
     win: *graph.SDL.Window,
@@ -339,6 +348,7 @@ pub const Context = struct {
         win_ptr: *graph.SDL.Window,
         loadctx: *LoadCtx,
         dirs: path_guess.Dirs,
+        gapp: *RGui.app.GuiApp,
     ) !*Self {
         app.EventCtx.SdlEventId = try win_ptr.addUserEventCb(app.EventCtx.graph_event_cb);
         shell.RpcEventId = try win_ptr.addUserEventCb(shell.rpc_cb);
@@ -350,6 +360,7 @@ pub const Context = struct {
             .asset = undefined,
             .asset_atlas = undefined,
 
+            .gapp = gapp,
             .games = .init(alloc),
             .classtrack = .init(alloc),
             .targetname_track = .init(alloc),
@@ -1610,6 +1621,17 @@ pub const Context = struct {
         self.eventctx.pushEvent(.{ .notify = self.eventctx.alloc.dupe(u8, str) catch return });
     }
 
+    pub fn setPaused(self: *Self, should_pause: bool) void {
+        if (self._paused == should_pause) return; //ensure this function is idempotent
+
+        if (!should_pause and !self.has_loaded_map) return; //We can only unpause if we have a map
+
+        self._paused = should_pause;
+        if (self._paused)
+            self.workspaces.pre_pause = self.gapp.workspaces.active_ws;
+        self.gapp.workspaces.active_ws = if (self._paused) self.workspaces.pause else self.workspaces.pre_pause;
+    }
+
     pub fn loadSkybox(self: *Self, sky_name: []const u8) !void {
         const name = try self.storeString(sky_name);
         self.loaded_skybox_name = name;
@@ -1628,7 +1650,19 @@ pub const Context = struct {
         }
     }
 
+    pub fn preUpdate(vt: *RGui.app.iUpdate) void {
+        const self: *Self = @alignCast(@fieldParentPtr("app_update", vt));
+
+        self.update(self.win) catch |err| {
+            std.debug.print("err {t}\n", .{err});
+            @panic("totally fucked");
+        };
+    }
+
     pub fn update(self: *Self, win: *graph.SDL.Window) !void {
+        self.edit_state.mpos = win.mouse.pos;
+        self.handleMisc3DKeys();
+        self.handleTabKeys();
         //TODO in the future, set app state to 'autosaving' and send saving to worker thread
         if (self.edit_state.saved_at_delta == self.undoctx.delta_counter or self.edit_state.autosaved_at_delta == self.undoctx.delta_counter) {
             self.autosaver.resetTimer(); //Don't autosave if the map is already saved
@@ -1659,6 +1693,10 @@ pub const Context = struct {
             self.notify("{s}: {s}", .{ L.lang.autosaved, basename }, colors.good);
         }
         const gbind = &self.conf.binds.global;
+
+        if (win.isBindState(gbind.pause, .rising)) {
+            self.setPaused(!self._paused);
+        }
         if (win.isBindState(gbind.save, .rising)) {
             try action.trySave(self);
         }
@@ -1769,19 +1807,18 @@ pub const Context = struct {
         ed.draw_state.meshes_dirty = true;
     }
 
-    pub fn handleTabKeys(ed: *Self, tabs: anytype) void {
-        const ds = &ed.draw_state;
+    pub fn handleTabKeys(ed: *Self) void {
+        if (ed._paused) return;
         const bb = &ed.conf.binds.global;
         if (ed.isBindState(bb.workspace_0, .rising)) {
-            ds.tab_index = 0;
+            ed.gapp.workspaces.active_ws = ed.workspaces.main;
         } else if (ed.isBindState(bb.workspace_texture, .rising)) {
-            ds.tab_index = 1;
+            ed.gapp.workspaces.active_ws = ed.workspaces.asset;
         } else if (ed.isBindState(bb.workspace_model, .rising)) {
-            ds.tab_index = 2;
+            ed.gapp.workspaces.active_ws = ed.workspaces.model;
         } else if (ed.isBindState(bb.workspace_1, .rising)) {
-            ds.tab_index = 3;
+            ed.gapp.workspaces.active_ws = ed.workspaces.main_2d;
         }
-        ds.tab_index = @min(ds.tab_index, tabs.len - 1);
     }
 
     pub fn handleMisc3DKeys(ed: *Self) void {

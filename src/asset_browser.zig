@@ -16,7 +16,7 @@ const RGui = guis.Gui;
 pub const DialogState = struct {
     target_id: ecs.EcsT.Id,
 
-    previous_pane_index: usize,
+    previous_pane_index: guis.workspaces.WorkspaceId,
 
     kind: enum { texture, model },
 };
@@ -111,8 +111,9 @@ pub const AssetBrowserGui = struct {
                 },
             }
 
-            editor.draw_state.tab_index = ds.previous_pane_index;
+            editor.gapp.workspaces.active_ws = ds.previous_pane_index;
+        } else {
+            editor.gapp.workspaces.active_ws = editor.workspaces.main;
         }
-        editor.draw_state.tab_index = 0;
     }
 };
