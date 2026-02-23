@@ -93,8 +93,6 @@ pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
 }
 
 pub fn unloadMap(ed: *Ed) !void {
-    //TODO should we nag on unsaved?
-
     ed.has_loaded_map = false;
 
     var it = ed.meshmap.iterator();
@@ -127,7 +125,7 @@ pub fn unloadMap(ed: *Ed) !void {
 
 pub fn trySave(ed: *Ed) !void {
     if (ed.loaded_map_name) |basename| {
-        ed.saveAndNotify(basename, ed.loaded_map_path orelse "") catch |err| {
+        ed.saveAndNotify(basename, ed.loaded_map_path orelse "", .nothing) catch |err| {
             ed.notify("Failed saving map: {t}", .{err}, colors.bad);
         };
     } else {

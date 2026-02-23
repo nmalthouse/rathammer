@@ -13,7 +13,13 @@ const Context = @import("../editor.zig").Context;
 const label = guis.label;
 const async_util = @import("../async.zig");
 const L = @import("../locale.zig");
+
 pub const NagWindow = struct {
+    const PostAction = enum {
+        quit,
+        close_map,
+    };
+
     const Buttons = enum {
         quit,
         save,
@@ -33,17 +39,26 @@ pub const NagWindow = struct {
         name: std.ArrayList(u8),
     };
 
+    post: PostAction,
+
     vt: iWindow,
     cbhandle: guis.CbHandle = .{},
 
     editor: *Context,
-    should_exit: bool = false,
 
-    pub fn create(gui: *Gui, editor: *Context) !*NagWindow {
+    pub fn makeTransientWindow(gui: *Gui, ed: *Context, post_action: PostAction) !void {
+        const nag_win = try create(gui, ed, post_action);
+        nag_win.vt.needs_rebuild = true;
+        nag_win.vt.area.area = gui.getCenterArea(gui.dstate.nstyle.item_h * 80, gui.dstate.nstyle.item_h * 10);
+        gui.setTransientWindow(&nag_win.vt, null);
+    }
+
+    pub fn create(gui: *Gui, editor: *Context, post_action: PostAction) !*NagWindow {
         const self = gui.create(@This());
         self.* = .{
             .vt = iWindow.init(&@This().build, gui, &@This().deinit, .{}, &self.vt),
             .editor = editor,
+            .post = post_action,
         };
 
         return self;
@@ -81,17 +96,40 @@ pub const NagWindow = struct {
         _ = Btn(ar, ly.getArea(), L.lang.btn.save, .{ .cb_fn = &btnCb, .id = Buttons.id(.save), .cb_vt = &self.cbhandle });
         _ = Btn(ar, ly.getArea(), L.lang.btn.quit, .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle });
     }
-    pub fn btnCb(cb: *guis.CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
+    pub fn btnCb(cb: *guis.CbHandle, id: usize, mcb: guis.MouseCbState, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        mcb.gui.deferTransientClose(win);
+        //Quit editor or close the map
         switch (@as(Buttons, @enumFromInt(id))) {
-            .quit => self.should_exit = true,
+            .quit => {
+                self.doPostAction() catch return;
+            },
             .save => {
                 self.vt.needs_rebuild = true;
                 if (self.editor.loaded_map_name) |basename| {
-                    self.editor.saveAndNotify(basename, self.editor.loaded_map_path orelse "") catch return;
+                    self.editor.saveAndNotify(basename, self.editor.loaded_map_path orelse "", switch (self.post) {
+                        .quit => .quit,
+                        .close_map => .unload_map,
+                    }) catch return;
+                    self.doPostAction() catch return;
                 } else {
-                    async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, .save_map) catch return;
+                    async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, switch (self.post) {
+                        .quit => .save_map_quit,
+                        .close_map => .save_map_close,
+                    }) catch return;
                 }
+            },
+        }
+    }
+
+    fn doPostAction(self: *@This()) !void {
+        switch (self.post) {
+            .quit => {
+                self.editor.gapp.main_window.should_exit = true;
+                self.editor.should_exit = true;
+            },
+            .close_map => {
+                try @import("../actions.zig").unloadMap(self.editor);
             },
         }
     }

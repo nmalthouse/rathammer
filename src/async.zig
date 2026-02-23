@@ -46,6 +46,8 @@ const log = std.log.scoped(.Async);
 pub const SdlFileData = struct {
     pub const Action = enum {
         save_map,
+        save_map_quit,
+        save_map_close,
         pick_map,
 
         pick_vmf, // Distinct from pick map for now. only one json map can be imported but any number of vmfs can be imported
@@ -119,10 +121,14 @@ pub const SdlFileData = struct {
                     actions.exportToObj(edit, edit.last_exported_obj_path orelse ".", basename) catch {};
                 }
             },
-            .save_map => {
+            .save_map, .save_map_quit, .save_map_close => {
                 edit.setMapName(first) catch return;
                 if (edit.loaded_map_name) |basename| {
-                    edit.saveAndNotify(basename, edit.loaded_map_path orelse "") catch return;
+                    edit.saveAndNotify(basename, edit.loaded_map_path orelse "", switch (self.action) {
+                        .save_map_quit => .quit,
+                        .save_map_close => .unload_map,
+                        else => .nothing,
+                    }) catch return;
                 }
             },
             .pick_map => {
@@ -144,7 +150,7 @@ pub const SdlFileData = struct {
 
     pub fn workFunc(self: *@This()) void {
         switch (self.action) {
-            .save_map, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
+            .save_map, .save_map_quit, .save_map_close, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
             .pick_map => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{}),
             .pick_vmf => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{ .allow_many = true }),
         }
@@ -277,12 +283,19 @@ pub const MapCompile = struct {
 };
 
 pub const CompressAndSave = struct {
+    pub const Post = enum {
+        nothing,
+        quit,
+        unload_map,
+    };
     const Opts = struct {
         dir: std.fs.Dir,
         name: []const u8,
         json_buffer: []const u8,
         json_info_buffer: []const u8,
         thumbnail: ?graph.Bitmap,
+
+        post: Post = .nothing,
     };
     job: thread_pool.iJob,
     pool_ptr: *thread_pool.Context,
@@ -290,6 +303,8 @@ pub const CompressAndSave = struct {
     alloc: std.mem.Allocator,
     json_buf: []const u8,
     json_info_buf: []const u8,
+
+    post: Post,
 
     dir: std.fs.Dir,
     filename: []const u8,
@@ -309,6 +324,7 @@ pub const CompressAndSave = struct {
             .json_buf = opts.json_buffer,
             .json_info_buf = opts.json_info_buffer,
             .pool_ptr = pool,
+            .post = opts.post,
             .dir = opts.dir,
             .filename = try alloc.dupe(u8, opts.name),
         };
@@ -340,6 +356,17 @@ pub const CompressAndSave = struct {
                     };
                 } else {
                     std.debug.print("Failed to get map full path\n", .{});
+                }
+
+                switch (self.post) {
+                    .nothing => {},
+                    .quit => {
+                        edit.gapp.main_window.should_exit = true;
+                        edit.should_exit = true;
+                    },
+                    .unload_map => {
+                        actions.unloadMap(edit) catch return;
+                    },
                 }
             },
         }

@@ -17,6 +17,7 @@ const version = @import("../version.zig");
 const colors = @import("../colors.zig").colors;
 const app = @import("../app.zig");
 const L = @import("../locale.zig");
+const limits = @import("../limits.zig");
 
 const MenuBtn = enum(guis.Uid) {
     save,
@@ -143,8 +144,9 @@ pub const MenuBar = struct {
             });
             ar.x += b + pad;
 
-            const ww = gui.dstate.minWidgetWidth(version.version_short);
-            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{version.version_short}, .{});
+            const ver_str = if (limits.IS_DEBUG) version.version_short ++ " DEBUG" else version.version_short;
+            const ww = gui.dstate.minWidgetWidth(ver_str);
+            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{ver_str}, .{});
             ar.x += ww + pad;
         }
     }
@@ -181,7 +183,7 @@ pub const MenuBar = struct {
         dat.gui.setTransientWindow(r_win, &self.vt.area);
     }
 
-    fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
+    fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, mcb: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(MenuBtn, @enumFromInt(id))) {
             .save => action.trySave(self.ed) catch {},
@@ -199,7 +201,12 @@ pub const MenuBar = struct {
             .build_map_user => action.buildMap(self.ed, true) catch {},
             .export_obj_as => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .export_obj) catch return,
             .unload_map => {
-                action.unloadMap(self.ed) catch {};
+                if (self.ed.isUnsaved()) {
+                    const Nag = @import("savenag.zig");
+                    Nag.NagWindow.makeTransientWindow(mcb.gui, self.ed, .close_map) catch {};
+                } else {
+                    action.unloadMap(self.ed) catch {};
+                }
             },
             .export_obj => {
                 const path = self.ed.last_exported_obj_path orelse return;

@@ -293,8 +293,8 @@ pub const Keys = struct {
         build_map: Bind = .{ .button = .{ .keycode = .F9 }, .mode = .exclusive },
         build_map_user: Bind = .{ .button = .{ .keycode = .F10 }, .mode = .exclusive },
 
-        down_line: Bind = .{ .button = .{ .scancode = .C }, .repeat = true }, // j in dvorak
-        up_line: Bind = .{ .button = .{ .scancode = .V }, .repeat = true }, // k in dvorak
+        down_line: Bind = .{ .button = .{ .scancode = .C }, .mod = &.{.ctrl}, .repeat = true }, // j in dvorak
+        up_line: Bind = .{ .button = .{ .scancode = .V }, .mod = &.{.ctrl}, .repeat = true }, // k in dvorak
         pause: Bind = SC(.ESCAPE),
 
         inspector_tab_0: Bind = SC(.F1),

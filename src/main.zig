@@ -228,13 +228,12 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     }
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
-    const nag_win = try NagWindow.create(gui, editor);
-    _ = try gui.addWindow(&nag_win.vt, default_rect, .{});
     const model_browse = try AssetBrowser.ModelBrowser.create(gui, editor);
     const asset_win = try AssetBrowser.AssetBrowser.create(gui, editor, model_browse);
     const asset_pane = try gui.addWindow(&asset_win.vt, default_rect, .{});
     const model_win = try gui.addWindow(&model_browse.vt, default_rect, .{});
-    const model_prev = try gui.addWindow(try AssetBrowser.ModelPreview.create(editor, gui, &gapp.drawctx), default_rect, .{});
+    const model_prev_win = try AssetBrowser.ModelPreview.create(editor, gui, &gapp.drawctx);
+    const model_prev = try gui.addWindow(model_prev_win, default_rect, .{});
 
     const menu_bar = try gui.addWindow(try MenuBar.create(gui, editor), default_rect, .{});
 
@@ -269,6 +268,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         inspector_win.vt.key_ctx_mask = .empty;
         main_3d_view.key_ctx_mask.setValue(loaded_config.binds.view3d.context_id, true);
         main_3d_view.key_ctx_mask.setValue(loaded_config.binds.tool.context_id, true);
+
+        model_prev_win.key_ctx_mask.setValue(loaded_config.binds.view3d.context_id, true);
 
         main_2d_0.key_ctx_mask.setValue(loaded_config.binds.view2d.context_id, true);
         main_2d_1.key_ctx_mask.setValue(loaded_config.binds.view2d.context_id, true);
@@ -369,7 +370,16 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
     }
 
-    try gapp.run();
+    while (true) {
+        try gapp.run();
+        if (editor.should_exit) break;
+        if (editor.isUnsaved()) {
+            gapp.main_window.should_exit = false;
+            try NagWindow.makeTransientWindow(&gapp.gui, editor, .quit);
+        } else {
+            break;
+        }
+    }
 
     //    graph.gl.Enable(graph.gl.BLEND);
     //    try editor.update(&win);

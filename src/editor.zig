@@ -166,6 +166,8 @@ pub const Context = struct {
     _paused: bool = true,
     has_loaded_map: bool = false,
 
+    should_exit: bool = false,
+
     draw_state: struct {
         mode: DrawMode = .shaded,
         skybox_textures: ?[6]graph.glID = null,
@@ -1530,7 +1532,7 @@ pub const Context = struct {
         return self.scratch_buf.items;
     }
 
-    pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8) !void {
+    pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8, post: async_util.CompressAndSave.Post) !void {
         self.edit_state.map_version += 1;
         var timer = try std.time.Timer.start();
 
@@ -1597,6 +1599,7 @@ pub const Context = struct {
                     .json_info_buffer = try info_writer.toOwnedSlice(),
                     .dir = try std.fs.cwd().openDir(".", .{}),
                     .name = name,
+                    .post = post,
                     .thumbnail = bmp,
                 },
             );
@@ -1653,6 +1656,10 @@ pub const Context = struct {
             std.debug.print("err {t}\n", .{err});
             @panic("totally fucked");
         };
+    }
+
+    pub fn isUnsaved(self: *Self) bool {
+        return self.edit_state.saved_at_delta != self.undoctx.delta_counter;
     }
 
     pub fn update(self: *Self) !void {
