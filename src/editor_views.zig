@@ -94,7 +94,7 @@ pub const Main3DView = struct {
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
         //self.ed.handleMisc3DKeys();
-        draw3Dview(self, self.ed, vt.area.area, self.drawctx, gui.dstate.font, gui.dstate.nstyle.text_h, gui) catch return;
+        draw3Dview(self, self.ed, vt.area.area, self.drawctx, true) catch return;
     }
 
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {
@@ -146,16 +146,20 @@ pub const Main3DView = struct {
             else => {},
         }
     }
+
+    //This assumses draw.screen_dimensions are set to sdl.window dim
+    //it uses these to gl.setViewport
     pub fn draw3Dview(
         window: *@This(),
         self: *Context,
         screen_area: graph.Rect,
         draw: *graph.ImmediateDrawingContext,
-        font: *graph.FontUtil.PublicFontInterface,
-        fh: f32,
-        gui: *G.Gui,
+        draw_hud: bool,
     ) !void {
         const bind = &self.conf.binds.view3d;
+        const font = self.gapp.gui.dstate.font;
+        const gui = &self.gapp.gui;
+        const fh = self.gapp.gui.dstate.nstyle.text_h;
         graph.gl.PolygonMode(
             graph.gl.FRONT_AND_BACK,
             if (self.draw_state.tog.wireframe) graph.gl.LINE else graph.gl.FILL,
@@ -497,7 +501,7 @@ pub const Main3DView = struct {
 
         try draw_nd.flush(null, self.draw_state.cam3d);
         graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
-        { // text stuff
+        if (draw_hud) { // text stuff
             const col = 0xff_ff_ffff;
             const p = self.draw_state.cam3d.pos;
 
@@ -544,30 +548,29 @@ pub const Main3DView = struct {
             }
 
             mt.drawBgRect(0x99, fh * 30);
-        }
 
-        const off = fh * 5;
-        self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
-        //3d marquee only works when mouse is not grabbed, otherwise camera projection changes throughout marquee
-        if (!self.stack_grabbed_mouse and limits.IS_DEBUG) {
-            if (self.isBindState(bind.marquee_3d, .rising)) {
-                self.edit_state.marquee.start = self.edit_state.mpos;
-            } else if (self.isBindState(bind.marquee_3d, .high)) {
-                const end = self.edit_state.mpos;
+            const off = fh * 5;
+            self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
+            //3d marquee only works when mouse is not grabbed, otherwise camera projection changes throughout marquee
+            if (!self.stack_grabbed_mouse and limits.IS_DEBUG) {
+                if (self.isBindState(bind.marquee_3d, .rising)) {
+                    self.edit_state.marquee.start = self.edit_state.mpos;
+                } else if (self.isBindState(bind.marquee_3d, .high)) {
+                    const end = self.edit_state.mpos;
 
-                draw.rect(.newV(self.edit_state.marquee.start, end.sub(self.edit_state.marquee.start)), 0xffffff_88);
+                    draw.rect(.newV(self.edit_state.marquee.start, end.sub(self.edit_state.marquee.start)), 0xffffff_88);
+                }
+            }
+            if (self.asset.getRectFromName("crosshair.png")) |cross| {
+                const start = screen_area.center().sub(cross.dim().scale(0.5));
+                draw.rectTex(graph.Rec(
+                    @trunc(start.x),
+                    @trunc(start.y),
+                    cross.w,
+                    cross.h,
+                ), cross, self.asset_atlas);
             }
         }
-        if (self.asset.getRectFromName("crosshair.png")) |cross| {
-            const start = screen_area.center().sub(cross.dim().scale(0.5));
-            draw.rectTex(graph.Rec(
-                @trunc(start.x),
-                @trunc(start.y),
-                cross.w,
-                cross.h,
-            ), cross, self.asset_atlas);
-        }
-
         try self.draw_state.screen_space_text_ctx.flush(null, self.draw_state.cam3d);
         try draw.flush(null, null);
     }

@@ -253,7 +253,7 @@ pub const Context = struct {
                 };
                 var mipLevels = std.ArrayList(vtf.VtfBuf.MipLevel){};
                 try mipLevels.append(self.alloc, .{
-                    .buf = try bmp.data.toOwnedSlice(),
+                    .buf = try bmp.data.toOwnedSlice(bmp.alloc),
                     .w = bmp.w,
                     .h = bmp.h,
                 });

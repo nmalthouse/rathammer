@@ -336,7 +336,7 @@ pub const CompressAndSave = struct {
         self.alloc.free(self.json_info_buf);
         self.dir.close();
         self.alloc.free(self.filename);
-        if (self.thumb) |th|
+        if (self.thumb) |*th|
             th.deinit();
 
         const alloc = self.alloc;
