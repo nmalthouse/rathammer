@@ -399,23 +399,15 @@ pub const CompressAndSave = struct {
 
             var tar_wr = std.tar.Writer{ .underlying_writer = &wr.interface };
 
-            if (self.thumb) |th| {
-                var qd = graph.c.qoi_desc{
-                    .width = th.w,
-                    .height = th.h,
-                    .channels = 3,
-                    .colorspace = graph.c.QOI_LINEAR,
+            if (self.thumb) |*th| {
+                var aw: std.Io.Writer.Allocating = .init(self.alloc);
+                defer aw.deinit();
+                th.writeQoi(&aw.writer) catch |err| {
+                    log.warn("unable to write thumbnail {t}", .{err});
                 };
-                var qoi_len: c_int = 0;
-                if (graph.c.qoi_encode(&th.data.items[0], &qd, &qoi_len)) |qoi_data| {
-                    const qoi_s: [*c]const u8 = @ptrCast(qoi_data);
-                    const qlen: usize = if (qoi_len > 0) @intCast(qoi_len) else 0;
-                    const slice: []const u8 = qoi_s[0..qlen];
-                    tar_wr.writeFileBytes("thumbnail.qoi", slice, .{}) catch |err| {
-                        log.warn("unable to write thumbnail {t}", .{err});
-                    };
-                    graph.c.QOI_FREE(qoi_data);
-                }
+                tar_wr.writeFileBytes("thumbnail.qoi", aw.written(), .{}) catch |err| {
+                    log.warn("unable to write thumbnail {t}", .{err});
+                };
             }
 
             tar_wr.writeFileBytes("map.json.gz", compressed.written(), .{}) catch |err| {
