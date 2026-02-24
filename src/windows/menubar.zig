@@ -100,9 +100,7 @@ pub const MenuBar = struct {
         win.area.clearChildren(gui, win);
         win.area.dirty();
 
-        var ar = win.area.area;
         if (win.area.children.items.len != 0) @panic("fucked up"); // code assumes
-        const pad = gui.dstate.minWidgetWidth("  ");
         const localMenu = [menus.len][]const u8{
             L.lang.btn.file,
             L.lang.btn.edit,
@@ -110,44 +108,52 @@ pub const MenuBar = struct {
             L.lang.btn.options,
             L.lang.btn.help,
         };
+        var hl = guis.HorizLayoutMeasured{ .bounds = win.area.area, .paddingh = 0 };
         for (menus, 0..) |_, i| {
             const b = gui.dstate.minWidgetWidth(localMenu[i]);
 
-            _ = Wg.Button.build(&win.area, ar.replace(null, null, b + pad, null), localMenu[i], .{
+            _ = Wg.Button.build(&win.area, hl.getArea(b), localMenu[i], .{
                 .cb_vt = &self.cbhandle,
                 .cb_fn = btnCb,
                 .id = @intCast(i),
             });
-            ar.x += b + pad;
         }
 
         {
             const b = Wg.Checkbox.getWidth(gui, L.lang.btn.ignore_groups, .{});
 
-            _ = Wg.Checkbox.build(&win.area, ar.replace(null, null, b + pad, null), L.lang.btn.ignore_groups, .{
+            _ = Wg.Checkbox.build(&win.area, hl.getArea(Wg.Checkbox.getWidth(gui, L.lang.btn.ignore_groups, .{})), L.lang.btn.ignore_groups, .{
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null);
-            ar.x += b + pad;
 
-            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.renderer.mode, .{});
-            ar.x += b + pad;
+            _ = Wg.Combo.build(&win.area, hl.getArea(b), &self.ed.renderer.mode, .{});
 
-            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.draw_state.mode, .{
+            _ = Wg.Combo.build(&win.area, hl.getArea(b), &self.ed.draw_state.mode, .{
                 .commit_vt = &self.cbhandle,
                 .commit_cb = drawModeCommit,
             });
-            ar.x += b + pad;
 
-            _ = Wg.Combo.build(&win.area, ar.replace(null, null, b + pad, null), &self.ed.draw_state.displacement_mode, .{
+            _ = Wg.Combo.build(&win.area, hl.getArea(b), &self.ed.draw_state.displacement_mode, .{
                 .commit_vt = &self.cbhandle,
                 .commit_cb = drawModeCommit,
             });
-            ar.x += b + pad;
 
             const ver_str = if (limits.IS_DEBUG) version.version_short ++ " DEBUG" else version.version_short;
             const ww = gui.dstate.minWidgetWidth(ver_str);
-            _ = Wg.Text.build(&win.area, ar.replace(null, null, ww + pad, null), "{s}", .{ver_str}, .{});
-            ar.x += ww + pad;
+            _ = Wg.Text.build(&win.area, hl.getArea(ww), "{s}", .{ver_str}, .{});
+            const strings = [_][]const u8{
+                "main", "asset", "model", "main_2d",
+            };
+            inline for (strings, 0..) |str, i| { //Workspaces
+                const id = @field(self.ed.workspaces, str);
+
+                _ = Wg.Button.build(&win.area, hl.getArea(gui.dstate.minWidgetWidth(str)), str, .{
+                    .id = i,
+                    .cb_fn = ws_btnCb,
+                    .cb_vt = &self.cbhandle,
+                    .disable = self.ed.gapp.workspaces.active_ws == id,
+                });
+            }
         }
     }
 
@@ -165,6 +171,18 @@ pub const MenuBar = struct {
             },
             else => {},
         }
+    }
+
+    fn ws_btnCb(cb: *guis.CbHandle, uid: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
+        const self = cb.cast(@This(), "cbhandle");
+        self.ed.gapp.workspaces.active_ws = switch (uid) {
+            0 => self.ed.workspaces.main,
+            1 => self.ed.workspaces.asset,
+            2 => self.ed.workspaces.model,
+            3 => self.ed.workspaces.main_2d,
+
+            else => return,
+        };
     }
 
     fn btnCb(cb: *guis.CbHandle, uid: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {

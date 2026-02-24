@@ -230,6 +230,7 @@ pub const Context = struct {
         const WsId = RGui.workspaces.WorkspaceId;
 
         main_3d_win: RGui.WindowId = .none,
+        inspector: RGui.WindowId = .none,
 
         pause: WsId = .none,
         main: WsId = .none,

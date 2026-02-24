@@ -401,30 +401,41 @@ pub const Main3DView = struct {
             }
         }
 
-        if (false and limits.IS_DEBUG) {
+        if (self.isBindState(self.conf.binds.view3d.tool_context, .rising) and limits.IS_DEBUG) {
             const mpos = if (self.stack_grabbed_mouse) screen_area.center() else self.edit_state.mpos.sub(screen_area.pos());
             const aa = self.frame_arena.allocator();
-            var btns = std.ArrayList(G.Widget.BtnContextWindow.ButtonMapping){};
-            try btns.append(aa, .{ 0, "cancel", .btn });
-            try btns.append(aa, .{ 0, "this does nothing yet", .btn });
-            try btns.append(aa, .{ 0, "boxy", .textbox });
-            try btns.append(aa, .{ 0, "another box", .textbox });
-            try btns.append(aa, .{ 0, "scale", .{ .vector = .new(1, 1, 1) } });
+            if (false) {
+                var blank_win = gui.create(iWindow);
 
-            const r_win = G.Widget.BtnContextWindow.create(gui, mpos.add(.{ .x = 0, .y = 10 }), .{
-                //.buttons = &.{},
-                .buttons = btns.items,
-                .btn_cb = toolContextBtn,
-                .btn_vt = &window.cbhandle,
-            }) catch return;
-            //try gui.updateWindowSize(r_win, graph.Rec(mpos.x, mpos.y, 800, 1200));
+                _ = &blank_win;
+            } else {
+                var btns = std.ArrayList(G.Widget.BtnContextWindow.ButtonMapping){};
+                _ = &btns;
+                _ = aa;
+                //try btns.append(aa, .{ 0, "cancel", .btn });
+                //try btns.append(aa, .{ 0, "this does nothing yet", .btn });
+                //try btns.append(aa, .{ 0, "boxy", .textbox });
+                //try btns.append(aa, .{ 0, "another box", .textbox });
+                //try btns.append(aa, .{ 0, "scale", .{ .vector = .new(1, 1, 1) } });
 
-            //@import("main.zig").INSPECTOR.layer_widget.build(gui, r_win, &r_win.area, r_win.area.area) catch {};
+                const r_win = G.Widget.BtnContextWindow.create(gui, mpos.add(.{ .x = 0, .y = 10 }), .{
+                    //.buttons = &.{},
+                    .buttons = btns.items,
+                    .btn_cb = toolContextBtn,
+                    .btn_vt = &window.cbhandle,
+                }) catch return;
+                try gui.updateWindowSize(r_win, graph.Rec(mpos.x, mpos.y, 800, 1200));
 
-            //self.right_click_id = self.opts.id;
-            gui.setTransientWindow(r_win);
-            gui.setGrabOverride(&window.vt, false, .{ .hide_pointer = false });
-            graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, mpos.x, mpos.y);
+                if (gui.getWindowId(self.workspaces.inspector)) |insp| {
+                    const ins: *@import("windows/inspector.zig").InspectorWindow = @alignCast(@fieldParentPtr("vt", insp));
+                    ins.layer_widget.build(gui, r_win, &r_win.area, r_win.area.area) catch {};
+                }
+
+                //self.right_click_id = self.opts.id;
+                gui.setTransientWindow(r_win, null);
+                gui.setGrabOverride(&window.vt, false, .{ .hide_pointer = false });
+                graph.c.SDL_WarpMouseInWindow(gui.sdl_win.win, mpos.x, mpos.y);
+            }
         }
         if (self.isBindState(self.conf.binds.global.undo, .rising)) {
             action.undo(self);

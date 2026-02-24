@@ -265,6 +265,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const main_3d_view = try editor_view.Main3DView.create(editor, gui, &gapp.drawctx);
     const main_3d_id = try gui.addWindow(main_3d_view, .Empty, .{ .put_fbo = false });
     editor.workspaces.main_3d_win = main_3d_id;
+    editor.workspaces.inspector = inspector_pane;
     { //Set up key contexts
         inspector_win.vt.key_ctx_mask = .empty;
         main_3d_view.key_ctx_mask.setValue(loaded_config.binds.view3d.context_id, true);
@@ -361,12 +362,30 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try wsp.split.handles.append(gapp.workspaces.alloc, 670);
     }
 
-    editor.workspaces.asset = try gapp.workspaces.addWorkspace(.{ .window = .{ .id = asset_pane } });
+    editor.workspaces.asset = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .horizontal } });
+    {
+        const ih = gui.dstate.nstyle.item_h;
+        var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.asset) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{
+            .window = .{ .id = menu_bar, .max_width = ih, .min_width = ih },
+        });
+        //try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .vertical } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = asset_pane, .min_width = ih } });
 
-    editor.workspaces.model = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .vertical } });
+        //wsp = &wsp.split.children.items[wsp.split.children.items.len - 1];
+    }
+
+    editor.workspaces.model = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .horizontal } });
     {
         const ih = gui.dstate.nstyle.item_h;
         var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.model) orelse return error.fucked).pane;
+        try wsp.split.append(gapp.workspaces.alloc, .{
+            .window = .{ .id = menu_bar, .max_width = ih, .min_width = ih },
+        });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .vertical } });
+
+        wsp = &wsp.split.children.items[wsp.split.children.items.len - 1];
+        //var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.model) orelse return error.fucked).pane;
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_win, .min_width = ih } });
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
     }
@@ -381,12 +400,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
             break;
         }
     }
-
-    //    graph.gl.Enable(graph.gl.BLEND);
-    //    try editor.update(&win);
-    //    //TODO move this back to POSONE once we can render 3dview to any fb
-    //    //this is here so editor.update can create a thumbnail from backbuffer before its cleared
-    //    try draw.begin(colors.clear, win.screen_dimensions.toF());
 
     //DON'T clean exit. We need editor.deinit to get called so the thread pool is deinit
     //std.process.cleanExit();
