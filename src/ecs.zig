@@ -893,7 +893,7 @@ pub const Solid = struct {
     }
 
     /// Check if this solid can be written to a vmf file
-    /// Assumes optimizeMesh has been called on self
+    /// Assumes optimizeMesh_ has been called on self
     /// returns error if invalid
     pub fn validateVmfSolid(self: *const Self, csgctx: *csg.Context) !void {
         //To be valid:
@@ -924,14 +924,26 @@ pub const Solid = struct {
         defer new_solid.deinit();
         if (new_solid.sides.items.len != self.sides.items.len) return error.sideLen;
         if (new_solid.verts.items.len != self.verts.items.len) {
-            std.debug.print("{d} {d}\n", .{ new_solid.verts.items.len, self.verts.items.len });
+            if (false) {
+                std.debug.print("{d} {d}\n", .{ new_solid.verts.items.len, self.verts.items.len });
+                var stdout_buf: [128]u8 = undefined;
+                var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+                try self.print(&stdout_writer.interface);
+                try new_solid.print(&stdout_writer.interface);
+
+                const off = try self.printObj(0, "old", &stdout_writer.interface);
+                _ = try new_solid.printObj(off, "new", &stdout_writer.interface);
+                try stdout_writer.interface.flush();
+            }
             return error.vertLen;
         }
 
         const eps: f32 = 0.1;
         for (new_solid.verts.items, 0..) |nv, i| {
-            if (nv.distance(self.verts.items[i]) > eps)
+            if (nv.distance(self.verts.items[i]) > eps) {
+                std.debug.print("DIST {d}\n", .{nv.distance(self.verts.items[i])});
                 return error.vertsDifferent;
+            }
         }
 
         //for(new_solid.sides.items, 0..)|ns, i|{ }
@@ -989,8 +1001,9 @@ pub const Solid = struct {
         for (self.sides.items) |*side| {
             index_map.clearRetainingCapacity();
             index.clearRetainingCapacity();
-            for (side.index.items) |*ind| // ensure each vertex unique
+            for (side.index.items) |*ind| { // ensure each vertex unique
                 ind.* = try vmap.put(self.verts.items[ind.*]);
+            }
 
             for (side.index.items) |ind| { //ensure each index unique
                 const res = try index_map.getOrPut(ind);
@@ -1355,22 +1368,34 @@ pub const Solid = struct {
         }
     }
 
+    //wr must have print method
+    pub fn print(solid: *const Self, wr: anytype) !void {
+        try wr.print("Solid\n", .{});
+        for (solid.verts.items, 0..) |vert, i| {
+            try wr.print("  v {d} [{d:.1} {d:.1} {d:.1}]\n", .{ i, vert.x(), vert.y(), vert.z() });
+        }
+        for (solid.sides.items, 0..) |side, i| {
+            try wr.print("  side {d}: ", .{i});
+            for (side.index.items) |ind|
+                try wr.print(" {d}", .{ind});
+            try wr.print("\n", .{});
+            const norm = side.normal(solid);
+            try wr.print("  Normal: [{d} {d} {d}]\n", .{ norm.x(), norm.y(), norm.z() });
+        }
+    }
+
     /// Returns the number of verticies serialized
-    pub fn printObj(self: *const Self, vert_offset: usize, name: []const u8, out: anytype) usize {
-        out.print("o {s}\n", .{name});
+    pub fn printObj(self: *const Self, vert_offset: usize, name: []const u8, out: anytype) !usize {
+        try out.print("o {s}\n", .{name});
         for (self.verts.items) |v|
-            out.print("v {d} {d} {d}\n", .{ v.x(), v.y(), v.z() });
+            try out.print("v {d} {d} {d}\n", .{ v.x(), v.y(), v.z() });
 
         for (self.sides.items) |side| {
-            const in = side.index.items;
-
-            for (1..side.index.items.len - 1) |i| {
-                std.debug.print("f {d} {d} {d}\n", .{
-                    1 + in[0] + vert_offset,
-                    1 + in[i + 1] + vert_offset,
-                    1 + in[i] + vert_offset,
-                });
+            try out.print("f", .{});
+            for (side.index.items) |ind| {
+                try out.print(" {d}", .{ind + 1 + vert_offset});
             }
+            try out.print("\n", .{});
         }
 
         return self.verts.items.len;

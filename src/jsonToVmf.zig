@@ -299,10 +299,12 @@ fn writeSolid(
     try solid.optimizeMesh(.{ .can_reorder = !try ecs_p.hasComponent(ent_id, .displacements) });
 
     solid.validateVmfSolid(csgctx) catch |err| {
-        std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });
-
-        if (opts.check_solid)
+        if (opts.check_solid) {
+            std.debug.print("Omitting solid {d} {t}\n", .{ ent_id, err });
             return;
+        } else {
+            std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });
+        }
     };
 
     const disps: ?*ecs.Displacements = try ecs_p.getOptPtr(ent_id, .displacements);

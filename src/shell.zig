@@ -371,17 +371,7 @@ pub const CommandCtx = struct {
                         try wr.print("id: {d} \n", .{id});
                         if (try self.ed.ecs.getOptPtr(id, .solid)) |solid| {
                             try wr.print("Solid\n", .{});
-                            for (solid.verts.items, 0..) |vert, i| {
-                                try wr.print("  v {d} [{d:.1} {d:.1} {d:.1}]\n", .{ i, vert.x(), vert.y(), vert.z() });
-                            }
-                            for (solid.sides.items, 0..) |side, i| {
-                                try wr.print("  side {d}: ", .{i});
-                                for (side.index.items) |ind|
-                                    try wr.print(" {d}", .{ind});
-                                try wr.print("\n", .{});
-                                const norm = side.normal(solid);
-                                try wr.print("  Normal: [{d} {d} {d}]\n", .{ norm.x(), norm.y(), norm.z() });
-                            }
+                            try solid.print(wr);
                         }
                     }
                 },

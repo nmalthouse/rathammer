@@ -70,7 +70,7 @@ pub const Context = struct {
         const MAPSIZE = std.math.maxInt(i32);
         var timer = try std.time.Timer.start();
         var ret = ecs.Solid.init(alloc);
-        try ret.sides.resize(ret._alloc, sides.len);
+        try ret.sides.appendNTimes(ret._alloc, .{ ._alloc = ret._alloc }, sides.len);
 
         self.vecmap.clear();
 
@@ -376,7 +376,7 @@ pub fn conVec(v: anytype) @TypeOf(v) {
 
 pub const VecOrder = struct {
     pub const SortCtx = struct {
-        mul: f32 = 128,
+        mul: f32 = limits.csg_mul,
 
         new: []Vec3_32,
         mapping: []usize,
@@ -406,7 +406,7 @@ pub const VecOrder = struct {
 // Rounds off anything after 0.1
 pub const VecMap = struct {
     pub const HashCtx = struct {
-        multiplier: f32 = 128,
+        multiplier: f32 = limits.csg_mul,
         pub fn hash(self: HashCtx, k: Vec3_32) u64 {
             var hasher = std.hash.Wyhash.init(0);
 

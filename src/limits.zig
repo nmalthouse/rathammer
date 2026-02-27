@@ -7,4 +7,6 @@ pub const max_grid: f32 = 4096;
 pub const delta_drawn: f32 = 0.001;
 pub const csg_epsilon: f64 = 2E-14;
 
+pub const csg_mul: f32 = 16.0;
+
 pub const IS_DEBUG = @import("builtin").mode == .Debug;
