@@ -99,6 +99,7 @@ pub const Translate = struct {
             .gizmo_translate = .{},
             .mode = .translate,
         };
+        obj.vt.key_ctx_mask.setValue(ed.conf.binds.cube_draw.context_id, true);
         return &obj.vt;
     }
 

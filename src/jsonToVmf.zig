@@ -265,7 +265,7 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
         try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", &layers, .{
             .omit_potentially_invalid = !(args.@"emit-invalid" orelse false),
             .optimize_mesh = !(args.@"no-optimize" orelse false),
-            .check_validity = !(args.@"no-check_validity" orelse false),
+            .check_validity = !(args.@"no-check-validity" orelse false),
         });
     } else {
         std.debug.print("Please specify map file with --map\n", .{});

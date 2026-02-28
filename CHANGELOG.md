@@ -11,6 +11,10 @@
 * Write config to appdata on Windows
 * rewrite binding system, binds can now mask other binds, key repeat can be enabled per key, mouse buttons can be bound to any function
 * !BREAKING Replace config.vdf and game vdf's with json. The old configs are ignored
-* Snap primitive gen verticies to integer coordinates when size is above a threshold
+* Snap primitive gen vertices to integer coordinates when size is above a threshold
 * rewrote the gui layout system
 * added tab buttons for workspace to menubar
+* fixed segfault on invalid solid export
+* invalid solids are tagged and can be cycled through with ctrl+o
+* invalid solids are omitted from vmf export by default
+* added menu button to remove all duplicate vertices in map
