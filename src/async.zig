@@ -309,6 +309,7 @@ pub const CompressAndSave = struct {
     dir: std.fs.Dir,
     filename: []const u8,
     status: enum { failed, built, nothing } = .nothing,
+    fail_reason: ?[]const u8 = null,
     thumb: ?graph.Bitmap,
 
     //Closes the passed in dir handle
@@ -339,6 +340,9 @@ pub const CompressAndSave = struct {
         if (self.thumb) |*th|
             th.deinit();
 
+        if (self.fail_reason) |fr|
+            self.alloc.free(fr);
+
         const alloc = self.alloc;
         alloc.destroy(self);
     }
@@ -347,7 +351,7 @@ pub const CompressAndSave = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("job", vt));
         defer self.destroy();
         switch (self.status) {
-            .nothing, .failed => edit.notify("Unable to compress map nothing written", .{}, 0xff0000ff),
+            .nothing, .failed => edit.notify("Unable to write map: {s}", .{self.fail_reason orelse ""}, 0xff0000ff),
             .built => {
                 edit.notify("Compressed map", .{}, 0x00ff00ff);
                 if (edit.getMapFullPath()) |full_path| {
@@ -374,12 +378,15 @@ pub const CompressAndSave = struct {
 
     pub fn workFunc(self: *@This()) void {
         defer self.pool_ptr.insertCompletedJob(&self.job) catch {};
+        self.status = .failed; //Default to failed
+        var erb = std.ArrayList(u8){};
 
         var compressed = std.Io.Writer.Allocating.init(self.alloc);
         defer compressed.deinit();
         if (graph.miniz.compressGzip(self.alloc, self.json_buf, &compressed.writer)) |_| {} else |err| {
             log.err("compress failed {t}", .{err});
-            self.status = .failed;
+            erb.print(self.alloc, "gzip compress failed: {t}", .{err}) catch {};
+            self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
             return;
         }
 
@@ -391,6 +398,8 @@ pub const CompressAndSave = struct {
         {
             const file = self.dir.createFile(copy_name.items, .{}) catch |err| {
                 log.err("unable to create file {s} aborting with {t}", .{ copy_name.items, err });
+                erb.print(self.alloc, "unable to create file: {s} {t}", .{ copy_name.items, err }) catch {};
+                self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
                 return;
             };
             defer file.close();
@@ -412,29 +421,35 @@ pub const CompressAndSave = struct {
 
             tar_wr.writeFileBytes("map.json.gz", compressed.written(), .{}) catch |err| {
                 log.err("file write failed {t}", .{err});
-                self.status = .failed;
+                erb.print(self.alloc, "unable to write map to tar: {t}", .{err}) catch {};
+                self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
                 return;
             };
 
             tar_wr.writeFileBytes("info.json", self.json_info_buf, .{}) catch |err| {
                 log.err("json info write failed {t}", .{err});
-                self.status = .failed;
+                erb.print(self.alloc, "unable to write info to tar: {t}", .{err}) catch {};
+                self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
                 return;
             };
 
             wr.interface.flush() catch {};
-            self.status = .built;
         }
         // saving file was written, copy then delete
         self.dir.copyFile(copy_name.items, self.dir, self.filename, .{}) catch |err| {
             log.err("unable to copy {s} to {s} with {t}", .{ copy_name.items, self.filename, err });
+            erb.print(self.alloc, "unable to copy {s} to {s} : {t}", .{ copy_name.items, self.filename, err }) catch {};
+            self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
             return;
         };
 
         self.dir.deleteFile(copy_name.items) catch |err| {
             log.err("unable to delete {s} with {t}", .{ copy_name.items, err });
+            erb.print(self.alloc, "unable to delete temp map  {s} : {t}", .{ copy_name.items, err }) catch {};
+            self.fail_reason = erb.toOwnedSlice(self.alloc) catch null;
             return;
         };
+        self.status = .built;
     }
 };
 

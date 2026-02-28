@@ -849,6 +849,33 @@ pub const Side = struct {
     }
 };
 
+pub const SolidValidityReport =
+    union(enum) {
+        const SideI = struct {
+            side_i: u32,
+        };
+
+        tooFewSides,
+
+        duplicateVerts: struct {
+            first_i: u32,
+            second_i: u32,
+        },
+        index_out_of_bounds: struct {
+            side_i: u32,
+            index: u32,
+        },
+        not_sealed: struct {
+            vert_i: u32,
+        },
+        invalid_normal: SideI,
+        side_not_flat: SideI,
+
+        duplicate_normal: struct {
+            first_side_i: u32,
+            second_side_i: u32,
+        },
+    };
 pub const Solid = struct {
     const Self = @This();
     _alloc: std.mem.Allocator,
@@ -878,18 +905,103 @@ pub const Solid = struct {
         };
     }
 
-    //TODO make this good
-    pub fn isValid(self: *const Self) bool {
+    pub fn isValid(self: *const Self) !?SolidValidityReport {
+        const log = std.log.scoped(.ecs_solid);
         // a prism is the simplest valid solid
-        if (self.verts.items.len < 4) return false;
-        var last = self.verts.items[0];
-        var all_same = true;
-        for (self.verts.items[1..]) |vert| {
-            if (!vert.eql(last))
-                all_same = false;
-            last = vert;
+        if (self.verts.items.len < 4) return .{ .tooFewSides = {} };
+
+        var vmap = csg.VecMap.init(self._alloc);
+        defer vmap.deinit();
+
+        { // Are all verts unique?
+            for (self.verts.items, 0..) |vert, v_i| {
+                _ = vmap.putUnique(vert) catch |err| {
+                    if (err == error.notUnique) {
+                        const first_i = vmap.map.get(vert) orelse blk: { //This should never fail
+                            log.err("first duplicate vert not found! defaulting to zero", .{});
+                            break :blk 0;
+                        };
+                        return .{ .duplicateVerts = .{
+                            .first_i = first_i,
+                            .second_i = @intCast(v_i),
+                        } };
+                    }
+                    return err;
+                };
+            }
         }
-        return !all_same;
+
+        {
+            // Are all vertices used by >= 3 sides. If not the solid is not sealed.
+            // Are all indices valid
+            var vert_ref_count = std.ArrayList(usize){};
+            defer vert_ref_count.deinit(self._alloc);
+            try vert_ref_count.appendNTimes(self._alloc, 0, self.verts.items.len);
+            for (self.sides.items, 0..) |side, s_i| {
+                for (side.index.items) |ind| {
+                    if (ind >= vert_ref_count.items.len) return .{ .index_out_of_bounds = .{
+                        .side_i = @intCast(s_i),
+                        .index = ind,
+                    } };
+
+                    vert_ref_count.items[ind] += 1;
+                }
+            }
+
+            for (vert_ref_count.items, 0..) |vref, v_i| {
+                if (vref < 3) return .{ .not_sealed = .{ .vert_i = @intCast(v_i) } };
+            }
+        }
+
+        {
+            //Is each normal valid
+            //Is each face's normal unique?
+
+            var norms = csg.VecMap.init(self._alloc);
+            defer norms.deinit();
+            norms.map.ctx.multiplier = 10000;
+
+            for (self.sides.items, 0..) |*side, s_i| {
+                const norm = side.normal(self);
+                if (@abs(norm.length()) < 0.1) return .{ .invalid_normal = .{ .side_i = @intCast(s_i) } };
+
+                _ = norms.putUnique(norm) catch |err| {
+                    if (err == error.notUnique) {
+                        const first_i = norms.map.get(norm) orelse blk: { //This should never fail
+                            log.err("first duplicate normal not found! defaulting to zero", .{});
+                            break :blk 0;
+                        };
+
+                        return .{ .duplicate_normal = .{
+                            .first_side_i = first_i,
+                            .second_side_i = @intCast(s_i),
+                        } };
+                    }
+                    return err;
+                };
+            }
+        }
+
+        { //For each face:
+            //   Is the normal consistent for all verticies? IE this face flat
+
+            for (self.sides.items, 0..) |*side, s_i| {
+                const len = side.index.items.len;
+                const norm = side.normal(self);
+                for (0..side.index.items.len) |ind_i| {
+                    const v0 = self.verts.items[side.index.items[(ind_i + 0) % len]];
+                    const v1 = self.verts.items[side.index.items[(ind_i + 1) % len]];
+                    const v2 = self.verts.items[side.index.items[(ind_i + 2) % len]];
+                    const this_norm = util3d.trianglePlane(.{ v0, v1, v2 });
+                    if (this_norm.dot(norm) < limits.normal_similarity_threshold) {
+                        return .{ .side_not_flat = .{
+                            .side_i = @intCast(s_i),
+                        } };
+                    }
+                }
+            }
+        }
+        return null;
     }
 
     /// Check if this solid can be written to a vmf file
@@ -998,30 +1110,32 @@ pub const Solid = struct {
         var index = ArrayList(u32){};
         defer index.deinit(alloc);
 
-        for (self.sides.items) |*side| {
-            index_map.clearRetainingCapacity();
-            index.clearRetainingCapacity();
-            for (side.index.items) |*ind| { // ensure each vertex unique
-                ind.* = try vmap.put(self.verts.items[ind.*]);
-            }
-
-            for (side.index.items) |ind| { //ensure each index unique
-                const res = try index_map.getOrPut(ind);
-                if (res.found_existing) {} else {
-                    try index.append(alloc, ind);
+        {
+            for (self.sides.items) |*side| {
+                index_map.clearRetainingCapacity();
+                index.clearRetainingCapacity();
+                for (side.index.items) |*ind| { // ensure each vertex unique
+                    ind.* = try vmap.put(self.verts.items[ind.*]);
                 }
-            }
-            if (index.items.len < 3) { //Remove degenerate sides
-                side.deinit();
-                continue;
-            }
-            side.index.clearRetainingCapacity();
-            try side.index.appendSlice(alloc, index.items);
 
-            try new_sides.append(self._alloc, side.*);
+                for (side.index.items) |ind| { //ensure each index unique
+                    const res = try index_map.getOrPut(ind);
+                    if (res.found_existing) {} else {
+                        try index.append(alloc, ind);
+                    }
+                }
+                if (index.items.len < 3) { //Remove degenerate sides
+                    side.deinit();
+                    continue;
+                }
+                side.index.clearRetainingCapacity();
+                try side.index.appendSlice(alloc, index.items);
+
+                try new_sides.append(self._alloc, side.*);
+            }
+            self.sides.deinit(self._alloc);
+            self.sides = new_sides;
         }
-        self.sides.deinit(self._alloc);
-        self.sides = new_sides;
         if (vmap.verts.items.len < self.verts.items.len) {
             self.verts.shrinkAndFree(self._alloc, vmap.verts.items.len);
         }

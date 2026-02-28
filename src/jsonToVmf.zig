@@ -44,8 +44,8 @@ fn fixupValue(key: []const u8, value: []const u8, ent_class: []const u8) []const
 }
 
 pub const Opts = struct {
-    check_solid: bool = false,
-    pre_optimize_mesh: bool = false,
+    optimize_mesh: bool = false,
+    omit_potentially_invalid: bool = false,
 };
 
 /// Does not free memory, use an arena.
@@ -212,7 +212,8 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
     const args = try graph.ArgGen.parseArgs(&.{
         Arg("map", .string, "ratmap or json map to load"),
         Arg("output", .string, "name of vmf file to write"),
-        Arg("no-check", .flag, "don't check solids for validity"),
+        Arg("no-optimize", .flag, "don't check solids for validity"),
+        Arg("emit-invalid", .flag, "emit solids which fail validity check"),
     }, arg_it);
 
     var loadctx = LoadCtx{};
@@ -260,8 +261,8 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
         try layers.insertVisgroupsFromJson(parsed.value.visgroup);
 
         try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", &layers, .{
-            .check_solid = !(args.@"no-check" orelse false),
-            .pre_optimize_mesh = true,
+            .omit_potentially_invalid = !(args.@"emit-invalid" orelse false),
+            .optimize_mesh = !(args.@"no-optimize" orelse false),
         });
     } else {
         std.debug.print("Please specify map file with --map\n", .{});
@@ -296,16 +297,28 @@ fn writeSolid(
     csgctx: *csg.Context,
     opts: Opts,
 ) !void {
-    try solid.optimizeMesh(.{ .can_reorder = !try ecs_p.hasComponent(ent_id, .displacements) });
-
-    solid.validateVmfSolid(csgctx) catch |err| {
-        if (opts.check_solid) {
-            std.debug.print("Omitting solid {d} {t}\n", .{ ent_id, err });
+    {
+        const invalid = solid.isValid() catch |err| {
+            std.debug.print("{d} FAILED {t}\n", .{ ent_id, err });
             return;
-        } else {
-            std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });
+        };
+        if (invalid) |reason| {
+            std.debug.print("{d} invalid: {any}\n", .{ ent_id, reason });
+            return;
         }
-    };
+    }
+    if (opts.optimize_mesh) {
+        try solid.optimizeMesh(.{ .can_reorder = !try ecs_p.hasComponent(ent_id, .displacements) });
+
+        solid.validateVmfSolid(csgctx) catch |err| {
+            if (opts.omit_potentially_invalid) {
+                std.debug.print("Omitting solid {d} {t}\n", .{ ent_id, err });
+                return;
+            } else {
+                std.debug.print("potentially invalid solid: {d} {t}\n", .{ ent_id, err });
+            }
+        };
+    }
 
     const disps: ?*ecs.Displacements = try ecs_p.getOptPtr(ent_id, .displacements);
     try vr.writeKey("solid");

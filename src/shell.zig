@@ -56,6 +56,8 @@ pub const Commands = enum {
     vpkinfo,
 
     unload_map,
+
+    check_validity,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -374,6 +376,22 @@ pub const CommandCtx = struct {
                             try solid.print(wr);
                         }
                     }
+                },
+                .check_validity => {
+                    var num_invalid: usize = 0;
+                    var it = self.ed.ecs.iterator(.solid);
+                    while (it.next()) |solid| {
+                        const invalid = solid.isValid() catch |err| {
+                            try wr.print("{d} : {t}\n", .{ it.i, err });
+                            num_invalid += 1;
+                            continue;
+                        };
+                        if (invalid) |reason| {
+                            try wr.print("{d}: {any}\n", .{ it.i, reason });
+                            num_invalid += 1;
+                        }
+                    }
+                    try wr.print("Num invalid: {d}\n", .{num_invalid});
                 },
                 .optimize => {
                     const selected_slice = self.ed.getSelected();

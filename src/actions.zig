@@ -334,7 +334,7 @@ pub fn buildMap(ed: *Ed, do_user_script: bool) !void {
         &ed.groups,
         lm,
         &ed.layers,
-        .{ .check_solid = false },
+        .{},
     )) {
         ed.notify("{s}", .{L.lang.notify.exported_vmf}, colors.good);
 

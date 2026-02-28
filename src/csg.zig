@@ -67,7 +67,6 @@ pub const Context = struct {
     }
 
     pub fn genMesh2(self: *Self, sides: []const Side, alloc: std.mem.Allocator, strstore: anytype) !ecs.Solid {
-        const MAPSIZE = std.math.maxInt(i32);
         var timer = try std.time.Timer.start();
         var ret = ecs.Solid.init(alloc);
         try ret.sides.appendNTimes(ret._alloc, .{ ._alloc = ret._alloc }, sides.len);
@@ -79,7 +78,7 @@ pub const Context = struct {
 
             self.winding_a.clearRetainingCapacity();
             var wind_a = &self.winding_a;
-            try wind_a.appendSlice(self.alloc, try self.baseWinding(plane, @floatFromInt(MAPSIZE / 2)));
+            try wind_a.appendSlice(self.alloc, try self.baseWinding(plane, limits.map_size));
 
             var wind_b = &self.winding_b;
 
@@ -265,7 +264,7 @@ pub const Context = struct {
 
     pub fn baseWinding(self: *Self, plane: Plane, size: f64) ![]const Vec3_64 {
         const global_up = try getGlobalUp(plane.norm);
-        const right = plane.norm.cross(global_up).norm().scale(size / 2);
+        const right = plane.norm.cross(global_up).norm().scale(size);
 
         const up = plane.norm.cross(right);
         const offset = plane.norm.scale(plane.dist);
@@ -403,7 +402,6 @@ pub const VecOrder = struct {
     };
 };
 
-// Rounds off anything after 0.1
 pub const VecMap = struct {
     pub const HashCtx = struct {
         multiplier: f32 = limits.csg_mul,
@@ -451,6 +449,18 @@ pub const VecMap = struct {
     pub fn clear(self: *@This()) void {
         self.map.clearRetainingCapacity();
         self.verts.clearRetainingCapacity();
+    }
+
+    //same as put but returns an error if vector already exists
+    pub fn putUnique(self: *@This(), v: Vec3_32) !u32 {
+        const res = try self.map.getOrPut(v);
+        if (!res.found_existing) {
+            const index = self.verts.items.len;
+            try self.verts.append(self.alloc, v);
+            res.value_ptr.* = @intCast(index);
+            return res.value_ptr.*;
+        }
+        return error.notUnique;
     }
 
     pub fn put(self: *@This(), v: Vec3_32) !u32 {

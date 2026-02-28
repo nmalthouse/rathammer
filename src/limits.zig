@@ -9,4 +9,8 @@ pub const csg_epsilon: f64 = 2E-14;
 
 pub const csg_mul: f32 = 16.0;
 
+pub const map_size: f32 = 16384.0 * 2.0;
+
+pub const normal_similarity_threshold: f32 = 0.9999;
+
 pub const IS_DEBUG = @import("builtin").mode == .Debug;
