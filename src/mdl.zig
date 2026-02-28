@@ -452,7 +452,7 @@ pub fn doItCrappy(alloc: std.mem.Allocator, slice: []const u8, print: anytype) !
             for (0..mm.num_mesh) |_| {
                 const mesh = try parseStruct(Mesh, endian, r);
                 print("num vert {d}\n", .{mesh.num_vert});
-                if (mesh.num_vert > std.math.maxInt(u16)) {
+                if (mesh.num_vert > std.math.maxInt(u16) or mesh.num_vert < 0) {
                     std.debug.print("holy hell thats a lot of verticies {d}\n", .{mesh.num_vert});
                     return error.TooManyVerts;
                 }

@@ -231,6 +231,7 @@ pub const Context = struct {
 
         main_3d_win: RGui.WindowId = .none,
         inspector: RGui.WindowId = .none,
+        model_win: RGui.WindowId = .none,
 
         pause: WsId = .none,
         main: WsId = .none,

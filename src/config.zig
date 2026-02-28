@@ -65,6 +65,7 @@ pub const GameEntry = struct {
     asset_browser_exclude: struct {
         prefix: []const u8 = "",
         entry: []const []const u8 = &.{},
+        full_entry: []const []const u8 = &.{},
     } = .{},
 };
 

@@ -266,6 +266,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const main_3d_id = try gui.addWindow(main_3d_view, .Empty, .{ .put_fbo = false });
     editor.workspaces.main_3d_win = main_3d_id;
     editor.workspaces.inspector = inspector_pane;
+    editor.workspaces.model_win = model_win;
     { //Set up key contexts
         inspector_win.vt.key_ctx_mask = .empty;
         main_3d_view.key_ctx_mask.setValue(loaded_config.binds.view3d.context_id, true);

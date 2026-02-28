@@ -67,7 +67,13 @@ pub const AssetBrowser = struct {
 
         switch (ev) {
             .gameLoaded => {
-                self.populate(&self.ed.vpkctx, self.ed.game_conf.asset_browser_exclude.prefix, self.ed.game_conf.asset_browser_exclude.entry, self.mod) catch {
+                self.populate(
+                    &self.ed.vpkctx,
+                    self.ed.game_conf.asset_browser_exclude.prefix,
+                    self.ed.game_conf.asset_browser_exclude.entry,
+                    self.ed.game_conf.asset_browser_exclude.full_entry,
+                    self.mod,
+                ) catch {
                     log.err("populate failed", .{});
                 };
                 self.vt.needs_rebuild = true;
@@ -80,6 +86,7 @@ pub const AssetBrowser = struct {
         self: *Self,
         vpkctx: *vpk.Context,
         exclude_prefix: []const u8,
+        material_exclude_list_prefix: []const []const u8,
         material_exclude_list: []const []const u8,
         mod_browse: *ModelBrowser,
     ) !void {
@@ -97,23 +104,28 @@ pub const AssetBrowser = struct {
         var excluded: usize = 0;
         outer: while (it.next()) |item| {
             const id = item.key_ptr.* >> 48;
-            if (id == vmt) {
+            if (id == vmt or id == png) {
                 if (std.mem.startsWith(u8, item.value_ptr.path, exclude_prefix)) {
                     const substr = item.value_ptr.path[exclude_prefix.len..];
                     if (substr.len > 0) {
-                        for (material_exclude_list) |ex| {
+                        for (material_exclude_list_prefix) |ex| {
                             if (std.mem.startsWith(u8, substr, ex)) {
                                 excluded += 1;
                                 continue :outer;
                             }
                         }
                     }
+                } else {
+                    for (material_exclude_list) |ex| {
+                        if (std.mem.startsWith(u8, item.value_ptr.path, ex)) {
+                            excluded += 1;
+                            continue :outer;
+                        }
+                    }
                 }
                 try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             } else if (id == mdl) {
                 try mod_browse.list.appendMaster(&.{item.key_ptr.*});
-            } else if (id == png) {
-                try self.tex_browse.mat_list.append(self.alloc, item.key_ptr.*);
             }
         }
         self.vpk_browse.list.appendMaster(self.ed.vpkctx.entries.keys()) catch {};
@@ -316,6 +328,13 @@ pub const ModelBrowser = struct {
         self.list.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self);
+    }
+
+    //Used in testing
+    pub fn loadAllUnconditional(self: *@This()) !void {
+        for (self.list.master.items) |mod| {
+            try self.ed.loadModelFromId(mod);
+        }
     }
 
     pub fn reset(self: *@This()) void {

@@ -294,7 +294,10 @@ pub const Context = struct {
 
     fn writeDump(self: *Self, comptime fmt: []const u8, args: anytype) void {
         if (config.dump_vpk) {
-            self.vpk_dump_file.writer().print(fmt, args) catch return;
+            var write_buf: [128]u8 = undefined;
+            var wr = self.vpk_dump_file.writerStreaming(&write_buf);
+            wr.interface.print(fmt, args) catch return;
+            wr.interface.flush() catch return;
         }
     }
 

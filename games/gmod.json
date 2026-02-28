@@ -1,21 +1,31 @@
 {
     "gameinfo":[ 
         { "base_dir":   "GarrysMod", "game_dir":   "GarrysMod/garrysmod" },
+        { "base_dir":   "Team Fortress 2", "game_dir":   "Team Fortress 2/tf" },
         { "base_dir":   "Counter-Strike Source", "game_dir":   "Counter-Strike Source/cstrike" }
     ],
     
     "fgd_dir":    "GarrysMod/BIN",
-    "fgd":         "garrysmodtf.fgd",
+    "fgd":         "garrysmod.fgd",
     
     "mapbuilder": {
         "game_dir":    "GarrysMod",
         "exe_dir" :    "GarrysMod/BIN",
-        "game_name":   "garrysmodtf",
-        "output_dir":  "garrysmodtf/maps"
+        "game_name":   "garrysmod",
+        "output_dir":  "garrysmod/maps"
     },
     
     "asset_browser_exclude": {
         "prefix": "materials/",
-        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack" ]
+        "entry": [ "models", "gamepadui", "skybox", "vgui", "particle", "console", "sprites", "backpack",
+            "icon",
+            "gui",
+            "effects",
+            "hud",
+            "entities",
+            "editor",
+            "flags"
+        ],
+        "full_entry" :["maps/thumb"]
     }
 }

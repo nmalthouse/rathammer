@@ -58,6 +58,8 @@ pub const Commands = enum {
     unload_map,
 
     check_validity,
+
+    load_all_model,
 };
 
 pub var RpcEventId: u32 = 0;
@@ -375,6 +377,12 @@ pub const CommandCtx = struct {
                             try wr.print("Solid\n", .{});
                             try solid.print(wr);
                         }
+                    }
+                },
+                .load_all_model => {
+                    if (self.ed.gapp.gui.getWindowId(self.ed.workspaces.model_win)) |modwin| {
+                        const winptr: *@import("windows/asset.zig").ModelBrowser = @alignCast(@fieldParentPtr("vt", modwin));
+                        try winptr.loadAllUnconditional();
                     }
                 },
                 .check_validity => {
