@@ -390,11 +390,11 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
     }
 
-    var quit_count: usize = 0;
     while (true) {
         try gapp.run();
-        quit_count += 1;
-        if (quit_count > 1) {} //Come up with a system that allows the user to quit if they hit quit twice
+        if (NagWindow.nag_window_open) { //User sent a second quit event, exit regardless
+            break;
+        }
         if (editor.should_exit) break;
         if (editor.isUnsaved()) {
             gapp.main_window.should_exit = false;

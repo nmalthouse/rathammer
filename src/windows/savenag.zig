@@ -15,6 +15,7 @@ const async_util = @import("../async.zig");
 const L = @import("../locale.zig");
 
 pub const NagWindow = struct {
+    pub var nag_window_open: bool = false;
     const PostAction = enum {
         quit,
         close_map,
@@ -47,6 +48,7 @@ pub const NagWindow = struct {
     editor: *Context,
 
     pub fn makeTransientWindow(gui: *Gui, ed: *Context, post_action: PostAction) !void {
+        if (nag_window_open) return;
         const nag_win = try create(gui, ed, post_action);
         nag_win.vt.needs_rebuild = true;
         nag_win.vt.area.area = gui.getCenterArea(gui.dstate.nstyle.item_h * 80, gui.dstate.nstyle.item_h * 10);
@@ -60,15 +62,16 @@ pub const NagWindow = struct {
             .editor = editor,
             .post = post_action,
         };
+        nag_window_open = true;
 
         return self;
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        //self.layout.deinit(gui, vt);
+        nag_window_open = false;
         vt.deinit(gui);
-        gui.alloc.destroy(self); //second
+        gui.alloc.destroy(self);
     }
 
     pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
