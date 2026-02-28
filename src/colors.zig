@@ -15,4 +15,6 @@ const Colors = struct {
     bad: u32 = 0xff0000_ff,
 
     fast_face_plane: u32 = 0xff000033,
+
+    bad_normal: u32 = 0xff0000_44,
 };

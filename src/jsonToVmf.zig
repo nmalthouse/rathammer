@@ -45,6 +45,7 @@ fn fixupValue(key: []const u8, value: []const u8, ent_class: []const u8) []const
 
 pub const Opts = struct {
     optimize_mesh: bool = false,
+    check_validity: bool = true,
     omit_potentially_invalid: bool = false,
 };
 
@@ -212,7 +213,8 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
     const args = try graph.ArgGen.parseArgs(&.{
         Arg("map", .string, "ratmap or json map to load"),
         Arg("output", .string, "name of vmf file to write"),
-        Arg("no-optimize", .flag, "don't check solids for validity"),
+        Arg("no-optimize", .flag, "don't try to optimize mesh"),
+        Arg("no-check-validity", .flag, "don't check solids for validity"),
         Arg("emit-invalid", .flag, "emit solids which fail validity check"),
     }, arg_it);
 
@@ -263,6 +265,7 @@ pub fn main(arg_it: *std.process.ArgIterator, alloc: std.mem.Allocator, _: *std.
         try jsontovmf(alloc, &ecs_p, parsed.value.sky_name, &vpkmapper, &groups, args.output orelse "dump.vmf", &layers, .{
             .omit_potentially_invalid = !(args.@"emit-invalid" orelse false),
             .optimize_mesh = !(args.@"no-optimize" orelse false),
+            .check_validity = !(args.@"no-check_validity" orelse false),
         });
     } else {
         std.debug.print("Please specify map file with --map\n", .{});
@@ -297,13 +300,13 @@ fn writeSolid(
     csgctx: *csg.Context,
     opts: Opts,
 ) !void {
-    {
-        const invalid = solid.isValid() catch |err| {
+    if (opts.check_validity) {
+        const invalid = solid.checkValidity() catch |err| {
             std.debug.print("{d} FAILED {t}\n", .{ ent_id, err });
             return;
         };
         if (invalid) |reason| {
-            std.debug.print("{d} invalid: {any}\n", .{ ent_id, reason });
+            std.debug.print("omitting: {d} invalid: {any}\n", .{ ent_id, reason });
             return;
         }
     }

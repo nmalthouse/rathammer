@@ -109,6 +109,19 @@ pub const ToolData = struct {
     screen_area: graph.Rect,
     draw: *DrawCtx,
     text_param: graph.ImmediateDrawingContext.TextParam,
+    screen_space_text_ctx: *graph.ImmediateDrawingContext,
+
+    pub fn text3d(td: *const @This(), pos: Vec3, comptime fmt: []const u8, args: anytype) void {
+        toolutil.drawText3D(
+            pos,
+            td.screen_space_text_ctx,
+            td.text_param,
+            td.screen_area,
+            td.view_3d.*,
+            fmt,
+            args,
+        );
+    }
 };
 
 //TODO How do tools register keybindings?

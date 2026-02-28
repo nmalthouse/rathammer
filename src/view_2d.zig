@@ -131,6 +131,7 @@ pub const Ctx2dView = struct {
         const draw_nd = &ed.draw_state.ctx;
 
         const td = tools.ToolData{
+            .screen_space_text_ctx = &ed.draw_state.screen_space_text_ctx,
             .screen_area = screen_area,
             .view_3d = &view_3d,
             .cam2d = &self.cam,

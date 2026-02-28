@@ -352,6 +352,8 @@ pub const Keys = struct {
         grid_dec: Bind = .{ .button = .{ .scancode = .F }, .mode = .multi, .repeat = true },
 
         ignore_groups: Bind = .{ .button = .{ .scancode = .G }, .mod = &.{.ctrl} },
+
+        next_invalid: Bind = .{ .button = .{ .scancode = .O }, .mod = &.{.ctrl}, .mode = .exclusive },
     } = .{},
 
     view2d: struct {

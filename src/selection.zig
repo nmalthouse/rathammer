@@ -262,10 +262,12 @@ pub fn getExclusive(self: *Self) ?Id {
     return null;
 }
 
+/// If ignore_groups, don't return group owners
 /// Returns either the owner of a selected group if that group is exclusive,
 /// or it returns the selection when len == 1
 pub fn getGroupOwnerExclusive(self: *Self, groups: *ecs.Groups) ?Id {
     blk: {
+        if (self.ignore_groups) break :blk;
         if (self._list.countGroup() != 1) break :blk;
 
         const last = self._list.getLast() orelse break :blk;

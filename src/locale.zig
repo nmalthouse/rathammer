@@ -118,6 +118,12 @@ pub const Strings = struct {
 
     label: struct {
         snap: Str = "snap: ",
+
+        duplicate_normal: Str = "duped normal",
+        duplicate_vert: Str = "duped vert",
+        not_flat: Str = "side not flat",
+        not_sealed: Str = "side not sealed",
+        bad_normal: Str = "bad normal",
     } = .{},
 
     checkbox: struct {
@@ -184,6 +190,9 @@ pub const Strings = struct {
 
         import_vmfs: Str = "import vmfs",
         unload_map: Str = "close map",
+
+        next_invalid: Str = "select next invalid",
+        rm_dupe_verts: Str = "remove duplicate verts",
     } = .{},
 };
 

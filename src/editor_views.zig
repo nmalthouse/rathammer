@@ -10,6 +10,7 @@ const cubeFromBounds = Editor.cubeFromBounds;
 const Solid = Editor.Solid;
 const AABB = Editor.AABB;
 const raycast = @import("raycast_solid.zig");
+const L = @import("locale.zig");
 const G = graph.RGui;
 const fgd = @import("fgd.zig");
 const undo = @import("undo.zig");
@@ -20,6 +21,7 @@ const Window = graph.SDL.Window;
 const action = @import("actions.zig");
 const app = @import("app.zig");
 const limits = @import("limits.zig");
+const colors = @import("colors.zig").colors;
 
 pub const Main3DView = struct {
     const iWindow = G.iWindow;
@@ -183,6 +185,7 @@ pub const Main3DView = struct {
         self.renderer.clearLights();
         self.draw_state.active_lights = 0;
         const td = tools.ToolData{
+            .screen_space_text_ctx = &self.draw_state.screen_space_text_ctx,
             .screen_area = screen_area,
             .view_3d = &view_3d,
             .draw = draw,
@@ -478,6 +481,45 @@ pub const Main3DView = struct {
                 const point_size = self.config.dot_size;
 
                 vt.drawSelectedOutline(self, draw_nd, selected, edge_size, point_size, Vec3.zero());
+
+                if (selected.len == 1) {
+                    if (self.getComponent(selected[0], .invalid)) |inv| {
+                        if (self.getComponent(selected[0], .solid)) |solid| {
+                            switch (inv.problem) {
+                                else => {},
+                                .invalid_normal => |prob| {
+                                    const side = &solid.sides.items[prob.side_i];
+
+                                    draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.bad_normal, .{});
+                                    td.text3d(prob.mid_v, "{s}", .{L.lang.label.bad_normal});
+                                },
+                                .duplicate_normal => |prob| {
+                                    const side0 = &solid.sides.items[prob.first_side_i];
+                                    const side1 = &solid.sides.items[prob.second_side_i];
+
+                                    draw_nd.convexPolyIndexed(side0.index.items, solid.verts.items, colors.bad_normal, .{});
+                                    draw_nd.convexPolyIndexed(side1.index.items, solid.verts.items, colors.bad_normal, .{});
+
+                                    td.text3d(prob.first_mid_v, "{s}", .{L.lang.label.duplicate_normal});
+                                    td.text3d(prob.second_mid_v, "{s}", .{L.lang.label.duplicate_normal});
+                                },
+                                .side_not_flat => |prob| {
+                                    const side = &solid.sides.items[prob.side_i];
+                                    draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.bad_normal, .{});
+                                    td.text3d(prob.mid_v, "{s}", .{L.lang.label.not_flat});
+                                },
+                                .not_sealed => |prob| {
+                                    const v = solid.verts.items[prob.vert_i];
+                                    td.text3d(v, "{s}", .{L.lang.label.not_sealed});
+                                },
+                                .duplicateVerts => |prob| {
+                                    const v = solid.verts.items[prob.first_i];
+                                    td.text3d(v, "{s}", .{L.lang.label.duplicate_vert});
+                                },
+                            }
+                        }
+                    }
+                }
             }
             try vt.runTool_fn(vt, td, self);
         }
@@ -544,6 +586,10 @@ pub const Main3DView = struct {
                 mt.textFmt("Selected: {d}", .{self.getSelected().len}, fh, col);
             if (self.edit_state.manual_hidden_count > 0) {
                 mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, HIDDEN_COLOR);
+            }
+            const num_invalid = self.ecs.data.invalid.count;
+            if (num_invalid > 0) {
+                mt.textFmt("{d} invalid", .{num_invalid}, fh, colors.bad);
             }
             if (self.draw_state.tog.debug_stats) {
                 mt.textFmt("  nbatch, ", .{}, fh, col);

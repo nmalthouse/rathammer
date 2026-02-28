@@ -60,6 +60,58 @@ pub fn hideSelected(ed: *Ed) !void {
     }
 }
 
+/// This effects the entire visible world, not just selection
+pub fn removeDuplicateVerts(ed: *Ed) !void {
+    var it = ed.editIterator(.invalid);
+    var num_fixed: usize = 0;
+    var unfixible: usize = 0;
+    while (it.next()) |inv| {
+        if (inv.problem == .duplicateVerts) {
+            if (try ed.ecs.getOptPtr(it.i, .solid)) |solid| {
+                try solid.optimizeMesh(.{ .can_reorder = !ed.hasComponent(it.i, .displacements) });
+
+                _ = try ed.ecs.removeComponentOpt(it.i, .invalid);
+                if (solid.checkValidity() catch null) |problem| {
+                    try ed.ecs.attach(it.i, .invalid, .{ .problem = problem });
+                    if (problem == .duplicateVerts)
+                        unfixible += 1;
+                } else {
+                    num_fixed += 1;
+                }
+            }
+        }
+    }
+    ed.notify("removed {d} duplicate vertices", .{num_fixed}, colors.tentative);
+    if (unfixible > 0) {
+        ed.notify("{d} unfixible duplicates remain", .{unfixible}, colors.bad);
+    }
+}
+
+pub fn selectNextInvalid(ed: *Ed) !void {
+    ed.selection.ignore_groups = true;
+    var current_invalid: ?editor.EcsT.Id = null;
+    {
+        const current_sel = ed.getSelected();
+        if (current_sel.len == 1) {
+            if (ed.getComponent(current_sel[0], .invalid)) |_| {
+                current_invalid = current_sel[0];
+            }
+        }
+    }
+
+    try clearSelection(ed);
+
+    var it = ed.editIterator(.invalid);
+    while (it.next()) |_| {
+        if (current_invalid) |cur| {
+            if (it.i == cur) current_invalid = null;
+            continue;
+        }
+        try selectId(ed, it.i);
+        break;
+    }
+}
+
 pub fn unhideAll(ed: *Ed) !void {
     try ed.rebuildVisGroups();
     ed.edit_state.manual_hidden_count = 0;

@@ -30,6 +30,8 @@ const MenuBtn = enum(guis.Uid) {
     unload_map,
 
     undo,
+    next_invalid,
+    rm_dupe_verts,
     redo,
     open_help_url,
     open_project_url,
@@ -201,6 +203,7 @@ pub const MenuBar = struct {
         dat.gui.setTransientWindow(r_win, &self.vt.area);
     }
 
+    //TODO atleast log the errors
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, mcb: guis.MouseCbState, _: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
         switch (@as(MenuBtn, @enumFromInt(id))) {
@@ -208,6 +211,8 @@ pub const MenuBar = struct {
             .saveas => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
             .quit => self.ed.gapp.main_window.should_exit = true,
             .undo => action.undo(self.ed),
+            .next_invalid => action.selectNextInvalid(self.ed) catch return,
+            .rm_dupe_verts => action.removeDuplicateVerts(self.ed) catch return,
             .redo => action.redo(self.ed),
             .open_help_url => {
                 _ = graph.c.SDL_OpenURL(version.help_url);
@@ -286,6 +291,8 @@ pub const MenuBar = struct {
                 return try aa.dupe(BtnMap, &[_]BtnMap{
                     .{ btn_id(.undo), L.lang.btn.undo, .btn },
                     .{ btn_id(.redo), L.lang.btn.redo, .btn },
+                    .{ btn_id(.next_invalid), L.lang.btn.next_invalid, .btn },
+                    .{ btn_id(.rm_dupe_verts), L.lang.btn.rm_dupe_verts, .btn },
                     .{ 0, "testpop", .{ .child = .{
                         .width = 300,
                         .height = 300,

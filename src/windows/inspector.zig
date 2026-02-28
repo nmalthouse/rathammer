@@ -330,6 +330,10 @@ pub const InspectorWindow = struct {
             if (try ed.ecs.getOptPtr(sel_id, .solid)) |sol| {
                 _ = sol;
                 _ = Wg.Text.build(lay, ly.getArea(), "{s}: {d}", .{ L.lang.inspector.selected_id, sel_id }, .{});
+
+                if (ed.getComponent(sel_id, .invalid)) |inv| {
+                    _ = Wg.Text.build(lay, ly.getArea(), "{any}", .{inv}, .{});
+                }
             }
         }
     }

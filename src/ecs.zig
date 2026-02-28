@@ -62,6 +62,7 @@ pub const EcsT = graph.Ecs.Registry(&.{
     Comp("autovis_invisible", EmptyT),
     Comp("invisible", EmptyT),
     Comp("deleted", EmptyT),
+    Comp("invalid", InvalidSolid),
 });
 
 /// Groups are used to group entities together. Any entities can be grouped but it is mainly used for brush entities
@@ -307,6 +308,11 @@ pub const MeshBatch = struct {
                         .both => true,
                         else => false,
                     } });
+                }
+
+                _ = try editor.ecs.removeComponentOpt(id.key_ptr.*, .invalid);
+                if (solid.checkValidity() catch null) |problem| {
+                    try editor.ecs.attach(id.key_ptr.*, .invalid, .{ .problem = problem });
                 }
             }
         }
@@ -749,6 +755,15 @@ pub const Side = struct {
         }
     }
 
+    pub fn getMeanPoint(self: *const @This(), solid: *const Solid) Vec3 {
+        var vec = Vec3.zero();
+        if (self.index.items.len == 0) return vec;
+        for (self.index.items) |ind| {
+            vec = vec.add(solid.verts.items[ind]);
+        }
+        return vec.scale(1.0 / @as(f32, @floatFromInt(self.index.items.len)));
+    }
+
     pub fn serial(self: @This(), editor: *Editor, jw: anytype, ent_id: EcsT.Id) !void {
         try jw.beginObject();
         {
@@ -849,10 +864,25 @@ pub const Side = struct {
     }
 };
 
+pub const InvalidSolid = struct {
+    pub const ECS_NO_SERIAL = void;
+
+    pub fn dupe(self: *@This(), _: anytype, _: anytype) !@This() {
+        return self.*;
+    }
+
+    pub fn initFromJson(_: std.json.Value, _: anytype) !@This() {
+        return error.notAllowed;
+    }
+
+    problem: SolidValidityReport,
+};
+
 pub const SolidValidityReport =
     union(enum) {
         const SideI = struct {
             side_i: u32,
+            mid_v: Vec3,
         };
 
         tooFewSides,
@@ -874,6 +904,9 @@ pub const SolidValidityReport =
         duplicate_normal: struct {
             first_side_i: u32,
             second_side_i: u32,
+
+            first_mid_v: Vec3,
+            second_mid_v: Vec3,
         },
     };
 pub const Solid = struct {
@@ -905,7 +938,7 @@ pub const Solid = struct {
         };
     }
 
-    pub fn isValid(self: *const Self) !?SolidValidityReport {
+    pub fn checkValidity(self: *const Self) !?SolidValidityReport {
         const log = std.log.scoped(.ecs_solid);
         // a prism is the simplest valid solid
         if (self.verts.items.len < 4) return .{ .tooFewSides = {} };
@@ -963,7 +996,7 @@ pub const Solid = struct {
 
             for (self.sides.items, 0..) |*side, s_i| {
                 const norm = side.normal(self);
-                if (@abs(norm.length()) < 0.1) return .{ .invalid_normal = .{ .side_i = @intCast(s_i) } };
+                if (@abs(norm.length()) < 0.1) return .{ .invalid_normal = .{ .side_i = @intCast(s_i), .mid_v = self.sides.items[s_i].getMeanPoint(self) } };
 
                 _ = norms.putUnique(norm) catch |err| {
                     if (err == error.notUnique) {
@@ -975,6 +1008,8 @@ pub const Solid = struct {
                         return .{ .duplicate_normal = .{
                             .first_side_i = first_i,
                             .second_side_i = @intCast(s_i),
+                            .first_mid_v = self.sides.items[first_i].getMeanPoint(self),
+                            .second_mid_v = self.sides.items[s_i].getMeanPoint(self),
                         } };
                     }
                     return err;
@@ -996,6 +1031,7 @@ pub const Solid = struct {
                     if (this_norm.dot(norm) < limits.normal_similarity_threshold) {
                         return .{ .side_not_flat = .{
                             .side_i = @intCast(s_i),
+                            .mid_v = side.getMeanPoint(self),
                         } };
                     }
                 }
@@ -1348,6 +1384,7 @@ pub const Solid = struct {
             if (batch.*.contains.remove(id))
                 batch.*.is_dirty = true;
         }
+        _ = try editor.ecs.removeComponentOpt(id, .invalid);
         editor.draw_state.meshes_dirty = true;
     }
 

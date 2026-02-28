@@ -661,7 +661,6 @@ pub const Context = struct {
             }
             self.ecs.clearComponent(.invisible);
         }
-        //IF
 
         var it = self.editIterator(.layer);
         while (it.next()) |lay| {
@@ -1823,6 +1822,12 @@ pub const Context = struct {
         }
     }
 
+    pub fn setIgnoreGroups(ed: *Self, value: bool) void {
+        ed.selection.ignore_groups = value;
+        ed.eventctx.pushEvent(.{ .menubar_dirty = {} });
+        ed.eventctx.pushEvent(.{ .selection_changed = {} });
+    }
+
     pub fn handleMisc3DKeys(ed: *Self) void {
         { //key binding stuff
 
@@ -1837,8 +1842,11 @@ pub const Context = struct {
                 ed.grid.half();
 
             if (ed.isBindState(ed.conf.binds.view3d.ignore_groups, .rising)) {
-                ed.selection.ignore_groups = !ed.selection.ignore_groups;
-                ed.eventctx.pushEvent(.{ .menubar_dirty = {} });
+                ed.setIgnoreGroups(!ed.selection.ignore_groups);
+            }
+
+            if (ed.isBindState(ed.conf.binds.view3d.next_invalid, .rising)) {
+                action.selectNextInvalid(ed) catch {};
             }
 
             const fi = @typeInfo(@TypeOf(ed.conf.binds.tool)).@"struct".fields;

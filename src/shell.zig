@@ -381,7 +381,7 @@ pub const CommandCtx = struct {
                     var num_invalid: usize = 0;
                     var it = self.ed.ecs.iterator(.solid);
                     while (it.next()) |solid| {
-                        const invalid = solid.isValid() catch |err| {
+                        const invalid = solid.checkValidity() catch |err| {
                             try wr.print("{d} : {t}\n", .{ it.i, err });
                             num_invalid += 1;
                             continue;
