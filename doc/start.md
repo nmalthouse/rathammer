@@ -275,6 +275,11 @@ When you try to close the editor, you will have to force kill it as that old vbs
 #### On Linux, trying to open or save files does nothing.
 Make sure that xdg-desktop-portal is functioning. You can test if it is functioning by installing zenity and running `zenity --file-selection` If the command exits without a window popping up it means your xdg-desktop-portal provider is not configured properly.
 
+A workaround to save maps is the shell command `save_as /path/to/save`
+
+`dbus-update-activation-environment --systemd DISPLAY`
+
+
 #### Error building map
 Look through the terminal output. You may have a leak -> press ~ and run the command `pointfile` to trace the leak.
 

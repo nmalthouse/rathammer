@@ -544,11 +544,11 @@ pub const VertexTranslate = struct {
                             try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
 
                             //Draw it here too so we it doesn't flash for a single frame
-                            try solid.drawImmediate(td.draw, ed, dist, null, false);
+                            try solid.drawImmediate(td.draw, ed, dist, null, .{ .texture_lock = false });
                         },
 
                         .high, .rising_repeat => {
-                            try solid.drawImmediate(td.draw, ed, dist, manip_verts.items(.index), false);
+                            try solid.drawImmediate(td.draw, ed, dist, manip_verts.items(.index), .{ .texture_lock = false });
                         },
                     }
                 }

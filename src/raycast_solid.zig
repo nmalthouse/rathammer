@@ -17,7 +17,7 @@ pub fn doesRayIntersectSolid(r_o: Vec3, r_d: Vec3, solid: *const ecs.Solid, csgc
         if (side.index.items.len < 3) continue;
         // triangulate using csg
         //Indexs into side.index
-        const ind = try csgctx.triangulateIndex(@intCast(side.index.items.len), 0);
+        const ind = try csgctx.triangulateIndex(@intCast(side.index.items.len), 0, false);
         const ts = solid.verts.items;
         const sindex = side.index.items;
         for (0..@divExact(ind.len, 3)) |i_i| {

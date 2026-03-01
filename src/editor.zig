@@ -431,7 +431,7 @@ pub const Context = struct {
         try self.tools.register(tool_def.TranslateFace, try tool_def.TranslateFace.create(self.alloc));
         try self.tools.register(tool_def.PlaceEntity, try tool_def.PlaceEntity.create(self.alloc));
         try self.tools.register(tool_def.CubeDraw, try tool_def.CubeDraw.create(self.alloc, self));
-        try self.tools.register(tool_def.FastFaceManip, try tool_def.FastFaceManip.create(self.alloc));
+        try self.tools.register(tool_def.FastFaceManip, try tool_def.FastFaceManip.create(self.alloc, self));
         try self.tools.register(tool_def.TextureTool, try tool_def.TextureTool.create(self.alloc, self));
         try self.tools.register(tool_def.VertexTranslate, try tool_def.VertexTranslate.create(self.alloc, self));
         try self.tools.register(tool_def.Clipping, try tool_def.Clipping.create(self.alloc, self));

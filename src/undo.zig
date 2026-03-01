@@ -396,33 +396,39 @@ pub const UndoVertexTranslate = struct {
     }
 };
 
-//TODO deprecate, use UndoVertexTranslate
 pub const UndoSolidFaceTranslate = struct {
     id: EntId,
-    side_id: usize,
+    side_id: u32,
     offset: Vec3,
+
+    invert_normal: bool,
 
     pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
-    pub fn create(alloc: std.mem.Allocator, id: EntId, side_id: usize, offset: Vec3) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, id: EntId, side_id: u32, offset: Vec3, invert_norm: bool) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .id = id,
             .side_id = side_id,
             .offset = offset,
+            .invert_normal = invert_norm,
         };
         return obj;
     }
 
     pub fn undo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
+            if (self.invert_normal)
+                solid.flipNormal(self.id, editor) catch return;
             solid.translateSide(self.id, self.offset.scale(-1), editor, self.side_id) catch return;
         }
     }
     pub fn redo(self: *@This(), editor: *Editor) void {
         if (editor.ecs.getOptPtr(self.id, .solid) catch return) |solid| {
             solid.translateSide(self.id, self.offset, editor, self.side_id) catch return;
+            if (self.invert_normal)
+                solid.flipNormal(self.id, editor) catch return;
         }
     }
 

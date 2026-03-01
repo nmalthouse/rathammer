@@ -154,15 +154,21 @@ pub const Context = struct {
     }
 
     /// for each vertex defined by index into all_verts, Triangulate
-    pub fn triangulateIndex(self: *Self, count: u32, offset: u32) ![]const u32 {
+    pub fn triangulateIndex(self: *Self, count: u32, offset: u32, flip_normal: bool) ![]const u32 {
         self.triangulate_index.clearRetainingCapacity();
         const ret = &self.triangulate_index;
         if (count < 3) return ret.items;
         for (1..count - 1) |i| {
             const ii: u32 = @intCast(i);
-            try ret.append(self.alloc, 0 + offset);
-            try ret.append(self.alloc, ii + 1 + offset);
-            try ret.append(self.alloc, ii + offset);
+            if (flip_normal) {
+                try ret.append(self.alloc, ii + offset);
+                try ret.append(self.alloc, ii + 1 + offset);
+                try ret.append(self.alloc, 0 + offset);
+            } else {
+                try ret.append(self.alloc, 0 + offset);
+                try ret.append(self.alloc, ii + 1 + offset);
+                try ret.append(self.alloc, ii + offset);
+            }
         }
         return ret.items;
     }

@@ -372,6 +372,10 @@ pub const Keys = struct {
         plane_raycast: Bind = SC(.Q),
     } = .{},
 
+    fast_face: struct {
+        extrude: Bind = SC(.Z),
+    } = .{},
+
     clipping: struct {
         commit: Bind = SC(.RETURN),
     } = .{},

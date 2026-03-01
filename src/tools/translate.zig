@@ -254,7 +254,7 @@ pub const Translate = struct {
                     if (giz_active == .high) {
                         try solid.drawImmediateCustom(draw, self, ctx, DrawCustomCtx.vertOffset, true);
                         if (dupe) { //Draw original
-                            try solid.drawImmediate(draw, self, Vec3.zero(), null, true);
+                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = true });
                         }
                     }
                 }
@@ -395,12 +395,12 @@ pub const Translate = struct {
                         try solid.translate(id, Vec3.zero(), self, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
 
                         //Draw it here too so we it doesn't flash for a single frame
-                        try solid.drawImmediate(draw, self, dist, null, true);
+                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = true });
                     }
                     if (giz_active == .high) {
-                        try solid.drawImmediate(draw, self, dist, null, true);
+                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = true });
                         if (dupe) { //Draw original
-                            try solid.drawImmediate(draw, self, Vec3.zero(), null, true);
+                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = true });
                         }
                     }
                 }

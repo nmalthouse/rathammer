@@ -703,6 +703,8 @@ pub fn moveLayer(ed: *Ed, moved_id: LayerId, new_parent_id: LayerId, sib_index: 
 pub const SelectedSide = struct {
     id: editor.EcsT.Id,
     side_i: u16,
+
+    invert_norm: bool = false,
 };
 pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
     if (list.len == 0) return;
@@ -713,6 +715,7 @@ pub fn translateFace(ed: *Ed, list: []const SelectedSide, dist: Vec3) !void {
             li.id,
             li.side_i,
             dist,
+            li.invert_norm,
         ) });
     }
     ustack.apply(ed);

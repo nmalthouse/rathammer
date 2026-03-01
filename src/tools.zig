@@ -11,7 +11,6 @@ const undo = @import("undo.zig");
 const L = @import("locale.zig");
 const DrawCtx = graph.ImmediateDrawingContext;
 const Gui = graph.Gui;
-const Os9Gui = graph.gui_app.Os9Gui;
 const Gizmo = @import("gizmo.zig").Gizmo;
 const ecs = @import("ecs.zig");
 const VtableReg = @import("vtable_reg.zig").VtableReg;
@@ -31,6 +30,7 @@ pub const TextureTool = @import("tools/texture.zig").TextureTool;
 pub const Translate = @import("tools/translate.zig").Translate;
 pub const Clipping = @import("tools/clipping.zig").Clipping;
 pub const VertexTranslate = @import("tools/vertex.zig").VertexTranslate;
+pub const FastFaceManip = @import("tools/fast_face.zig").FastFaceManip;
 
 pub const Inspector = @import("windows/inspector.zig").InspectorWindow;
 pub const ToolRegistry = VtableReg(i3DTool);
@@ -124,298 +124,6 @@ pub const ToolData = struct {
     }
 };
 
-//TODO How do tools register keybindings?
-
-pub const FastFaceManip = struct {
-    pub threadlocal var tool_id: ToolReg = initToolReg;
-
-    vt: i3DTool,
-
-    state: enum {
-        start,
-        active,
-    } = .start,
-    face_id: i32 = -1,
-    start: Vec3 = Vec3.zero(),
-    right: bool = false,
-    main_id: ?ecs.EcsT.Id = null,
-
-    draw_grid: bool = false,
-    draw_text: bool = true,
-
-    selected: std.ArrayListUnmanaged(action.SelectedSide) = .{},
-    alloc: std.mem.Allocator,
-
-    fn reset(self: *@This()) void {
-        self.face_id = -1;
-        self.state = .start;
-        self.right = false;
-        self.selected.clearRetainingCapacity();
-    }
-
-    pub fn create(alloc: std.mem.Allocator) !*i3DTool {
-        var obj = try alloc.create(@This());
-        obj.* = .{
-            .vt = .{
-                .deinit_fn = &@This().deinit,
-                .runTool_fn = &@This().runTool,
-                .tool_icon_fn = &@This().drawIcon,
-                .event_fn = &event,
-                .gui_build_cb = &buildGui,
-                .selected_solid_edge_color = 0xf7_a94a_af,
-                .selected_solid_point_color = 0xff0000ff,
-            },
-            .alloc = alloc,
-        };
-        return &obj.vt;
-    }
-
-    pub fn drawIcon(vt: *i3DTool, draw: *DrawCtx, editor: *Editor, r: graph.Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        _ = self;
-        const rec = editor.asset.getRectFromName("fast_face_manip.png") orelse graph.Rec(0, 0, 0, 0);
-        draw.rectTex(r, rec, editor.asset_atlas);
-    }
-
-    pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.selected.deinit(self.alloc);
-        alloc.destroy(self);
-    }
-    pub fn runTool(vt: *i3DTool, td: ToolData, editor: *Editor) ToolError!void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        self.runToolErr(td, editor) catch return error.fatal;
-    }
-
-    pub fn event(vt: *i3DTool, ev: ToolEvent, _: *Editor) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        switch (ev) {
-            .focus => {
-                self.reset();
-            },
-            else => {},
-        }
-    }
-
-    pub fn runToolErr(self: *@This(), td: ToolData, editor: *Editor) !void {
-        const draw_nd = &editor.draw_state.ctx;
-        const selected_slice = editor.getSelected();
-
-        const rm = editor.edit_state.rmouse;
-        const lm = editor.edit_state.lmouse;
-        switch (self.state) {
-            .start => {
-                if (rm == .rising or lm == .rising) {
-                    self.right = rm == .rising;
-                    const rc = editor.camRay(td.screen_area, td.view_3d.*);
-                    editor.rayctx.reset();
-                    for (selected_slice) |s_id| {
-                        try editor.rayctx.addPotentialSolid(&editor.ecs, rc[0], rc[1], &editor.csgctx, s_id);
-                    }
-                    const pot = editor.rayctx.sortFine();
-                    if (pot.len > 0) {
-                        const rci = if (editor.edit_state.rmouse == .rising) @min(1, pot.len - 1) else 0;
-                        const p = pot[rci];
-                        const solid = editor.getComponent(p.id, .solid) orelse return;
-                        self.main_id = p.id;
-                        self.face_id = @intCast(p.side_id orelse return);
-                        self.state = .active;
-                        self.start = p.point;
-                        const norm = solid.sides.items[@intCast(self.face_id)].normal(solid);
-                        const NORM_THRESH = 0.99;
-                        for (selected_slice) |other| {
-                            if (editor.getComponent(other, .solid)) |o_solid| {
-                                for (o_solid.sides.items, 0..) |*side, fi| {
-                                    if (norm.dot(side.normal(o_solid)) > NORM_THRESH) {
-                                        //if (init_plane.eql(side.normal(o_solid))) {
-                                        try self.selected.append(self.alloc, .{ .id = other, .side_i = @intCast(fi) });
-                                        try o_solid.removeFromMeshMap(other, editor);
-                                        break; //Only one side per solid can be coplanar
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    for (selected_slice) |sel| {
-                        if (!editor.hasComponent(sel, .solid)) continue;
-                        if (editor.getComponent(sel, .bounding_box)) |bb| {
-                            toolutil.drawBBDimensions(
-                                bb.a,
-                                bb.b,
-                                &editor.draw_state.screen_space_text_ctx,
-                                td.text_param,
-                                td.screen_area,
-                                td.view_3d.*,
-                            );
-                        }
-                    }
-                }
-            },
-            .active => {
-                //for (self.selected.items) |id| {
-                if (self.main_id) |id| {
-                    if (editor.getComponent(id, .solid)) |solid| {
-                        if (self.face_id >= 0 and self.face_id < solid.sides.items.len) {
-                            const s_i: usize = @intCast(self.face_id);
-                            const side = &solid.sides.items[s_i];
-                            //if (self.face_id == s_i) {
-                            //Side_normal
-                            //self.start
-                            if (side.index.items.len < 3) return;
-                            const ind = side.index.items;
-                            const ver = solid.verts.items;
-
-                            //The projection of a vector u onto a plane with normal n is given by:
-                            //v_proj = u - n.scale(u dot n), assuming n is normalized
-                            const plane_norm = util3d.trianglePlane([3]Vec3{ ver[ind[0]], ver[ind[1]], ver[ind[2]] });
-                            const ray = editor.camRay(td.screen_area, td.view_3d.*);
-                            //const u = ray[1];
-                            //const v_proj = u.sub(plane_norm.scale(u.dot(plane_norm)));
-
-                            // By projecting the cam_norm onto the side's plane,
-                            // we can use the resulting vector as a normal for a plane to raycast against
-                            // The resulting plane's normal is as colinear with the cameras normal as we can get
-                            // while still having the side's normal perpendicular (in the raycast plane)
-                            //
-                            // If cam_norm and side_norm are colinear the projection is near zero, in the future discard vectors below a threshold as they cause explosions
-
-                            if (util3d.planeNormalGizmo(self.start, plane_norm, ray)) |inter_| {
-                                _, const pos = inter_;
-                                const dist = editor.grid.snapDelta(pos);
-
-                                //Get current bounds of each solid and display delta
-                                if (self.draw_text) {
-                                    if (editor.getComponent(id, .bounding_box)) |bb| {
-                                        {
-                                            const aa = editor.frame_arena.allocator();
-                                            var vert_cpy = try aa.dupe(Vec3, ver);
-                                            defer aa.free(vert_cpy);
-                                            for (ind) |index|
-                                                vert_cpy[index] = vert_cpy[index].add(dist);
-                                            var bcpy = bb;
-                                            bcpy.a = .set(std.math.floatMax(f32));
-                                            bcpy.b = .set(-std.math.floatMax(f32));
-                                            for (vert_cpy) |v| {
-                                                bcpy.a = bcpy.a.min(v);
-                                                bcpy.b = bcpy.b.max(v);
-                                            }
-                                            toolutil.drawBBDimensions(
-                                                bcpy.a,
-                                                bcpy.b,
-                                                &editor.draw_state.screen_space_text_ctx,
-                                                td.text_param,
-                                                td.screen_area,
-                                                td.view_3d.*,
-                                            );
-                                        }
-
-                                        const dist_rounded = toolutil.roundForDrawing(dist);
-                                        toolutil.drawText3D(
-                                            self.start.add(dist),
-                                            &editor.draw_state.screen_space_text_ctx,
-                                            td.text_param,
-                                            td.screen_area,
-                                            td.view_3d.*,
-                                            "[{d} {d} {d}]",
-                                            .{
-                                                dist_rounded.x(),
-                                                dist_rounded.y(),
-                                                dist_rounded.z(),
-                                            },
-                                        );
-                                    }
-                                    //toolutil.drawDistance(
-                                    //    self.start,
-                                    //    dist,
-                                    //    &editor.draw_state.screen_space_text_ctx,
-                                    //    td.text_param,
-                                    //    td.screen_area,
-                                    //    td.view_3d.*,
-                                    //);
-                                }
-
-                                if (self.draw_grid) {
-                                    const counts = editor.grid.countV3(dist);
-                                    const absd = Vec3{ .data = @abs(dist.data) };
-                                    const width = @max(10, util3d.maxComp(absd));
-                                    gridutil.drawGridAxis(
-                                        self.start,
-                                        counts,
-                                        td.draw,
-                                        editor.grid,
-                                        Vec3.set(width),
-                                    );
-                                }
-                                //if (util3d.doesRayIntersectPlane(ray[0], ray[1], self.start, v_proj)) |inter| {
-                                //const dist_n = inter.sub(self.start); //How much of our movement lies along the normal
-                                //const acc = dist_n.dot(plane_norm);
-
-                                for (self.selected.items) |sel| {
-                                    const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                    if (sel.side_i >= solid_o.sides.items.len) continue;
-                                    const s_io: usize = @intCast(sel.side_i);
-                                    const side_o = &solid_o.sides.items[s_io];
-                                    solid_o.drawImmediate(td.draw, editor, dist, side_o.index.items, false) catch return;
-                                    draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, colors.fast_face_plane, .{ .offset = dist });
-                                }
-
-                                const commit_btn = if (self.right) rm else lm;
-                                if (commit_btn == .falling and dist.length() > 0.1) {
-                                    try action.translateFace(editor, self.selected.items, dist);
-                                }
-                            } else {
-                                draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.fast_face_plane, .{});
-                            }
-                        }
-
-                        if (rm != .high and lm != .high) {
-                            for (self.selected.items) |sel| {
-                                const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                try solid_o.markDirty(sel.id, editor);
-                            }
-                            self.reset();
-                        }
-                    }
-                }
-            },
-        }
-    }
-
-    pub fn buildGui(vt: *i3DTool, _: *Inspector, area_vt: *iArea, gui: *RGui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        const doc =
-            \\This is the Fast Face tool.
-            \\Select objects with 'E'.
-            \\Left click selects the near face, right click selects the far face
-            \\Click and drag and click the opposite mouse button to commit changes
-            \\If in multi select mode, faces with a common normal will be manipulated
-        ;
-        var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
-        ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
-            .mode = .split_on_space,
-        });
-        const CB = Wg.Checkbox.build;
-        _ = CB(area_vt, ly.getArea(), "Draw Grid", .{ .bool_ptr = &self.draw_grid }, null);
-    }
-
-    pub fn guiDoc(_: *i3DTool, os9gui: *Os9Gui, editor: *Editor, vl: *Gui.VerticalLayout) void {
-        const hl = os9gui.nstyle.text_h;
-        vl.pushHeight(hl * 10);
-        if (os9gui.textView(hl, 0xff)) |tvc| {
-            var tv = tvc;
-            tv.text("This is the Fast Face tool", .{});
-            tv.text("Left click selects the near face, right click selects the far face.", .{});
-            tv.text("Click and drag and click the opposite mouse button to commit changes", .{});
-            tv.text("", .{});
-            tv.text("If in multi select mode, faces with a common normal will be manipulated", .{});
-            //tv.text("", .{});
-        }
-        _ = editor;
-    }
-};
-
 pub const PlaceEntity = struct {
     pub threadlocal var tool_id: ToolReg = initToolReg;
     vt: i3DTool,
@@ -445,11 +153,6 @@ pub const PlaceEntity = struct {
             .focus => {},
             else => {},
         }
-    }
-
-    pub fn doGui(vt: *i3DTool, os9gui: *Os9Gui, _: *Editor, _: *Gui.VerticalLayout) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
-        os9gui.enumCombo("New class: {s}", .{@tagName(self.ent_class)}, &self.ent_class) catch return;
     }
 
     pub fn drawIcon(vt: *i3DTool, draw: *DrawCtx, editor: *Editor, r: graph.Rect) void {
@@ -818,7 +521,7 @@ pub const TranslateFace = struct {
                     if (giz_active == .high) {
                         const dist = self.grid.snapV3(origin.sub(origin_i));
                         toolutil.drawDistance(origin_i, dist, &self.draw_state.screen_space_text_ctx, td.text_param, td.screen_area, td.view_3d.*);
-                        try solid.drawImmediate(td.draw, self, dist, side.index.items, false);
+                        try solid.drawImmediate(td.draw, self, dist, side.index.items, .{ .texture_lock = false });
                         if (self.edit_state.rmouse == .rising) {
                             //try solid.translateSide(id, dist, self, s_i);
                             try action.translateFace(self, &.{.{ .id = id, .side_i = @intCast(s_i) }}, dist);
