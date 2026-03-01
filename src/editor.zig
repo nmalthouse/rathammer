@@ -127,6 +127,8 @@ pub const Context = struct {
 
     layers: Layer.Context,
 
+    omit_solids: std.AutoArrayHashMapUnmanaged(EcsT.Id, bool) = .{},
+
     /// This sucks, clean it up
     fgd_ctx: fgd.EntCtx,
 
@@ -517,6 +519,7 @@ pub const Context = struct {
         self.rayctx.deinit();
         self.scratch_buf.deinit(self.alloc);
         self.asset_browser.deinit();
+        self.omit_solids.deinit(self.alloc);
         self.csgctx.deinit();
         self.clipctx.deinit();
         self.vpkctx.deinit();
@@ -578,6 +581,18 @@ pub const Context = struct {
         if (self.ecs.getPtr(index, comp) catch null) |ptr| {
             ptr.* = val;
         }
+    }
+
+    // remove the given entity from mesh storage until next update
+    pub fn markSolidRemoved(self: *Self, ent: EcsT.Id) !void {
+        if (self.omit_solids.getPtr(ent)) |om| {
+            om.* = true;
+            return;
+        }
+
+        try self.omit_solids.put(self.alloc, ent, true);
+        if (self.getComponent(ent, .solid)) |sol|
+            try sol.removeFromMeshMap(ent, self);
     }
 
     pub fn dupeEntity(self: *Self, ent: EcsT.Id) !EcsT.Id {
@@ -1777,6 +1792,26 @@ pub const Context = struct {
         }
         if (tcount > 0) {
             self.draw_state.meshes_dirty = true;
+        }
+        {
+            var to_rem = std.ArrayList(usize){};
+            const keys = self.omit_solids.keys();
+            for (self.omit_solids.values(), 0..) |*val, i| {
+                if (val.*) {
+                    val.* = false;
+                    continue;
+                }
+
+                try to_rem.append(aa, i);
+
+                if (try self.ecs.getOptPtr(keys[i], .solid)) |solid| {
+                    try solid.markDirty(keys[i], self);
+                }
+            }
+            var i = to_rem.items.len;
+            while (i > 0) : (i -= 1) {
+                self.omit_solids.swapRemoveAt(to_rem.items[i - 1]);
+            }
         }
 
         if (self.draw_state.meshes_dirty) {

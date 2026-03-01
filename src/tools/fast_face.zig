@@ -71,8 +71,41 @@ pub const FastFaceManip = struct {
         }
     }
 
+    fn gizmo(self: *@This(), td: ToolData, editor: *Editor) ?Vec3 {
+        if (self.main_id) |id| {
+            if (editor.getComponent(id, .solid)) |solid| {
+                if (self.face_id >= 0 and self.face_id < solid.sides.items.len) {
+                    const s_i: usize = @intCast(self.face_id);
+                    const side = &solid.sides.items[s_i];
+                    //if (self.face_id == s_i) {
+                    //Side_normal
+                    //self.start
+                    if (side.index.items.len < 3) return null;
+                    const ind = side.index.items;
+                    const ver = solid.verts.items;
+
+                    //The projection of a vector u onto a plane with normal n is given by:
+                    //v_proj = u - n.scale(u dot n), assuming n is normalized
+                    const plane_norm = util3d.trianglePlane([3]Vec3{ ver[ind[0]], ver[ind[1]], ver[ind[2]] });
+                    const ray = editor.camRay(td.screen_area, td.view_3d.*);
+                    //const u = ray[1];
+                    //const v_proj = u.sub(plane_norm.scale(u.dot(plane_norm)));
+
+                    // By projecting the cam_norm onto the side's plane,
+                    // we can use the resulting vector as a normal for a plane to raycast against
+                    // The resulting plane's normal is as colinear with the cameras normal as we can get
+                    // while still having the side's normal perpendicular (in the raycast plane)
+                    //
+                    // If cam_norm and side_norm are colinear the projection is near zero, in the future discard vectors below a threshold as they cause explosions
+                    _, const pos = util3d.planeNormalGizmo(self.start, plane_norm, ray) orelse return null;
+                    return pos;
+                }
+            }
+        }
+        return null;
+    }
+
     pub fn runToolErr(self: *@This(), td: ToolData, editor: *Editor) !void {
-        const draw_nd = &editor.draw_state.ctx;
         const selected_slice = editor.getSelected();
 
         const rm = editor.edit_state.rmouse;
@@ -102,7 +135,8 @@ pub const FastFaceManip = struct {
                                     if (norm.dot(side.normal(o_solid)) > NORM_THRESH) {
                                         //if (init_plane.eql(side.normal(o_solid))) {
                                         try self.selected.append(self.alloc, .{ .id = other, .side_i = @intCast(fi) });
-                                        try o_solid.removeFromMeshMap(other, editor);
+                                        try editor.markSolidRemoved(other);
+                                        //try o_solid.removeFromMeshMap(other, editor);
                                         break; //Only one side per solid can be coplanar
                                     }
                                 }
@@ -126,134 +160,216 @@ pub const FastFaceManip = struct {
                 }
             },
             .active => {
-                if (self.main_id) |id| {
-                    if (editor.getComponent(id, .solid)) |solid| {
-                        if (self.face_id >= 0 and self.face_id < solid.sides.items.len) {
-                            const s_i: usize = @intCast(self.face_id);
-                            const side = &solid.sides.items[s_i];
-                            //if (self.face_id == s_i) {
-                            //Side_normal
-                            //self.start
-                            if (side.index.items.len < 3) return;
-                            const ind = side.index.items;
-                            const ver = solid.verts.items;
-
-                            //The projection of a vector u onto a plane with normal n is given by:
-                            //v_proj = u - n.scale(u dot n), assuming n is normalized
-                            const plane_norm = util3d.trianglePlane([3]Vec3{ ver[ind[0]], ver[ind[1]], ver[ind[2]] });
-                            const ray = editor.camRay(td.screen_area, td.view_3d.*);
-                            //const u = ray[1];
-                            //const v_proj = u.sub(plane_norm.scale(u.dot(plane_norm)));
-
-                            // By projecting the cam_norm onto the side's plane,
-                            // we can use the resulting vector as a normal for a plane to raycast against
-                            // The resulting plane's normal is as colinear with the cameras normal as we can get
-                            // while still having the side's normal perpendicular (in the raycast plane)
-                            //
-                            // If cam_norm and side_norm are colinear the projection is near zero, in the future discard vectors below a threshold as they cause explosions
-
-                            if (util3d.planeNormalGizmo(self.start, plane_norm, ray)) |inter_| {
-                                _, const pos = inter_;
-                                const dist = editor.grid.snapDelta(pos);
-
-                                //Get current bounds of each solid and display delta
-                                if (self.draw_text) {
-                                    if (editor.getComponent(id, .bounding_box)) |bb| {
-                                        {
-                                            const aa = editor.frame_arena.allocator();
-                                            var vert_cpy = try aa.dupe(Vec3, ver);
-                                            defer aa.free(vert_cpy);
-                                            for (ind) |index|
-                                                vert_cpy[index] = vert_cpy[index].add(dist);
-                                            var bcpy = bb;
-                                            bcpy.a = .set(std.math.floatMax(f32));
-                                            bcpy.b = .set(-std.math.floatMax(f32));
-                                            for (vert_cpy) |v| {
-                                                bcpy.a = bcpy.a.min(v);
-                                                bcpy.b = bcpy.b.max(v);
-                                            }
-                                            toolutil.drawBBDimensions(
-                                                bcpy.a,
-                                                bcpy.b,
-                                                &editor.draw_state.screen_space_text_ctx,
-                                                td.text_param,
-                                                td.screen_area,
-                                                td.view_3d.*,
-                                            );
-                                        }
-
-                                        const dist_rounded = toolutil.roundForDrawing(dist);
-                                        toolutil.drawText3D(
-                                            self.start.add(dist),
-                                            &editor.draw_state.screen_space_text_ctx,
-                                            td.text_param,
-                                            td.screen_area,
-                                            td.view_3d.*,
-                                            "[{d} {d} {d}]",
-                                            .{
-                                                dist_rounded.x(),
-                                                dist_rounded.y(),
-                                                dist_rounded.z(),
-                                            },
-                                        );
-                                    }
-                                    //toolutil.drawDistance(
-                                    //    self.start,
-                                    //    dist,
-                                    //    &editor.draw_state.screen_space_text_ctx,
-                                    //    td.text_param,
-                                    //    td.screen_area,
-                                    //    td.view_3d.*,
-                                    //);
-                                }
-
-                                if (self.draw_grid) {
-                                    const counts = editor.grid.countV3(dist);
-                                    const absd = Vec3{ .data = @abs(dist.data) };
-                                    const width = @max(10, util3d.maxComp(absd));
-                                    gridutil.drawGridAxis(
-                                        self.start,
-                                        counts,
-                                        td.draw,
-                                        editor.grid,
-                                        Vec3.set(width),
-                                    );
-                                }
-                                //if (util3d.doesRayIntersectPlane(ray[0], ray[1], self.start, v_proj)) |inter| {
-                                //const dist_n = inter.sub(self.start); //How much of our movement lies along the normal
-                                //const acc = dist_n.dot(plane_norm);
-
-                                for (self.selected.items) |*sel| {
-                                    sel.invert_norm = false;
-                                    const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                    if (sel.side_i >= solid_o.sides.items.len) continue;
-                                    const s_io: usize = @intCast(sel.side_i);
-                                    const side_o = &solid_o.sides.items[s_io];
-                                    const inv = canInvertNormals(solid_o, sel.side_i, dist);
-                                    sel.invert_norm = inv == .invert;
-                                    solid_o.drawImmediate(td.draw, editor, dist, side_o.index.items, .{ .texture_lock = false, .invert_normal = inv == .invert }) catch return;
-                                    draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, colors.fast_face_plane, .{ .offset = dist });
-                                }
-
-                                const commit_btn = if (self.right) rm else lm;
-                                if (commit_btn == .falling and dist.length() > 0.1) {
-                                    try action.translateFace(editor, self.selected.items, dist);
-                                }
-                            } else {
-                                draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.fast_face_plane, .{});
-                            }
-                        }
-
-                        if (rm != .high and lm != .high) {
-                            for (self.selected.items) |sel| {
-                                const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
-                                try solid_o.markDirty(sel.id, editor);
-                            }
-                            self.reset();
-                        }
-                    }
+                const extrude = editor.isBindState(editor.conf.binds.fast_face.extrude, .high) or editor.isBindState(editor.conf.binds.fast_face.extrude, .falling);
+                if (extrude) {
+                    try self.activeExtrude(td, editor);
+                } else {
+                    try self.activeRegular(td, editor);
                 }
             },
+        }
+    }
+
+    fn genDummy(aa: std.mem.Allocator, parent: *const ecs.Solid, parent_side_i: u32, dist: Vec3) !ecs.Solid {
+        const side = &parent.sides.items[parent_side_i];
+        var dummy = ecs.Solid.init(aa);
+        try dummy.verts.resize(aa, side.index.items.len * 2);
+        try dummy.sides.resize(aa, side.index.items.len + 2);
+
+        for (side.index.items, 0..) |ind, i| {
+            dummy.verts.items[i] = parent.verts.items[ind];
+            dummy.verts.items[i + side.index.items.len] = parent.verts.items[ind].add(dist);
+        }
+
+        dummy.sides.items[0] = side.*; //near face
+        dummy.sides.items[0]._alloc = aa;
+        dummy.sides.items[0].index = .{};
+        try dummy.sides.items[0].index.resize(aa, side.index.items.len);
+        for (dummy.sides.items[0].index.items, 0..) |*ind, i| {
+            ind.* = @intCast(i);
+        }
+        dummy.sides.items[0].flipNormal();
+
+        dummy.sides.items[1] = side.*; //far face
+        dummy.sides.items[1].index = .{};
+        try dummy.sides.items[1].index.resize(aa, side.index.items.len);
+        dummy.sides.items[1]._alloc = aa;
+        for (dummy.sides.items[1].index.items, 0..) |*ind, i| {
+            ind.* = @intCast(i + side.index.items.len);
+        }
+
+        for (dummy.sides.items[2..], 0..) |*sd, i| {
+            sd.* = .{ ._alloc = aa, .tex_id = side.tex_id, .tw = side.tw, .th = side.th };
+            try sd.index.resize(aa, 4);
+            sd.index.items[0] = @intCast(i);
+            sd.index.items[1] = @intCast((i + 1) % side.index.items.len);
+            sd.index.items[2] = @intCast((i + 1) % side.index.items.len + side.index.items.len);
+            sd.index.items[3] = @intCast(i + side.index.items.len);
+
+            sd.resetUv(sd.normal(&dummy), true, 0.25, 0.25);
+        }
+        return dummy;
+    }
+
+    fn activeExtrude(self: *@This(), td: ToolData, editor: *Editor) !void {
+        const rm = editor.edit_state.rmouse;
+        const lm = editor.edit_state.lmouse;
+        if (self.gizmo(td, editor)) |pos| {
+            const dist = editor.grid.snapDelta(pos);
+            var dupe_count: usize = 0;
+            for (self.selected.items) |*sel| {
+                const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
+                if (sel.side_i >= solid_o.sides.items.len) continue;
+                const s_io: usize = @intCast(sel.side_i);
+                const side = &solid_o.sides.items[s_io];
+                const norm = side.normal(solid_o);
+                const can_dupe = norm.dot(dist) < 0;
+
+                if (!can_dupe) continue;
+                const aa = editor.frame_arena.allocator();
+                dupe_count += 1;
+
+                var dummy = try genDummy(aa, solid_o, @intCast(s_io), dist);
+
+                try dummy.drawImmediate(td.draw, editor, .zero(), null, .{ .texture_lock = false });
+            }
+
+            const ed = editor;
+            const commit_btn = if (self.right) rm else lm;
+            if (commit_btn == .falling and dist.length() > 0.1 and dupe_count > 0) {
+                const ustack = try ed.undoctx.pushNewFmt("{s}", .{L.lang.undo.create_primitive});
+                for (self.selected.items) |*sel| {
+                    const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
+                    if (sel.side_i >= solid_o.sides.items.len) continue;
+                    const s_io: usize = @intCast(sel.side_i);
+                    const side = &solid_o.sides.items[s_io];
+                    const norm = side.normal(solid_o);
+                    const can_dupe = norm.dot(dist) < 0;
+
+                    if (!can_dupe) continue;
+
+                    const dummy = try genDummy(editor.alloc, solid_o, @intCast(s_io), dist);
+
+                    const new = try ed.ecs.createEntity();
+                    try ed.ecs.attach(new, .solid, dummy);
+                    try ed.ecs.attach(new, .bounding_box, .{});
+                    try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
+                    const solid_ptr = try ed.ecs.getPtr(new, .solid);
+                    try solid_ptr.markDirty(new, ed);
+
+                    try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
+                    _ = &dummy;
+                }
+                ustack.apply(ed);
+                //try action.translateFace(editor, self.selected.items, dist);
+            }
+        }
+        if (rm != .high and lm != .high) {
+            self.reset();
+        }
+    }
+
+    fn activeRegular(self: *@This(), td: ToolData, editor: *Editor) !void {
+        const draw_nd = &editor.draw_state.ctx;
+        const rm = editor.edit_state.rmouse;
+        const lm = editor.edit_state.lmouse;
+        if (self.main_id) |id| {
+            if (editor.getComponent(id, .solid)) |solid| {
+                if (self.face_id >= 0 and self.face_id < solid.sides.items.len) {
+                    const s_i: usize = @intCast(self.face_id);
+                    const side = &solid.sides.items[s_i];
+                    if (side.index.items.len < 3) return;
+                    const ind = side.index.items;
+                    const ver = solid.verts.items;
+
+                    if (self.gizmo(td, editor)) |pos| {
+                        const dist = editor.grid.snapDelta(pos);
+
+                        //Get current bounds of each solid and display delta
+                        if (self.draw_text) {
+                            if (editor.getComponent(id, .bounding_box)) |bb| {
+                                {
+                                    const aa = editor.frame_arena.allocator();
+                                    var vert_cpy = try aa.dupe(Vec3, ver);
+                                    defer aa.free(vert_cpy);
+                                    for (ind) |index|
+                                        vert_cpy[index] = vert_cpy[index].add(dist);
+                                    var bcpy = bb;
+                                    bcpy.a = .set(std.math.floatMax(f32));
+                                    bcpy.b = .set(-std.math.floatMax(f32));
+                                    for (vert_cpy) |v| {
+                                        bcpy.a = bcpy.a.min(v);
+                                        bcpy.b = bcpy.b.max(v);
+                                    }
+                                    toolutil.drawBBDimensions(
+                                        bcpy.a,
+                                        bcpy.b,
+                                        &editor.draw_state.screen_space_text_ctx,
+                                        td.text_param,
+                                        td.screen_area,
+                                        td.view_3d.*,
+                                    );
+                                }
+
+                                const dist_rounded = toolutil.roundForDrawing(dist);
+                                toolutil.drawText3D(
+                                    self.start.add(dist),
+                                    &editor.draw_state.screen_space_text_ctx,
+                                    td.text_param,
+                                    td.screen_area,
+                                    td.view_3d.*,
+                                    "[{d} {d} {d}]",
+                                    .{
+                                        dist_rounded.x(),
+                                        dist_rounded.y(),
+                                        dist_rounded.z(),
+                                    },
+                                );
+                            }
+                        }
+
+                        if (self.draw_grid) {
+                            const counts = editor.grid.countV3(dist);
+                            const absd = Vec3{ .data = @abs(dist.data) };
+                            const width = @max(10, util3d.maxComp(absd));
+                            gridutil.drawGridAxis(
+                                self.start,
+                                counts,
+                                td.draw,
+                                editor.grid,
+                                Vec3.set(width),
+                            );
+                        }
+                        //if (util3d.doesRayIntersectPlane(ray[0], ray[1], self.start, v_proj)) |inter| {
+                        //const dist_n = inter.sub(self.start); //How much of our movement lies along the normal
+                        //const acc = dist_n.dot(plane_norm);
+
+                        for (self.selected.items) |*sel| {
+                            try editor.markSolidRemoved(sel.id);
+                            sel.invert_norm = false;
+                            const solid_o = editor.getComponent(sel.id, .solid) orelse continue;
+                            if (sel.side_i >= solid_o.sides.items.len) continue;
+                            const s_io: usize = @intCast(sel.side_i);
+                            const side_o = &solid_o.sides.items[s_io];
+                            const inv = canInvertNormals(solid_o, sel.side_i, dist);
+                            sel.invert_norm = inv == .invert;
+                            solid_o.drawImmediate(td.draw, editor, dist, side_o.index.items, .{ .texture_lock = false, .invert_normal = inv == .invert }) catch return;
+                            draw_nd.convexPolyIndexed(side_o.index.items, solid_o.verts.items, colors.fast_face_plane, .{ .offset = dist });
+                        }
+
+                        const commit_btn = if (self.right) rm else lm;
+                        if (commit_btn == .falling and dist.length() > 0.1) {
+                            try action.translateFace(editor, self.selected.items, dist);
+                        }
+                    } else {
+                        draw_nd.convexPolyIndexed(side.index.items, solid.verts.items, colors.fast_face_plane, .{});
+                    }
+                }
+
+                if (rm != .high and lm != .high) {
+                    self.reset();
+                }
+            }
         }
     }
 
@@ -347,3 +463,4 @@ const RGui = guis.Gui;
 const iWindow = guis.iWindow;
 const Wg = guis.Widget;
 const edit = @import("../editor.zig");
+const L = @import("../locale.zig");

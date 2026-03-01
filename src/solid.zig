@@ -26,6 +26,7 @@ pub const Side = struct {
     u: UVaxis = .{},
     v: UVaxis = .{},
     tex_id: vpk.VpkResId = 0,
+    //TODO these shouldn't be serialized
     tw: i32 = 10,
     th: i32 = 10,
 
