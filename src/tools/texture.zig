@@ -336,7 +336,7 @@ pub const TextureTool = struct {
             }
             ptr.* = nn;
             const sel_face = self.selected_faces.getLastOrNull() orelse return;
-            solid.translate(sel_face.id, Vec3.zero(), self.ed, Vec3.zero(), null) catch return;
+            solid.translate(sel_face.id, Vec3.zero(), self.ed, .{}) catch return;
         }
     }
 

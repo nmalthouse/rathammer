@@ -489,21 +489,23 @@ pub const Solid = struct {
 
     pub fn initFromPrimitive(alloc: std.mem.Allocator, verts: []const Vec3, faces: []const std.ArrayList(u32), tex_id: vpk.VpkResId, offset: Vec3, rot: graph.za.Mat3, u_scale: f32, v_scale: f32) !Solid {
         var ret = init(alloc);
-        for (verts) |v|
-            try ret.verts.append(alloc, rot.mulByVec3(v).add(offset));
+        try ret.verts.resize(ret._alloc, verts.len);
+        for (verts, 0..) |v, i|
+            ret.verts.items[i] = rot.mulByVec3(v).add(offset);
 
-        for (faces) |face| {
+        try ret.sides.resize(ret._alloc, faces.len);
+        for (faces, 0..) |face, i| {
             var ind = ArrayList(u32){};
             try ind.appendSlice(alloc, face.items);
 
-            try ret.sides.append(alloc, .{
+            ret.sides.items[i] = .{
                 ._alloc = alloc,
                 .index = ind,
                 .u = .{},
                 .v = .{},
                 .material = "",
                 .tex_id = tex_id,
-            });
+            };
         }
         try ret.optimizeMesh(.{ .can_reorder = true });
         for (ret.sides.items) |*side| {
@@ -732,43 +734,49 @@ pub const Solid = struct {
         editor.draw_state.meshes_dirty = true;
     }
 
-    pub fn translate(self: *@This(), id: EcsT.Id, vec: Vec3, editor: *Editor, rot_origin: Vec3, rot: ?Quat) !void {
+    pub fn translate(self: *@This(), id: EcsT.Id, vec: Vec3, editor: *Editor, opts: struct {
+        rot_origin: Vec3 = Vec3.zero(),
+        rot: ?Quat = null,
+        texture_lock: bool = true,
+    }) !void {
         //move all verts, recompute bounds
         //for each batchid, call rebuild
 
-        if (rot) |quat| {
+        if (opts.rot) |quat| {
             for (self.verts.items) |*vert| {
-                const v = vert.sub(rot_origin);
+                const v = vert.sub(opts.rot_origin);
                 const rotv = quat.rotateVec(v);
 
-                vert.* = rotv.add(rot_origin).add(vec);
+                vert.* = rotv.add(opts.rot_origin).add(vec);
             }
         } else {
             for (self.verts.items) |*vert| {
                 vert.* = vert.add(vec);
             }
         }
-        var pos = rot_origin.scale(-1);
+        var pos = opts.rot_origin.scale(-1);
         if (pos.length() > 0.1)
             pos = Vec3.new(1, 0, 0);
-        for (self.sides.items) |*side| {
-            side.u.trans = side.u.trans - (vec.dot(side.u.axis)) / side.u.scale;
-            side.v.trans = side.v.trans - (vec.dot(side.v.axis)) / side.v.scale;
+        if (opts.texture_lock) {
+            for (self.sides.items) |*side| {
+                side.u.trans = side.u.trans - (vec.dot(side.u.axis)) / side.u.scale;
+                side.v.trans = side.v.trans - (vec.dot(side.v.axis)) / side.v.scale;
 
-            if (rot) |quat| {
-                const pos_r = quat.rotateVec(pos.sub(rot_origin)).add(rot_origin);
+                if (opts.rot) |quat| {
+                    const pos_r = quat.rotateVec(pos.sub(opts.rot_origin)).add(opts.rot_origin);
 
-                const new_u_axis = quat.rotateVec(side.u.axis);
-                const new_v_axis = quat.rotateVec(side.v.axis);
+                    const new_u_axis = quat.rotateVec(side.u.axis);
+                    const new_v_axis = quat.rotateVec(side.v.axis);
 
-                const u_trans_r = pos.dot(side.u.axis) / side.u.scale + side.u.trans - pos_r.dot(new_u_axis) / side.u.scale;
-                const v_trans_r = pos.dot(side.v.axis) / side.v.scale + side.v.trans - pos_r.dot(new_v_axis) / side.v.scale;
+                    const u_trans_r = pos.dot(side.u.axis) / side.u.scale + side.u.trans - pos_r.dot(new_u_axis) / side.u.scale;
+                    const v_trans_r = pos.dot(side.v.axis) / side.v.scale + side.v.trans - pos_r.dot(new_v_axis) / side.v.scale;
 
-                side.u.trans = u_trans_r;
-                side.v.trans = v_trans_r;
+                    side.u.trans = u_trans_r;
+                    side.v.trans = v_trans_r;
 
-                side.u.axis = new_u_axis;
-                side.v.axis = new_v_axis;
+                    side.u.axis = new_u_axis;
+                    side.v.axis = new_v_axis;
+                }
             }
         }
         try self.markDirty(id, editor);

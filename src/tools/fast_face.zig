@@ -381,6 +381,7 @@ pub const FastFaceManip = struct {
             \\Left click selects the near face, right click selects the far face
             \\Click and drag and click the opposite mouse button to commit changes
             \\If in multi select mode, faces with a common normal will be manipulated
+            \\Hold Z to extrude
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
         ly.pushHeight(Wg.TextView.heightForN(gui, 4));

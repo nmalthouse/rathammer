@@ -504,7 +504,7 @@ pub const VertexTranslate = struct {
                             }
                             if (ed.getComponent(id, .solid)) |solid| {
                                 //Dummy to put it bake in the mesh batch
-                                try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null);
+                                try solid.translate(id, Vec3.zero(), ed, .{});
                             }
                         },
                         .high => {
@@ -541,7 +541,7 @@ pub const VertexTranslate = struct {
                             try solid.removeFromMeshMap(id, ed);
                         },
                         .falling => {
-                            try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
+                            try solid.translate(id, Vec3.zero(), ed, .{}); //Dummy to put it bake in the mesh batch
 
                             //Draw it here too so we it doesn't flash for a single frame
                             try solid.drawImmediate(td.draw, ed, dist, null, .{ .texture_lock = false });

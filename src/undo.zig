@@ -301,34 +301,36 @@ pub const UndoTranslate = struct {
     angle_delta: ?Vec3,
     rot_origin: Vec3,
     id: EntId,
+    tex_lock: bool,
 
     pub fn depId(self: *const @This()) ?EntId {
         return self.id;
     }
 
-    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: EntId, rot_origin: Vec3) !*@This() {
+    pub fn create(alloc: std.mem.Allocator, vec: Vec3, angle_delta: ?Vec3, id: EntId, rot_origin: Vec3, tex_lock: bool) !*@This() {
         const obj = try alloc.create(@This());
         obj.* = .{
             .vec = vec,
             .angle_delta = angle_delta,
             .rot_origin = rot_origin,
             .id = id,
+            .tex_lock = tex_lock,
         };
         return obj;
     }
 
     pub fn undo(self: *@This(), editor: *Editor) void {
-        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, -1);
+        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, self.tex_lock, -1);
     }
 
     pub fn redo(self: *@This(), editor: *Editor) void {
-        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, 1);
+        applyTransRot(editor, self.id, self.vec, self.angle_delta, self.rot_origin, self.tex_lock, 1);
     }
 
-    pub fn applyTransRot(editor: *Editor, id: EntId, trans: Vec3, angle_delta: ?Vec3, origin: Vec3, scale: f32) void {
+    pub fn applyTransRot(editor: *Editor, id: EntId, trans: Vec3, angle_delta: ?Vec3, origin: Vec3, tex_lock: bool, scale: f32) void {
         const quat = if (angle_delta) |ad| util3d.extEulerToQuat(ad.scale(scale)) else null;
         if (editor.ecs.getOptPtr(id, .solid) catch return) |solid| {
-            solid.translate(id, trans.scale(scale), editor, origin, quat) catch return;
+            solid.translate(id, trans.scale(scale), editor, .{ .rot_origin = origin, .rot = quat, .texture_lock = tex_lock }) catch return;
         }
         if (editor.ecs.getOptPtr(id, .entity) catch return) |ent| {
             ent.setOrigin(editor, id, ent.origin.add(trans.scale(scale))) catch return;

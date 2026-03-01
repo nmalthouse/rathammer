@@ -315,7 +315,7 @@ const Proportional = struct {
         const sel = ed.getSelected();
         for (sel) |id| {
             if (ed.getComponent(id, .solid)) |solid| {
-                if (!add) try solid.removeFromMeshMap(id, ed) else try solid.translate(id, Vec3.zero(), ed, Vec3.zero(), null);
+                if (!add) try solid.removeFromMeshMap(id, ed) else try solid.translate(id, Vec3.zero(), ed, .{});
             }
         }
     }
@@ -514,7 +514,7 @@ pub const TranslateFace = struct {
                         try solid.removeFromMeshMap(id, self);
                     }
                     if (giz_active == .falling) {
-                        try solid.translate(id, Vec3.zero(), self, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
+                        try solid.translate(id, Vec3.zero(), self, .{}); //Dummy to put it bake in the mesh batch
                         tool.face_origin = origin;
                     }
 

@@ -264,6 +264,7 @@ pub const Context = struct {
         selected_layer: Layer.Id = .none,
         selected_model_vpk_id: ?vpk.VpkResId = null,
         selected_texture_vpk_id: ?vpk.VpkResId = null,
+        texture_lock: bool = true,
 
         map_description: std.ArrayList(u8) = .{},
 

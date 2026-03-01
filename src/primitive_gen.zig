@@ -137,6 +137,65 @@ pub fn cylinder(
 
     return prim;
 }
+
+pub fn spike(
+    alloc: std.mem.Allocator,
+    param: struct {
+        a: f32,
+        b: f32,
+        z: f32,
+        num_segment: u32 = 16,
+        grid: gridutil.Snap,
+    },
+) !Primitive {
+    var prim = Primitive.init(alloc);
+    const a = param.a;
+    const b = param.b;
+    //const r = param.r;
+    const num_segment = param.num_segment;
+    const dtheta: f32 = std.math.tau / @as(f32, @floatFromInt(num_segment));
+    const z = param.z;
+    try prim.verts.resize(prim.alloc, num_segment + 1); // + 1 for the point
+    for (0..num_segment) |ni| {
+        const fi: f32 = @floatFromInt(ni);
+
+        const thet = fi * dtheta;
+        const x_f = @cos(thet) * a;
+        const y_f = @sin(thet) * b;
+        const x = param.grid.swiz1(x_f, "x");
+        const y = param.grid.swiz1(y_f, "y");
+
+        prim.verts.items[ni] = Vec3.new(x, y, -z / 2);
+    }
+    prim.verts.items[num_segment] = Vec3.new(0, 0, z / 2);
+
+    var faces = try prim.newSolid();
+    { //bottom
+        var face = prim.newFace();
+        for (0..num_segment) |nni| {
+            const ni: u32 = @intCast(nni);
+            try face.append(prim.alloc, ni);
+        }
+        try faces.append(prim.alloc, face);
+    }
+
+    const vpoint = num_segment;
+    for (0..num_segment) |nni| {
+        var face = prim.newFace();
+        const ni: u32 = @intCast(nni);
+        const v0 = ni;
+        const v1 = (ni + 1) % num_segment;
+        try face.appendSlice(prim.alloc, &.{
+            vpoint,
+            v1,
+            v0,
+        });
+        try faces.append(prim.alloc, face);
+    }
+
+    return prim;
+}
+
 pub const Axis = enum {
     x,
     y,
@@ -409,6 +468,85 @@ pub fn stairs(alloc: std.mem.Allocator, param: struct {
             i + 6,
             i + 5,
         );
+    }
+
+    return prim;
+}
+
+//borken
+pub fn uvBall(alloc: std.mem.Allocator, param: struct {
+    a: f32,
+    b: f32,
+    z: f32,
+    theta_seg: u32 = 11,
+    phi_seg: u32 = 11,
+    grid: gridutil.Snap,
+    thick: f32 = 16,
+}) !Primitive {
+    var prim = Primitive.init(alloc);
+
+    const dtheta: f32 = std.math.pi / @as(f32, @floatFromInt(param.theta_seg));
+    const phi_offset: usize = 1;
+    const dphi: f32 = std.math.degreesToRadians(360) / @as(f32, @floatFromInt(param.phi_seg - phi_offset));
+
+    const a = param.a;
+
+    const b = param.b;
+
+    const h = param.z;
+
+    const num: u32 = @intCast(param.theta_seg * param.phi_seg);
+    try prim.verts.resize(prim.alloc, num);
+    for (0..param.theta_seg) |dth| {
+        const th: f32 = @as(f32, @floatFromInt(dth)) * dtheta;
+        for (0..param.phi_seg) |dpi| {
+            const phi: f32 = @as(f32, @floatFromInt(dpi)) * dphi;
+            const x = @sin(th) * @cos(phi);
+            const y = @sin(th) * @sin(phi);
+            const z = @cos(th);
+            const gi = dth * param.theta_seg + dpi;
+            prim.verts.items[gi] = param.grid.snapV3(Vec3.new(x, y, z).mul(Vec3.new(a, b, h)));
+        }
+    }
+
+    //var faces = try prim.newSolid();
+    for (0..param.theta_seg - 1) |ddth| {
+        _ = ddth;
+        for (0..param.phi_seg - phi_offset) |ddpi| {
+            const dpi: u32 = @as(u32, @intCast(ddpi));
+            const v0 = (dpi) % param.phi_seg;
+            const v1 = (dpi + 1) % param.phi_seg;
+            const v2 = (v1 + param.phi_seg);
+            const v3 = (v0 + param.phi_seg);
+            //+ dth * param.theta_seg;
+
+            var face = prim.newFace();
+            try face.appendSlice(prim.alloc, &.{
+                v3,
+                v2,
+                v1,
+                v0,
+            });
+            //{
+            //    var face = prim.newFace();
+            //    try face.appendSlice(&.{
+            //        v0 + off, v1 + off, v2 + off, v3 + off,
+            //    });
+
+            //    try faces.append(face);
+            //}
+            //{
+            //    var face = prim.newFace();
+            //    try face.appendSlice(&.{
+            //        v3 + off + num,
+            //        v2 + off + num,
+            //        v1 + off + num,
+            //        v0 + off + num
+            //    });
+
+            //    try faces.append(face);
+            //}
+        }
     }
 
     return prim;

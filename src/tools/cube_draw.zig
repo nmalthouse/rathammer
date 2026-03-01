@@ -6,6 +6,7 @@ const graph = @import("graph");
 const std = @import("std");
 const DrawCtx = graph.ImmediateDrawingContext;
 const edit = @import("../editor.zig");
+const vpk = @import("../vpk.zig");
 const Editor = edit.Context;
 const guis = graph.RGui;
 const RGui = guis.Gui;
@@ -24,6 +25,7 @@ const L = @import("../locale.zig");
 
 pub const CubeDraw = struct {
     pub threadlocal var tool_id: tools.ToolReg = tools.initToolReg;
+    const max_drawn_real = 512;
     vt: i3DTool,
 
     primitive: enum {
@@ -32,6 +34,7 @@ pub const CubeDraw = struct {
         cylinder,
         stairs,
         dome,
+        spike,
     } = .cube,
     height_setting: enum {
         grid,
@@ -267,19 +270,20 @@ pub const CubeDraw = struct {
             //tool.start = bounds[0];
             //tool.end = bounds[1];
         }
+        const aa = ed.frame_arena.allocator();
         const nsegment: u32 = @intFromFloat(std.math.clamp(tool.primitive_settings.nsegment, 2, 128));
         const prim: struct {
             prim_gen.Primitive,
             bool,
         } = switch (tool.primitive) {
-            .cylinder => .{ try prim_gen.cylinder(ed.frame_arena.allocator(), .{
+            .cylinder => .{ try prim_gen.cylinder(aa, .{
                 .a = rb.x() / 2,
                 .b = rb.y() / 2,
                 .z = rb.z(),
                 .num_segment = nsegment,
                 .grid = snap,
             }), false },
-            .arch => .{ try prim_gen.arch(ed.frame_arena.allocator(), .{
+            .arch => .{ try prim_gen.arch(aa, .{
                 .thick = tool.primitive_settings.thickness,
                 .a = rb.x() / 2,
                 .b = rb.y() / 2,
@@ -289,7 +293,7 @@ pub const CubeDraw = struct {
                 .snap_to_box = tool.primitive_settings.archbox,
                 .grid = snap,
             }), true },
-            .dome => .{ try prim_gen.uvSphere(ed.frame_arena.allocator(), .{
+            .dome => .{ try prim_gen.uvSphere(aa, .{
                 .a = rb.x() / 2,
                 .b = rb.y() / 2,
                 .z = rb.z() / 2,
@@ -299,7 +303,14 @@ pub const CubeDraw = struct {
                 .grid = snap,
                 .thick = tool.primitive_settings.thickness,
             }), true },
-            .stairs => .{ try prim_gen.stairs(ed.frame_arena.allocator(), .{
+            .spike => .{ try prim_gen.spike(aa, .{
+                .a = rb.x() / 2,
+                .b = rb.y() / 2,
+                .z = rb.z(),
+                .num_segment = nsegment,
+                .grid = snap,
+            }), false },
+            .stairs => .{ try prim_gen.stairs(aa, .{
                 .width = rb.x(),
                 .height = rb.y(),
                 .z = rb.z(),
@@ -311,11 +322,25 @@ pub const CubeDraw = struct {
                 .back_perc = tool.stairs_setting.back_perc,
                 .grid = snap,
             }), true },
-            .cube => .{ try prim_gen.cube(ed.frame_arena.allocator(), .{
+            .cube => .{ try prim_gen.cube(aa, .{
                 .size = rb.scale(0.5),
             }), false },
         };
-        prim[0].draw(td.draw, center, rot);
+        if (prim[0].solids.items.len > max_drawn_real) {
+            prim[0].draw(td.draw, center, rot);
+        } else {
+            const vpk_id = ed.edit_state.selected_texture_vpk_id orelse 0;
+            const game: vpk.Game = ed.vpkctx.getGame(vpk_id) orelse .Default;
+            const tex = (try ed.getTexture(vpk_id));
+            for (prim[0].solids.items) |sol| {
+                var newsolid = ecs.Solid.initFromPrimitive(aa, prim[0].verts.items, sol.items, vpk_id, center, rot, game.u_scale, game.v_scale) catch continue;
+                for (newsolid.sides.items) |*side| {
+                    side.tw = tex.w;
+                    side.th = tex.h;
+                }
+                try newsolid.drawImmediate(td.draw, ed, .zero(), null, .{ .texture_lock = true });
+            }
+        }
         if (ed.edit_state.rmouse != .rising) return;
         tool.state = .start;
         try tool.commitPrimitive(ed, center, &prim[0], .{ .rot = rot, .select = prim[1] });

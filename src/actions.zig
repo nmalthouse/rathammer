@@ -499,7 +499,7 @@ pub fn createSolid(ed: *Ed, primitive: *const Primitive, tex_id: vpk.VpkResId, c
             try ed.ecs.attach(new, .bounding_box, .{});
             try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
             const solid_ptr = try ed.ecs.getPtr(new, .solid);
-            try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
+            try solid_ptr.translate(new, Vec3.zero(), ed, .{});
             {
                 try ustack.append(.{ .create_destroy = try .create(ustack.alloc, new, .create) });
             }
@@ -754,7 +754,7 @@ pub fn clipSelected(ed: *Ed, points: [3]Vec3) !void {
             try ed.ecs.attach(new, .bounding_box, .{});
             try ed.ecs.attach(new, .layer, .{ .id = ed.edit_state.selected_layer });
             const solid_ptr = try ed.ecs.getPtr(new, .solid);
-            try solid_ptr.translate(new, Vec3.zero(), ed, Vec3.zero(), null);
+            try solid_ptr.translate(new, Vec3.zero(), ed, .{});
         }
     }
     ustack.apply(ed);
@@ -785,6 +785,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
                 angle_delta,
                 duped,
                 origin,
+                ed.edit_state.texture_lock,
             ) });
             if (!ed.selection.ignore_groups) {
                 if (try ed.ecs.getOpt(duped, .group)) |group| {
@@ -803,6 +804,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
                 angle_delta,
                 id,
                 origin,
+                ed.edit_state.texture_lock,
             ) });
         }
     }
@@ -818,6 +820,7 @@ pub fn rotateTranslateSelected(ed: *Ed, dupe: bool, angle_delta: ?Vec3, origin: 
                     dist,
                     angle_delta,
                     origin,
+                    ed.edit_state.texture_lock,
                     1,
                 );
 

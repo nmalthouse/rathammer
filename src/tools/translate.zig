@@ -239,7 +239,7 @@ pub const Translate = struct {
                         try solid.removeFromMeshMap(id, self);
                     }
                     if (giz_active == .falling) {
-                        try solid.translate(id, Vec3.zero(), self, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
+                        try solid.translate(id, Vec3.zero(), self, .{}); //Dummy to put it bake in the mesh batch
 
                         //Draw it here too so we it doesn't flash for a single frame
                         //try solid.drawImmediate(draw, self, dist, null);
@@ -252,9 +252,9 @@ pub const Translate = struct {
                     angle_delta = snapV3(angle, tool.angle_snap);
 
                     if (giz_active == .high) {
-                        try solid.drawImmediateCustom(draw, self, ctx, DrawCustomCtx.vertOffset, true);
+                        try solid.drawImmediateCustom(draw, self, ctx, DrawCustomCtx.vertOffset, self.edit_state.texture_lock);
                         if (dupe) { //Draw original
-                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = true });
+                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = self.edit_state.texture_lock });
                         }
                     }
                 }
@@ -392,15 +392,15 @@ pub const Translate = struct {
                         try solid.removeFromMeshMap(id, self);
                     }
                     if (giz_active == .falling) {
-                        try solid.translate(id, Vec3.zero(), self, Vec3.zero(), null); //Dummy to put it bake in the mesh batch
+                        try solid.translate(id, Vec3.zero(), self, .{}); //Dummy to put it bake in the mesh batch
 
                         //Draw it here too so we it doesn't flash for a single frame
-                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = true });
+                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = self.edit_state.texture_lock });
                     }
                     if (giz_active == .high) {
-                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = true });
+                        try solid.drawImmediate(draw, self, dist, null, .{ .texture_lock = self.edit_state.texture_lock });
                         if (dupe) { //Draw original
-                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = true });
+                            try solid.drawImmediate(draw, self, Vec3.zero(), null, .{ .texture_lock = self.edit_state.texture_lock });
                         }
                     }
                 }

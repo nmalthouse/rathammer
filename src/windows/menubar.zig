@@ -128,6 +128,10 @@ pub const MenuBar = struct {
                 .bool_ptr = &self.ed.selection.ignore_groups,
             }, null);
 
+            _ = Wg.Checkbox.build(&win.area, hl.getArea(Wg.Checkbox.getWidth(gui, "uv-lock", .{})), "uv-lock", .{
+                .bool_ptr = &self.ed.edit_state.texture_lock,
+            }, null);
+
             _ = Wg.Combo.build(&win.area, hl.getArea(b), &self.ed.renderer.mode, .{});
 
             _ = Wg.Combo.build(&win.area, hl.getArea(b), &self.ed.draw_state.mode, .{
