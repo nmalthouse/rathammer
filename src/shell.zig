@@ -160,15 +160,6 @@ pub const CommandCtx = struct {
         alloc.destroy(self);
     }
 
-    pub fn resolveArg(self: *@This(), token: []const u8, output: *std.array_list.Managed(u8)) !void {
-        if (token.len == 0) return;
-        switch (token[0]) {
-            '$' => try output.appendSlice(self.env.get(token[1..]) orelse return error.notAVar),
-            '!' => try self.execErr(token[1..], output),
-            else => try output.appendSlice(token),
-        }
-    }
-
     pub fn execConsole(vt: *Console.ConsoleCb, string: []const u8, wr: *std.array_list.Managed(u8)) void {
         const self: *@This() = @alignCast(@fieldParentPtr("iconsole", vt));
         var args = argIt(string);

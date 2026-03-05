@@ -37,6 +37,8 @@ pub const Console = struct {
     lines: std.ArrayList([]const u8),
     scratch: std.array_list.Managed(u8),
 
+    index: usize = 0,
+
     readline: Readline,
 
     exec_vt: *ConsoleCb,
@@ -89,7 +91,7 @@ pub const Console = struct {
 
         switch (ev) {
             .notify => |n| {
-                self.printLine("{s}", .{n}) catch {};
+                self.printLine("{s}\n", .{n}) catch {};
             },
             else => {},
         }
@@ -129,7 +131,7 @@ pub const Console = struct {
         _ = Wg.TextView.build(&vt.area, sp.text, self.lines.items, vt, .{
             .mode = .split_on_space,
             .force_scroll = true,
-            //.bg_col = 0x222222ff,
+            .index_ptr = &self.index,
         });
     }
 
@@ -153,17 +155,20 @@ pub const Console = struct {
     }
 
     pub fn execCommand(self: *@This(), command: []const u8, gui: *Gui) void {
-        self.printLine("{s}", .{command}) catch {}; //echo
-        self.lines.append(self.alloc, self.line_arena.allocator().dupe(u8, command) catch return) catch return;
+        self.printLine("{s}\n", .{command}) catch {}; //echo
+        //self.lines.append(self.alloc, self.line_arena.allocator().dupe(u8, command) catch return) catch return;
         self.scratch.clearRetainingCapacity();
         self.exec_vt.exec(self.exec_vt, command, &self.scratch);
         self.readline.appendHistory(command) catch return;
         const duped = self.line_arena.allocator().dupe(u8, self.scratch.items) catch return;
         self.lines.append(self.alloc, duped) catch return;
-        var tv = self.getTextView() orelse return;
-        tv.addOwnedText(duped, gui) catch return;
-        tv.gotoBottom();
-        tv.rebuildScroll(gui, &self.vt);
+        //var tv = self.getTextView() orelse return;
+
+        self.vt.needs_rebuild = true;
+        //tv.addOwnedText(duped, gui) catch return;
+        //tv.gotoBottom();
+        //tv.rebuildScroll(gui, &self.vt);
+        _ = gui;
     }
 
     pub fn textbox_fevent(cb: *guis.CbHandle, ev: guis.FocusedEvent, tb: *Wg.Textbox) void {

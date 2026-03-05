@@ -68,6 +68,8 @@ pub const PauseWindow = struct {
 
     tab_index: usize = 0,
 
+    tv_index: usize = 0,
+
     layer_widget: Layer.GuiWidget,
 
     alloc: std.mem.Allocator,
@@ -218,7 +220,7 @@ pub const PauseWindow = struct {
                     _ = Wg.Text.build(vt, ly.getArea(), "{s}: {s}", .{
                         field.name,
                         key.b.nameFull(&buf),
-                    }, .{});
+                    }, .{ .bg_col = gui.dstate.nstyle.color.bg });
                 }
             }
         }
@@ -227,7 +229,7 @@ pub const PauseWindow = struct {
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
             var ly = gui.dstate.vlayout(vt.area);
             const Btn = Wg.Button.build;
-            _ = Wg.Text.buildStatic(vt, ly.getArea(), L.lang.welcome, .{});
+            _ = Wg.Text.buildStatic(vt, ly.getArea(), L.lang.welcome, .{ .bg_col = gui.dstate.nstyle.color.bg });
             {
                 ly.pushCount(2);
                 var hy = gui.dstate.tlayout(ly.getArea() orelse return, 2);
@@ -386,6 +388,7 @@ pub const PauseWindow = struct {
             if (self.selected_text_i < self.texts.items.len) {
                 _ = Wg.TextView.build(vt, sp[1], &.{self.texts.items[self.selected_text_i].text}, win, .{
                     .mode = .split_on_space,
+                    .index_ptr = &self.tv_index,
                 });
             }
 
@@ -460,7 +463,7 @@ pub const PauseWindow = struct {
             const sp = ar.split(.vertical, ar.h);
 
             var ly = gui.dstate.vlayout(sp[1]);
-            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, .{});
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.name, .{ .bg_col = gui.dstate.nstyle.color.bg });
             //_ = Wg.GLTexture.build(area, sp[0], tex, tex.rect(), .{});
             _ = ptext.PollingTexture.build(area, sp[0], self.editor, rec.tex, "", .{}, .{});
             const ld_btn = ly.getArea() orelse return;
@@ -476,7 +479,7 @@ pub const PauseWindow = struct {
                 .commit_cb = gameComboCommit,
                 .name_cb = gameComboName,
             }, i);
-            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, .{});
+            _ = Wg.Text.buildStatic(area, ly.getArea(), rec.description, .{ .bg_col = gui.dstate.nstyle.color.bg });
         }
     }
 
