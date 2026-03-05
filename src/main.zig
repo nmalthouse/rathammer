@@ -166,7 +166,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     });
     defer gapp.deinit();
 
-    loaded_config.binds = try Conf.registerBindIds(Conf.Keys, &gapp.main_window.bindreg, config.keys);
+    loaded_config.binds = try graph.SDL.keybinding.registerBindIds(Conf.Keys, &gapp.main_window.bindreg, config.keys);
 
     if (!graph.SDL.Window.glHasExtension("GL_EXT_texture_compression_s3tc")) return error.glMissingExt;
     var basic_prof = profile.init();
@@ -212,6 +212,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const inspector_win = InspectorWindow.create(gui, editor);
     const pause_win = try PauseWindow.create(gui, editor, app_cwd.dir);
     const pause_win_id = try gui.addWindow(&pause_win.vt, default_rect, .{});
+
+    const config_win = try ConfigCheckWindow.create(gui, editor);
+    const config_win_id = try gui.addWindow(&config_win.vt, default_rect, .{});
 
     const console_win = try ConsoleWindow.create(gui, editor, &editor.shell.iconsole);
     const console_id = try gui.addWindow(&console_win.vt, default_rect, .{});
@@ -357,10 +360,16 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     {
         const ih = gui.dstate.nstyle.item_h;
         var wsp = &(gapp.workspaces.getWorkspace(editor.workspaces.pause) orelse return error.fucked).pane;
-        try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = console_id, .min_width = ih } });
+        try wsp.split.append(gapp.workspaces.alloc, .{ .split = .{ .orientation = .horizontal } });
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = pause_win_id, .min_width = ih } });
         wsp.split.area = .{ .x1 = 1000, .y1 = 1000 };
         try wsp.split.handles.append(gapp.workspaces.alloc, 670);
+
+        {
+            wsp = &wsp.split.children.items[0];
+            try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = config_win_id, .min_width = ih } });
+            try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = console_id, .min_width = ih } });
+        }
     }
 
     editor.workspaces.asset = try gapp.workspaces.addWorkspace(.{ .split = .{ .orientation = .horizontal } });

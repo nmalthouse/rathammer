@@ -74,7 +74,7 @@ pub const ConfigCtx = struct {
     strings: StringStorage,
     alloc: std.mem.Allocator,
     games: std.StringHashMapUnmanaged(GameEntry) = .{},
-    binds: genBindingIdStruct(Keys) = undefined,
+    binds: graph.SDL.keybinding.genBindingIdStruct(Keys) = undefined,
 
     pub fn loadLooseGameConfigs(self: *@This(), dir: std.fs.Dir, dir_name: []const u8) !void {
         var iter = try dir.openDir(dir_name, .{ .iterate = true });
@@ -244,43 +244,11 @@ pub fn loadConfig(alloc: std.mem.Allocator, slice: []const u8) !*ConfigCtx { //L
     return ctx;
 }
 
-const SerialBinding = struct {
-    mode: graph.SDL.keybinding.FocusMode = .multi,
-    button: graph.SDL.keybinding.ButtonBind,
-    repeat: bool = false,
-    mod: []const graph.SDL.keybinding.Keymod = &.{},
-
-    pub fn Keycode(k: graph.SDL.keycodes.Keycode) @This() {
-        return .{ .button = .{ .keycode = k } };
-    }
-
-    pub fn Scancode(k: graph.SDL.keycodes.Scancode) @This() {
-        return .{ .button = .{ .scancode = k } };
-    }
-
-    pub fn name(self: @This()) []const u8 {
-        return switch (self.button) {
-            inline else => |k| @tagName(k),
-        };
-    }
-
-    pub fn nameFull(self: @This(), buf: []u8) []const u8 {
-        //const mod_name = graph.keycodes.Keymod.name(self.mod, buf);
-        //if (mod_name.len >= buf.len) return mod_name;
-        const mod_name = "";
-        var fbs = std.io.FixedBufferStream([]u8){ .buffer = buf, .pos = mod_name.len };
-
-        fbs.writer().print("{s}", .{self.name()}) catch {};
-
-        return buf[0..fbs.pos];
-    }
-};
-
 pub const Keys = struct {
     const mask = graph.SDL.keybinding.Keymod.mask;
-    const Bind = SerialBinding;
-    const SC = SerialBinding.Scancode;
-    const KC = SerialBinding.Keycode;
+    const Bind = graph.SDL.keybinding.SerialBinding;
+    const SC = graph.SDL.keybinding.SerialBinding.Scancode;
+    const KC = graph.SDL.keybinding.SerialBinding.Keycode;
     global: struct {
         focus_search: Bind = .{ .button = .{ .keycode = .f }, .mod = &.{.ctrl} },
 
@@ -386,74 +354,7 @@ pub const Keys = struct {
     } = .{},
 };
 
-pub fn registerBindIds(comptime BindingSerialT: type, bindreg: *graph.SDL.keybinding.BindRegistry, serial: BindingSerialT) !genBindingIdStruct(BindingSerialT) {
-    const BindingIdStruct = genBindingIdStruct(BindingSerialT);
-    var ret: BindingIdStruct = undefined;
-    const info = @typeInfo(BindingIdStruct).@"struct";
-    inline for (info.fields) |field| {
-        const ctx_info = @typeInfo(field.type).@"struct";
-        const ctx_id = try bindreg.newContext(field.name);
-        @field(ret, field.name).context_id = ctx_id;
-
-        inline for (ctx_info.fields[0 .. ctx_info.fields.len - 1]) |bf| {
-            const bind = @field(@field(serial, field.name), bf.name);
-
-            const bind_id = try bindreg.registerBind(.bind(bind.button, bind.mode, bind.mod, bind.repeat, ctx_id), bf.name);
-
-            @field(@field(ret, field.name), bf.name) = bind_id;
-        }
-    }
-    return ret;
-}
-
-pub const BindIds = genBindingIdStruct(Keys);
-fn genBindingIdStruct(comptime config_mapping: type) type {
-    const info = @typeInfo(config_mapping).@"struct";
-    var main_out: [info.fields.len]std.builtin.Type.StructField = undefined;
-    inline for (info.fields, 0..) |field, f_i| {
-        const binf = @typeInfo(field.type).@"struct";
-        var bind_fields: [binf.fields.len + 1]std.builtin.Type.StructField = undefined;
-        const default: graph.SDL.keybinding.BindId = .none;
-        inline for (binf.fields, 0..) |bind, b_i| {
-            bind_fields[b_i] = .{
-                .name = bind.name,
-                .type = graph.SDL.keybinding.BindId,
-                .default_value_ptr = &default,
-                .is_comptime = false,
-                .alignment = @alignOf(graph.SDL.keybinding.BindId),
-            };
-        }
-        bind_fields[binf.fields.len] = .{
-            .name = "context_id",
-            .type = graph.SDL.keybinding.ContextId,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(graph.SDL.keybinding.ContextId),
-        };
-
-        const T = @Type(.{ .@"struct" = .{
-            .fields = &bind_fields,
-            .layout = .auto,
-            .decls = &.{},
-            .is_tuple = false,
-        } });
-        main_out[f_i] = .{
-            .name = field.name,
-            .type = T,
-            .default_value_ptr = null,
-            .is_comptime = false,
-            .alignment = @alignOf(T),
-        };
-    }
-    return @Type(.{
-        .@"struct" = .{
-            .fields = &main_out,
-            .layout = .auto,
-            .decls = &.{},
-            .is_tuple = false,
-        },
-    });
-}
+//pub const BindIds = graph.SDL.keybinding.genBindingIdStruct(Keys);
 
 fn dupeStruct(input: anytype, alloc: std.mem.Allocator, str: *StringStorage) !@TypeOf(input) {
     const T = @TypeOf(input);

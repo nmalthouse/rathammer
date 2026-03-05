@@ -52,11 +52,13 @@ pub const ConfigCheck = struct {
         const area = &vt.area;
         const inset = GuiHelp.insetAreaForWindowFrame(gui, vt.area.area);
         var ly = gui.dstate.vlayout(inset);
-        _ = Wg.Text.build(
-            area,
-            ly.getArea(),
-            "{s}",
-            .{self.ed.dirs.games_dir.path},
-        );
+
+        _ = Wg.Text.build(area, ly.getArea(), "steam path: {s}", .{self.ed.dirs.games_dir.path}, .{});
+
+        for (self.ed.games.list.values()) |val| {
+            _ = Wg.Button.build(area, ly.getArea(), val.name, .{
+                .disable = !val.good,
+            });
+        }
     }
 };

@@ -442,9 +442,10 @@ pub const GuiWidget = struct {
             .build_cb = &buildList,
             .build_vt = &self.cbhandle,
             .win = win,
-            .count = self.ctx.layers.items.len,
+            .count = self.ctx.layers.items.len + 1,
             .item_h = item_h,
             .index_ptr = &self.scroll_index,
+            .bg_col = gui.dstate.nstyle.color.bg,
         });
     }
 
