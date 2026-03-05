@@ -297,10 +297,6 @@ pub const MenuBar = struct {
                     .{ btn_id(.redo), L.lang.btn.redo, .btn },
                     .{ btn_id(.next_invalid), L.lang.btn.next_invalid, .btn },
                     .{ btn_id(.rm_dupe_verts), L.lang.btn.rm_dupe_verts, .btn },
-                    .{ 0, "testpop", .{ .child = .{
-                        .width = 300,
-                        .height = 300,
-                    } } },
                 });
             },
             btn_strid("help") => {

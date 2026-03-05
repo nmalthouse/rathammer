@@ -92,7 +92,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         log.err("User config failed to load with error {t}", .{err});
         return error.failedConfig;
     };
-    defer loaded_config.deinit();
+    //defer loaded_config.deinit(); //editor takes ownership
     loaded_config.loadLooseGameConfigs(config_dir.dir, "games") catch |err| {
         switch (err) {
             else => return err,
@@ -139,7 +139,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try stdout.print("Config dir : {s}\n", .{config_dir.path});
     }
 
-    var dirs = try fs.Dirs.open(alloc, cwd, .{
+    const dirs = try fs.Dirs.open(alloc, cwd, .{ //Editor takes ownership
         .config_dir = config_dir,
         .app_cwd = app_cwd,
         .override_games_dir = args.custom_cwd,
@@ -147,7 +147,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         .override_fgd_dir = args.fgddir,
         .config_fgd_dir = game_conf.fgd_dir, //TODO
     }, &env);
-    defer dirs.deinit(alloc);
 
     var gapp = try G.app.GuiApp.initDefault(alloc, .{
         .window_title = "Rat Hammer",
@@ -198,6 +197,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         gapp,
     );
     defer editor.deinit();
+    defer editor.dirs.deinit(alloc);
     edit_prof.end();
     edit_prof.log("edit init");
 
@@ -220,14 +220,6 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
     const console_id = try gui.addWindow(&console_win.vt, default_rect, .{});
     if (builtin.target.os.tag == .linux) {
         try console_win.printLine("On linux, you have to install the game with proton first and copy the bin folder to BIN\ncd Half-Life 2; cp -r bin BIN\n", .{});
-    }
-    try console_win.printLine("steam_path {s}\nconfig_path {s}\n", .{
-        dirs.games_dir.path,
-        config_dir.path,
-    });
-    for (editor.games.list.values()) |game| {
-        if (game.good) continue;
-        try console_win.printLine("{s}: {s}\n", .{ game.name, game.reason });
     }
 
     const inspector_pane = try gui.addWindow(&inspector_win.vt, default_rect, .{});
@@ -367,6 +359,8 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 
         {
             wsp = &wsp.split.children.items[0];
+            wsp.split.area = .{ .x1 = 1000, .y1 = 1000 };
+            try wsp.split.handles.append(gapp.workspaces.alloc, 200);
             try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = config_win_id, .min_width = ih } });
             try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = console_id, .min_width = ih } });
         }

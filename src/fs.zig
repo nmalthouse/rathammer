@@ -27,6 +27,7 @@ pub const WrappedDir = struct {
     pub fn close(self: *@This(), alloc: std.mem.Allocator) void {
         alloc.free(self.path);
         self.dir.close();
+        self.* = undefined;
     }
 
     pub fn cwd(alloc: std.mem.Allocator) !@This() {

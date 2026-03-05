@@ -49,6 +49,7 @@ pub const SdlFileData = struct {
         save_map_quit,
         save_map_close,
         pick_map,
+        pick_steam_dir,
 
         pick_vmf, // Distinct from pick map for now. only one json map can be imported but any number of vmfs can be imported
         export_obj,
@@ -131,6 +132,9 @@ pub const SdlFileData = struct {
                     }) catch return;
                 }
             },
+            .pick_steam_dir => {
+                actions.setGameDir(edit, first) catch return;
+            },
             .pick_map => {
                 edit.loadctx.setDraw(true); // Renable it
                 edit.setPaused(false);
@@ -153,6 +157,7 @@ pub const SdlFileData = struct {
             .save_map, .save_map_quit, .save_map_close, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
             .pick_map => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{}),
             .pick_vmf => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{ .allow_many = true }),
+            .pick_steam_dir => graph.SDL.openFolderPicker(&saveFileCallback2, self, .{ .allow_many = false }),
         }
     }
 

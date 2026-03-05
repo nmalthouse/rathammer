@@ -276,7 +276,7 @@ pub const Context = struct {
 
     games: Game.GameList,
     config: Conf.Config,
-    conf: *const Conf.ConfigCtx,
+    conf: *Conf.ConfigCtx,
     gapp: *RGui.app.GuiApp,
     game_conf: Conf.GameEntry,
     dirs: path_guess.Dirs,
@@ -350,7 +350,7 @@ pub const Context = struct {
     pub fn init(
         alloc: std.mem.Allocator,
         num_threads: ?u32,
-        config: *const Conf.ConfigCtx,
+        config: *Conf.ConfigCtx,
         args: anytype,
         loadctx: *LoadCtx,
         dirs: path_guess.Dirs,
@@ -502,6 +502,7 @@ pub const Context = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        self.conf.deinit();
         self.asset.deinit();
         self.games.deinit();
         self.edit_state.map_description.deinit(self.alloc);

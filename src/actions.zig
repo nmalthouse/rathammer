@@ -144,10 +144,31 @@ pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
     _ = try ed.selection.put(id, ed);
 }
 
+pub fn setGameDir(ed: *Ed, new_dir: []const u8) !void {
+    const fs = @import("fs.zig");
+    const new = try fs.WrappedDir.absolute(new_dir, .{}, ed.alloc);
+    ed.dirs.games_dir.close(ed.alloc);
+    ed.dirs.games_dir = new;
+
+    try ed.games.createGameList(&ed.conf.games, ed.dirs.games_dir);
+
+    ed.conf.config.paths.steam_dir = try ed.conf.strings.store(new_dir);
+}
+
+pub fn writeConfig(ed: *Ed) !void {
+    var out = try ed.dirs.config.dir.createFile("config.json", .{});
+    defer out.close();
+    var out_buf: [1024]u8 = undefined;
+    var out_wr = out.writer(&out_buf);
+    defer out_wr.interface.flush() catch {};
+    try std.json.Stringify.value(ed.conf.config, .{ .whitespace = .indent_2 }, &out_wr.interface);
+}
+
 pub fn unloadMap(ed: *Ed) !void {
     ed.has_loaded_map = false;
     defer ed.loaded_map_name = null;
     defer ed.loaded_map_path = null;
+    defer ed.setWindowTitle(.{ "", "" });
 
     var it = ed.meshmap.iterator();
     while (it.next()) |item| {
