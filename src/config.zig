@@ -18,7 +18,7 @@ pub const Config = struct {
     } = .{},
     dot_size: f32 = 16,
     gui_tint: u32 = 0xffff_ffff,
-    mouse_grab_when: enum { key_low, key_high, toggle } = .key_low,
+    mouse_grab_when: enum { key_low, key_high, toggle } = .key_high,
     keys: Keys = .{},
     window: struct {
         height_px: i32 = 600,
@@ -297,8 +297,8 @@ pub const Keys = struct {
         cam_up: Bind = SC(.SPACE),
         duplicate: Bind = SC(.Z),
         tool_context: Bind = SC(.G),
-        mouse_capture: Bind = SC(.LSHIFT),
-        //mouse_capture: Bind = .{ .button = .{ .mouse = .middle } },
+        //mouse_capture: Bind = SC(.LSHIFT),
+        mouse_capture: Bind = .{ .button = .{ .mouse = .middle } },
 
         cam_slow: Bind = SC(.LCTRL),
 

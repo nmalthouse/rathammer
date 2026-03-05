@@ -15,6 +15,7 @@ const util = @import("../util.zig");
 const async_util = @import("../async.zig");
 const Config = @import("../config.zig");
 const CbHandle = guis.CbHandle;
+const colors = @import("../colors.zig").colors;
 
 pub const ConfigCheck = struct {
     cbhandle: CbHandle = .{},
@@ -56,9 +57,9 @@ pub const ConfigCheck = struct {
         _ = Wg.Text.build(area, ly.getArea(), "steam path: {s}", .{self.ed.dirs.games_dir.path}, .{});
 
         for (self.ed.games.list.values()) |val| {
-            _ = Wg.Button.build(area, ly.getArea(), val.name, .{
-                .disable = !val.good,
-            });
+            _ = Wg.Text.build(area, ly.getArea(), "{s}", .{val.name}, .{ .col = if (val.good) colors.good else colors.bad });
         }
+
+        _ = Wg.Button.build(area, ly.getArea(), "edit config", .{});
     }
 };

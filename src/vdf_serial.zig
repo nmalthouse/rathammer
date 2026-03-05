@@ -70,8 +70,8 @@ pub const VdfWriter = struct {
         if (self.state != .expecting_key)
             return error.invalidState;
         try self.indent();
-        _ = try self.out_stream.write(try self.sanitizeName(key));
-        _ = try self.out_stream.write(" ");
+        try self.out_stream.writeAll(try self.sanitizeName(key));
+        try self.out_stream.writeAll(" ");
         self.state = .expecting_value;
     }
 
@@ -80,14 +80,14 @@ pub const VdfWriter = struct {
             return error.invalidState;
         try self.indent();
         try self.out_stream.print(fmt, args);
-        _ = try self.out_stream.write(" ");
+        try self.out_stream.writeAll(" ");
         self.state = .expecting_value;
     }
 
     pub fn beginObject(self: *Self) !void {
         if (self.state != .expecting_value)
             return error.invalidState;
-        _ = try self.out_stream.write("{\n");
+        try self.out_stream.writeAll("{\n");
         self.indendation += 1;
         self.state = .expecting_key;
     }
@@ -97,13 +97,13 @@ pub const VdfWriter = struct {
             return error.invalidState;
         self.indendation -= 1;
         try self.indent();
-        _ = try self.out_stream.write("}\n");
+        try self.out_stream.writeAll("}\n");
     }
 
     pub fn writeValue(self: *Self, value: []const u8) !void {
         if (self.state != .expecting_value)
             return error.invalidState;
-        _ = try self.out_stream.write(try self.sanitizeName(value));
+        try self.out_stream.writeAll(try self.sanitizeName(value));
         _ = try self.out_stream.writeByte('\n');
         self.state = .expecting_key;
     }
@@ -138,7 +138,7 @@ pub const VdfWriter = struct {
     pub fn endValue(self: *Self) !void {
         if (self.state != .in_value)
             return error.invalidState;
-        _ = try self.out_stream.write("\"\n");
+        try self.out_stream.writeAll("\"\n");
         self.state = .expecting_key;
     }
 

@@ -39,6 +39,7 @@ cd distrib
 cp appimagebuild/rathammer rathammer # so ci can get version
 
 dirname=rathammer_$(./rathammer --version)_linux_amd64
+rm -rf "$dirname"
 mv appimagebuild $dirname
 zip -r rathammer_linux_amd64.zip $dirname
 cd ..

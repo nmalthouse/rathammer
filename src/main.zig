@@ -419,6 +419,7 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
 }
 
 pub fn main() !void {
+    std.debug.print("I AM RUNNING\n", .{});
     var total_app_profile = profile.init();
     total_app_profile.start();
     defer total_app_profile.log("app lifetime");

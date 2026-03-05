@@ -146,6 +146,8 @@ pub fn selectId(ed: *Ed, id: editor.EcsT.Id) !void {
 
 pub fn unloadMap(ed: *Ed) !void {
     ed.has_loaded_map = false;
+    defer ed.loaded_map_name = null;
+    defer ed.loaded_map_path = null;
 
     var it = ed.meshmap.iterator();
     while (it.next()) |item| {
