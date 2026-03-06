@@ -133,7 +133,7 @@ pub const SdlFileData = struct {
                 }
             },
             .pick_steam_dir => {
-                actions.setGameDir(edit, first) catch return;
+                edit.conf.config.paths.steam_dir = edit.conf.strings.store(first) catch return;
             },
             .pick_map => {
                 edit.loadctx.setDraw(true); // Renable it

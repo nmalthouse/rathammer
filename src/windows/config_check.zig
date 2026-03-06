@@ -60,10 +60,13 @@ pub const ConfigCheck = struct {
 
         var numgood: usize = 0;
         for (self.ed.games.list.values()) |val| {
-            _ = Wg.Text.build(area, ly.getArea(), "{s}", .{val.name}, .{ .col = if (val.good) colors.good else colors.bad });
             if (val.good) numgood += 1;
         }
-        _ = Wg.Text.build(area, ly.getArea(), "{d} good games", .{numgood}, .{});
+        _ = Wg.Text.build(area, ly.getArea(), "{d}/{d} games good", .{ numgood, self.ed.games.list.values().len }, .{});
+
+        for (self.ed.games.list.values()) |val| {
+            _ = Wg.Text.build(area, ly.getArea(), "{s}", .{val.name}, .{ .col = if (val.good) colors.good else colors.bad });
+        }
     }
 
     fn btnCb(cb: *CbHandle, _: guis.Uid, mcb: guis.MouseCbState, _: *iWindow) void {
@@ -83,6 +86,7 @@ pub const ConfigEdit = struct {
     vt: iWindow,
 
     ed: *Context,
+    tab_index: usize = 0,
 
     cbhandle: guis.CbHandle = .{},
     parent: *ConfigCheck,
@@ -136,6 +140,52 @@ pub const ConfigEdit = struct {
         _ = Wg.Text.build(&vt.area, ly.getArea(), "{s}/config.json", .{
             self.ed.dirs.config.path,
         }, .{});
+
+        ly.pushRemaining();
+        _ = Wg.Tabs.build(&vt.area, ly.getArea(), &.{ "nothing", "keys", "other" }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
+    }
+
+    fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const eql = std.mem.eql;
+        if (eql(u8, tab_name, "keys")) {
+            _ = Wg.FloatScroll.build(vt, vt.area, .{
+                .build_cb = buildKeyList,
+                .build_vt = &self.cbhandle,
+                .win = win,
+                .scroll_mul = gui.dstate.nstyle.item_h * 4,
+                .scroll_y = true,
+                .scroll_x = false,
+            });
+            return;
+        }
+    }
+
+    fn buildKeyList(cb: *CbHandle, lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        var ly = gui.dstate.vlayout(lay.area);
+        ly.padding.left = 10;
+        ly.padding.right = 10;
+        ly.padding.top = 0;
+        defer scr.hintBounds(ly.getUsed());
+
+        const info = @typeInfo(Config.Keys).@"struct";
+        _ = win;
+
+        inline for (info.fields) |field| {
+            _ = Wg.Text.buildStatic(lay, ly.getArea(), field.name, .{});
+            ly.padding.left += 20;
+            defer ly.padding.left -= 20;
+            const in = @typeInfo(field.type).@"struct";
+            inline for (in.fields) |fi| {
+                const k = @field(@field(self.ed.config.keys, field.name), fi.name);
+                var buf: [32]u8 = undefined;
+                _ = Wg.Button.build(lay, ly.getArea(), gui.printScratch("{s}: {s}", .{
+                    fi.name,
+                    k.nameFull(&buf),
+                }), .{});
+            }
+        }
     }
 
     fn btnCb(cb: *CbHandle, id: guis.Uid, mcb: guis.MouseCbState, win: *iWindow) void {
@@ -145,6 +195,7 @@ pub const ConfigEdit = struct {
             else => {},
             .cancel => {
                 mcb.gui.deferTransientClose(win);
+                self.ed.conf.config = self.ed.config; //Restore to previous state
             },
             .pick_steam_dir => {
                 async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .pick_steam_dir) catch {};
@@ -153,6 +204,10 @@ pub const ConfigEdit = struct {
                 mcb.gui.deferTransientClose(win);
 
                 action.writeConfig(self.ed) catch {};
+                if (!std.mem.eql(u8, self.ed.config.paths.steam_dir, self.ed.conf.config.paths.steam_dir)) {
+                    action.setGameDir(self.ed, self.ed.conf.config.paths.steam_dir) catch {};
+                }
+                self.ed.config = self.ed.conf.config;
             },
         }
     }

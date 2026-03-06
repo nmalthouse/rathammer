@@ -76,6 +76,11 @@ pub const GameList = struct {
                 .reason = try summary.toOwnedSlice(),
             };
             try self.list.put(self.alloc, new.name, new);
+            if (!new.good)
+                std.debug.print("{s}: {s}\n", .{
+                    new.name,
+                    new.reason,
+                });
         }
     }
 

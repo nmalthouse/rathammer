@@ -199,7 +199,6 @@ pub const PauseWindow = struct {
         _ = Wg.Tabs.build(&vt.area, inset, &.{
             "recent",
             "main",
-            "keybinds",
             "graphics",
             "mapprops",
         }, vt, .{ .build_cb = &buildTabs, .cb_vt = &self.cbhandle, .index_ptr = &self.tab_index });
@@ -210,20 +209,6 @@ pub const PauseWindow = struct {
         const self = win_vt.cast(@This(), "cbhandle");
         const eql = std.mem.eql;
         const St = Wg.StaticSlider.build;
-        if (eql(u8, tab, "keybinds")) {
-            const info = @typeInfo(@TypeOf(self.editor.config.keys));
-            var ly = gui.dstate.vlayout(vt.area);
-            var buf: [64]u8 = undefined;
-            inline for (info.@"struct".fields) |field| {
-                const key = @field(self.editor.config.keys, field.name);
-                if (@TypeOf(key) == Config.Keybind) {
-                    _ = Wg.Text.build(vt, ly.getArea(), "{s}: {s}", .{
-                        field.name,
-                        key.b.nameFull(&buf),
-                    }, .{ .bg_col = gui.dstate.nstyle.color.bg });
-                }
-            }
-        }
         if (eql(u8, tab, "recent")) {
             //if (self.editor.has_loaded_map == true) return;
             //_ = self.area.addEmpty(gui, vt, graph.Rec(0, 0, 0, 0));
