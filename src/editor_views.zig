@@ -28,13 +28,14 @@ pub const Main3DView = struct {
     const iArea = G.iArea;
     const Gui = G.Gui;
     const DrawState = G.DrawState;
+    pub var __cbhandle = G.cbReg("cbhandle");
 
     vt: G.iWindow,
 
     ed: *Context,
     drawctx: *graph.ImmediateDrawingContext,
     ev_vt: app.iEvent = .{ .cb = event_cb },
-    cbhandle: G.CbHandle = .{},
+    cbhandle: G.CbHandle = .init(@This()),
 
     enabled_tool_bind: graph.keybinding.ContextMask = .empty,
 

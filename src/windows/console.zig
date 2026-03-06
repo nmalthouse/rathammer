@@ -27,8 +27,9 @@ pub const ConsoleCb = struct {
 
 pub const Console = struct {
     const Self = @This();
+    pub var __cbhandle = guis.cbReg("cbhandle");
     vt: iWindow,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     alloc: std.mem.Allocator,
 
@@ -172,7 +173,7 @@ pub const Console = struct {
     }
 
     pub fn textbox_fevent(cb: *guis.CbHandle, ev: guis.FocusedEvent, tb: *Wg.Textbox) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         switch (ev.event) {
             else => {},
             .keydown => |kev| {
@@ -222,7 +223,7 @@ pub const Console = struct {
     }
 
     pub fn textbox_cb(cb: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.execCommand(p.string, p.gui);
     }
 

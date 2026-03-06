@@ -19,7 +19,8 @@ const CbHandle = guis.CbHandle;
 const colors = @import("../colors.zig").colors;
 
 pub const ConfigCheck = struct {
-    cbhandle: CbHandle = .{},
+    pub var __cbhandle = guis.cbReg("cbhandle");
+    cbhandle: CbHandle = .init(@This()),
     vt: iWindow,
 
     ed: *Context,
@@ -70,13 +71,14 @@ pub const ConfigCheck = struct {
     }
 
     fn btnCb(cb: *CbHandle, _: guis.Uid, mcb: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(ConfigCheck);
         const pop = ConfigEdit.create(mcb.gui, mcb.gui.clamp_window, self.ed, self) catch return;
         mcb.gui.setTransientWindow(pop, null);
     }
 };
 
 pub const ConfigEdit = struct {
+    pub var __cbhandle = guis.cbReg("cbhandle");
     const Btn = enum(guis.Uid) {
         cancel,
         pick_steam_dir,
@@ -88,7 +90,7 @@ pub const ConfigEdit = struct {
     ed: *Context,
     tab_index: usize = 0,
 
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
     parent: *ConfigCheck,
 
     pub fn create(gui: *Gui, area: Rect, ed: *Context, parent: *ConfigCheck) !*iWindow {
@@ -146,7 +148,7 @@ pub const ConfigEdit = struct {
     }
 
     fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "keys")) {
             _ = Wg.FloatScroll.build(vt, vt.area, .{
@@ -162,7 +164,7 @@ pub const ConfigEdit = struct {
     }
 
     fn buildKeyList(cb: *CbHandle, lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         var ly = gui.dstate.vlayout(lay.area);
         ly.padding.left = 10;
         ly.padding.right = 10;
@@ -189,7 +191,7 @@ pub const ConfigEdit = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: guis.Uid, mcb: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
 
         switch (@as(Btn, @enumFromInt(id))) {
             else => {},

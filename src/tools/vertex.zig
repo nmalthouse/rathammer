@@ -30,6 +30,7 @@ pub const VertexTranslate = struct {
         index: u32,
         disp_i: ?u32 = null,
     });
+    pub var __cbhandle = guis.cbReg("cbhandle");
 
     //How will the vertex translation work?
     //Selection works like normal selection, but uses mouse clicks or whatever.
@@ -44,7 +45,7 @@ pub const VertexTranslate = struct {
     vt: i3DTool,
     selected: std.AutoHashMap(ecs.EcsT.Id, Sel),
 
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     /// The perpendicular distance between a vertex and the mouse's ray must be smaller than the distance from vertex to camera multiplied by this factor to be a
     /// candidate for selection.
@@ -585,7 +586,7 @@ pub const VertexTranslate = struct {
     }
 
     pub fn btn_cb(vt: *guis.CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
+        const self = vt.cast(@This());
         self.btn_cbErr(id, dat.gui, win) catch return;
     }
     pub fn btn_cbErr(self: *@This(), id: usize, _: *RGui, _: *guis.iWindow) !void {

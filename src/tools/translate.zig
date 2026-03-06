@@ -41,6 +41,7 @@ pub const Translate = struct {
             return world;
         }
     };
+    pub var __cbhandle = guis.cbReg("cbhandle");
     vt: i3DTool,
 
     gizmo_rotation: gizmo2.Gizmo,
@@ -65,7 +66,7 @@ pub const Translate = struct {
         mean,
         last_selected,
     } = .last_selected,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
     win_ptr: ?*iWindow = null,
 
     /// Clicking anywhere will move in xy plane
@@ -522,7 +523,7 @@ pub const Translate = struct {
     }
 
     fn btnCb(vt: *guis.CbHandle, _: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
+        const self = vt.cast(@This());
 
         self.ed.grid.setAll(16);
         if (self.win_ptr) |wp|
@@ -530,7 +531,7 @@ pub const Translate = struct {
     }
 
     fn textbox_cb(vt: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
+        const self = vt.cast(@This());
         self.textboxErr(p.string, p.user_id) catch return;
         if (self.win_ptr) |wp|
             wp.needs_rebuild = true;

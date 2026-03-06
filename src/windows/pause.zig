@@ -55,7 +55,8 @@ pub const PauseWindow = struct {
         name: []const u8,
     };
 
-    cbhandle: CbHandle = .{},
+    pub var __cbhandle = guis.cbReg("cbhandle");
+    cbhandle: CbHandle = .init(@This()),
     vt: iWindow,
 
     editor: *Context,
@@ -149,7 +150,7 @@ pub const PauseWindow = struct {
     }
 
     pub fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         switch (@as(Buttons, @enumFromInt(id))) {
             .unpause => self.editor.setPaused(false),
             .quit => self.should_exit = true,
@@ -206,7 +207,7 @@ pub const PauseWindow = struct {
 
     fn buildTabs(win_vt: *CbHandle, vt: *iArea, tab: []const u8, index: usize, gui: *Gui, win: *iWindow) void {
         _ = index;
-        const self = win_vt.cast(@This(), "cbhandle");
+        const self = win_vt.cast(@This());
         const eql = std.mem.eql;
         const St = Wg.StaticSlider.build;
         if (eql(u8, tab, "recent")) {
@@ -238,6 +239,7 @@ pub const PauseWindow = struct {
                 .item_h = gui.dstate.nstyle.item_h * SZ,
                 .build_cb = buildRecentScroll,
                 .build_vt = &self.cbhandle,
+                .bg_col = gui.dstate.nstyle.color.bg,
                 .win = win,
             });
         }
@@ -383,19 +385,20 @@ pub const PauseWindow = struct {
                 .win = win,
                 .count = self.texts.items.len,
                 .item_h = ly.item_height,
+                .bg_col = gui.dstate.nstyle.color.bg,
             });
         }
     }
 
     pub fn btn_help_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (id >= self.texts.items.len) return;
         self.selected_text_i = id;
         self.vt.needs_rebuild = true;
     }
 
     pub fn textbox_cb(cb: *guis.CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
 
         const str = self.editor.storeString(p.string) catch return;
         switch (@as(Textboxes, @enumFromInt(p.user_id))) {
@@ -411,7 +414,7 @@ pub const PauseWindow = struct {
 
     pub fn buildHelpScroll(cb: *CbHandle, vt: *iArea, index: usize) void {
         const gui = vt.win_ptr.gui_ptr;
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         var ly = gui.dstate.vlayout(vt.area);
         if (index >= self.texts.items.len) return;
         for (self.texts.items[index..], index..) |text, i| {
@@ -438,7 +441,7 @@ pub const PauseWindow = struct {
     }
 
     pub fn buildRecentScroll(cb: *CbHandle, area: *iArea, index: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const gui = area.win_ptr.gui_ptr;
         var scrly = guis.VerticalLayout{ .padding = .{}, .item_height = gui.dstate.nstyle.item_h * 5, .bounds = area.area };
         if (index >= self.recents.items.len) return;
@@ -469,23 +472,23 @@ pub const PauseWindow = struct {
     }
 
     fn gameComboCommitNewMap(cb: *CbHandle, _: usize, p: Wg.ComboCommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.new_map_game_config = p.index;
     }
 
     fn gameComboCommit(cb: *CbHandle, rec_index: usize, p: Wg.ComboCommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.recents.items[rec_index].game_config_index = p.index;
     }
     fn gameComboName(cb: *CbHandle, id: usize, _: *Gui, _: usize) Wg.ComboItem {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (id >= self.editor.games.list.values().len) return .broken();
         const game = (self.editor.games.list.values()[id]);
         return .{ .name = game.name, .enabled = game.good };
     }
 
     pub fn loadBtn(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (id >= self.recents.items.len) return;
 
         if (self.editor.has_loaded_map) {

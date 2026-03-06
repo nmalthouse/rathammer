@@ -29,13 +29,14 @@ const IoBtn = enum(usize) {
 
 pub const InspectorWindow = struct {
     pub const tabs = [_][]const u8{ "props", "io", "tool", "layer" };
+    pub var __cbhandle = guis.cbReg("cbhandle");
     const Self = @This();
     const MiscBtn = enum {
         ungroup,
     };
 
     vt: iWindow,
-    cbhandle: CbHandle = .{},
+    cbhandle: CbHandle = .init(@This()),
 
     editor: *Context,
     selected_kv_index: usize = 0,
@@ -171,7 +172,7 @@ pub const InspectorWindow = struct {
     }
 
     fn buildTabs(cb: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "layer")) {
             const sp2 = vt.area.split(.horizontal, vt.area.h / 2);
@@ -221,13 +222,13 @@ pub const InspectorWindow = struct {
     }
 
     pub fn checkbox_cb_auto_vis(cb: *CbHandle, _: *Gui, val: bool, id: usize) void {
-        const self: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         if (id >= self.editor.autovis.enabled.items.len) return;
         self.editor.autovis.enabled.items[id] = val;
         self.editor.rebuildAutoVis() catch return;
     }
     fn misc_btn_cb(cb: *CbHandle, btn_id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         self.misc_btn_cbErr(btn_id) catch return;
     }
     fn misc_btn_cbErr(self: *@This(), btn_id: usize) !void {
@@ -273,7 +274,7 @@ pub const InspectorWindow = struct {
                 const aa = ly.getArea() orelse return;
                 const ClassCombo = struct {
                     fn commit(cb: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
-                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cb));
+                        const lself = cb.cast(InspectorWindow);
                         const fields = lself.editor.fgd_ctx.classSlice();
                         lself.vt.needs_rebuild = true;
                         if (p.index >= fields.len) return;
@@ -294,7 +295,7 @@ pub const InspectorWindow = struct {
                     }
 
                     fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
-                        const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                        const lself = vtt.cast(InspectorWindow);
                         return .{ .name = lself.editor.fgd_ctx.getPtrId(id).name };
                     }
                 };
@@ -325,6 +326,7 @@ pub const InspectorWindow = struct {
                     .count = fields.len,
                     .item_h = gui.dstate.nstyle.item_h,
                     .index_ptr = &self.kv_scroll_index,
+                    .bg_col = gui.dstate.nstyle.color.bg,
                 });
             }
             if (try ed.ecs.getOptPtr(sel_id, .solid)) |sol| {
@@ -339,7 +341,7 @@ pub const InspectorWindow = struct {
     }
 
     fn buildValueEditor(cb: *CbHandle, lay: *iArea, gui: *Gui, win: *iWindow, scr: *Wg.FloatScroll) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         buildValueEditorErr(self, lay, gui, win, scr) catch {};
     }
 
@@ -389,12 +391,12 @@ pub const InspectorWindow = struct {
                     for (flags.items) |flag| {
                         const is_set = if (mask) |m| flag.mask & m > 0 else flag.on;
                         const packed_id: u64 = @as(u64, @intCast(flag.mask)) << 32 | cb_id;
-                        _ = Wg.Checkbox.build(lay, ly.getArea(), flag.name, .{
+                        Wg.Checkbox.build(lay, ly.getArea(), flag.name, .{
                             .cb_fn = &cb_commitCheckbox,
                             .cb_vt = &self.cbhandle,
                             .user_id = packed_id,
                             .style = .check,
-                        }, is_set);
+                        }, is_set).ignore();
                     }
                 },
                 .material => {},
@@ -430,7 +432,7 @@ pub const InspectorWindow = struct {
 
     pub fn buildPropScrollErr(cb: *CbHandle, vt: *iArea, index: usize) !void {
         const gui = vt.win_ptr.gui_ptr;
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         self.resetIds();
         var ly = guis.TableLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = vt.area, .columns = 2 };
         const ed = self.editor;
@@ -464,7 +466,7 @@ pub const InspectorWindow = struct {
                                     // if msb of id is set, its a texture not model
                                     // hacky yea.
                                     // FIXME less hacky please.
-                                    const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", cbb));
+                                    const lself = cbb.cast(InspectorWindow);
                                     const idd = id << 1 >> 1; //clear msb;
 
                                     const is_mat = (id & (1 << 63) != 0);
@@ -541,7 +543,7 @@ pub const InspectorWindow = struct {
     }
 
     fn setBrightness(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         if (self.getNameFromId(p.user_id)) |field_name| {
             const ent_id = self.getSelId() orelse return;
             const kvs = self.getKvsPtr() orelse return;
@@ -601,7 +603,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn cb_commitColor(this_w: *CbHandle, _: *Gui, val: u32, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", this_w));
+        const self = this_w.cast(InspectorWindow);
         const charc = graph.ptypes.intToColor(val);
         if (self.getNameFromId(id)) |field_name| {
             const ent_id = self.getSelId() orelse return;
@@ -635,7 +637,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn cb_commitCheckbox(cb: *CbHandle, _: *Gui, val: bool, id: u64) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         const upper: u32 = @intCast(id >> 32);
         if (upper != 0) { //we store flags in upper 32
             const lower = id << 32 >> 32; //Clear upper
@@ -656,19 +658,19 @@ pub const InspectorWindow = struct {
     }
 
     pub fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         self.setKvStr(p.user_id, p.string);
     }
 
     pub fn select_kv_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         win.needs_rebuild = true;
         self.selected_kv_index = id;
         //We need to rebuild buttons to show the selected mark
     }
 
     fn generic_checkbox_rebuild_cb(cb: *CbHandle, _: *Gui, _: bool, _: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         self.vt.needs_rebuild = true;
     }
 
@@ -680,7 +682,7 @@ pub const InspectorWindow = struct {
             fgd_field_index: usize,
 
             fn commit(vtt: *CbHandle, lam: @This(), p: Wg.ComboCommitParam) void {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(InspectorWindow);
 
                 const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
                 const fie = class.field_data.items[lam.fgd_field_index];
@@ -689,7 +691,7 @@ pub const InspectorWindow = struct {
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, lam: @This()) Wg.ComboItem {
-                const lself: *InspectorWindow = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(InspectorWindow);
                 const class = lself.editor.fgd_ctx.getPtrId(lam.fgd_class_index);
                 const field = class.field_data.items[lam.fgd_field_index];
                 if (field.type == .choices) {
@@ -737,7 +739,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn recent_texture_btn_cb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *guis.iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(InspectorWindow);
         const asb = &self.editor.asset_browser;
         if (id >= asb.recent_mats.list.items.len) return;
         const missing = edit.missingTexture();
@@ -751,7 +753,9 @@ pub const InspectorWindow = struct {
 
 /// namespace for io gui stuff
 const IoWg = struct {
-    cbhandle: CbHandle = .{},
+    pub var __cbhandle = guis.cbReg("cbhandle");
+    cbhandle: CbHandle = .init(@This()),
+
     io_columns_width: [5]f32 = .{ 0.2, 0.4, 0.6, 0.8, 0.9 },
     selected_io_index: usize = 0,
     right_click_index: ?usize = null,
@@ -765,7 +769,7 @@ const IoWg = struct {
     scratch_buf: std.array_list.Managed(u8),
 
     fn buildIo(user_vt: *CbHandle, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", user_vt));
+        const self = user_vt.cast(IoWg);
         const cons = self.getConsPtr() orelse return;
         _ = Wg.VScroll.build(area_vt, area_vt.area, .{
             .build_cb = &buildIoScrollCb,
@@ -774,6 +778,7 @@ const IoWg = struct {
             .count = cons.list.items.len,
             .item_h = gui.dstate.nstyle.item_h,
             .index_ptr = &self.io_scroll_index,
+            .bg_col = gui.dstate.nstyle.color.bg,
         });
     }
 
@@ -785,12 +790,12 @@ const IoWg = struct {
     }
 
     fn buildIoScrollCb(cb: *CbHandle, vt: *iArea, index: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(IoWg);
         self.buildIoTab(vt.area, vt, index) catch return;
     }
 
     fn io_btn_cb(cb: *CbHandle, id: usize, mb: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(IoWg);
         const cons = self.getConsPtr() orelse return;
         const real_id = if (id >= cons.list.items.len) null else id;
         switch (mb.btn) {
@@ -822,7 +827,7 @@ const IoWg = struct {
     }
 
     fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(IoWg);
         //const ed = self.editor;
         //const sel_id = self.right_click_id orelse return;
         const bi = guis.Widget.BtnContextWindow.buttonId;
@@ -919,7 +924,7 @@ const IoWg = struct {
     }
 
     fn ioBtnCb(cb: *CbHandle, un_i: usize, _: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const id: IoBtn = @enumFromInt(un_i);
         const sel_id = self.editor.selection.getGroupOwnerExclusive(&self.editor.groups) orelse return;
         switch (id) {
@@ -964,7 +969,7 @@ const IoWg = struct {
     }
 
     fn ioStaticSlideCb(cb: *CbHandle, g: *Gui, value: f32, user_id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
 
         self.scratch_buf.clearRetainingCapacity();
         self.scratch_buf.print("{d}", .{value}) catch {};
@@ -977,7 +982,7 @@ const IoWg = struct {
     }
 
     fn ioTextboxCb(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const cons = self.getConsPtr() orelse return;
         if (self.selected_io_index >= cons.list.items.len) return;
         const con = &cons.list.items[self.selected_io_index];
@@ -1024,7 +1029,7 @@ const IoWg = struct {
 
         const TargetCombo = struct {
             fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
-                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(IoWg);
 
                 const OUTPUT_TABLE_INDEX = 1;
                 const keys = lself.editor.targetname_track.map.keys();
@@ -1037,7 +1042,7 @@ const IoWg = struct {
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
-                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(IoWg);
                 const keys = lself.editor.targetname_track.map.keys();
                 const vals = lself.editor.targetname_track.map.values();
 
@@ -1080,7 +1085,7 @@ const IoWg = struct {
 
         const OutputCombo = struct {
             fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
-                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(IoWg);
 
                 const class = lself.getEntDef() orelse return;
                 if (p.index >= class.outputs.items.len) return;
@@ -1092,7 +1097,7 @@ const IoWg = struct {
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
-                const lself: *IoWg = @alignCast(@fieldParentPtr("cbhandle", vtt));
+                const lself = vtt.cast(IoWg);
                 const class = lself.getEntDef() orelse return .broken();
                 if (id >= class.outputs.items.len) return .broken();
                 const ind = class.outputs.items[id];
@@ -1126,7 +1131,7 @@ const IoWg = struct {
     pub fn buildInputCombo(self: *@This(), lay: *iArea, aa: graph.Rect) void {
         const InputCombo = struct {
             fn commit(vtt: *CbHandle, _: void, p: Wg.ComboCommitParam) void {
-                const lself = vtt.cast(IoWg, "cbhandle");
+                const lself = vtt.cast(IoWg);
 
                 const list = lself.matched_input_set.keys();
                 if (p.index >= list.len) return;
@@ -1138,7 +1143,7 @@ const IoWg = struct {
             }
 
             fn name(vtt: *CbHandle, id: usize, _: *Gui, _: void) Wg.ComboItem {
-                const lself = vtt.cast(IoWg, "cbhandle");
+                const lself = vtt.cast(IoWg);
                 const list = lself.matched_input_set.keys();
                 if (id >= list.len) return .broken();
                 return .{ .name = lself.editor.fgd_ctx.all_inputs.items[@intFromEnum(list[id])].name };

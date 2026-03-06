@@ -1641,6 +1641,7 @@ pub const Context = struct {
         if (!should_pause and !self.has_loaded_map) return; //We can only unpause if we have a map
 
         self._paused = should_pause;
+        self.gapp.event_mode = if (self._paused) .wait else .poll;
         if (self._paused)
             self.workspaces.pre_pause = self.gapp.workspaces.active_ws;
         self.gapp.workspaces.active_ws = if (self._paused) self.workspaces.pause else self.workspaces.pre_pause;

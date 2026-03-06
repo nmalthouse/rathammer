@@ -23,11 +23,12 @@ const L = @import("../locale.zig");
 const log = std.log.scoped(.asset);
 
 pub const AssetBrowser = struct {
+    pub var __cbhandle = guis.cbReg("cbhandle");
     pub const tabs = [_][]const u8{ "texture", "vpk", "fgd", "undo" };
     const Self = @This();
 
     vt: iWindow,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     tex_browse: TextureBrowser,
     vpk_browse: VpkBrowser,
@@ -160,7 +161,7 @@ pub const AssetBrowser = struct {
     }
 
     fn buildTabs(user_vt: *CbHandle, vt: *iArea, tab_name: []const u8, _: usize, gui: *Gui, win: *iWindow) void {
-        const self = user_vt.cast(@This(), "cbhandle");
+        const self = user_vt.cast(@This());
         const eql = std.mem.eql;
         if (eql(u8, tab_name, "texture")) {
             self.tex_browse.build(vt, win, gui, vt.area);
@@ -173,7 +174,7 @@ pub const AssetBrowser = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         _ = id;
         self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
@@ -181,10 +182,11 @@ pub const AssetBrowser = struct {
 
 const VpkBrowser = struct {
     const Self = @This();
+    pub var __cbhandle = guis.cbReg("cbhandle");
     ed: *Context,
     win: *iWindow,
 
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
     selected_index: usize = 0,
 
     scroll_index: usize = 0,
@@ -230,6 +232,7 @@ const VpkBrowser = struct {
                 .item_h = gui.dstate.nstyle.item_h,
                 .current_index = self.selected_index,
                 .index_ptr = &self.scroll_index,
+                .bg_col = gui.dstate.nstyle.color.bg,
             }) == .good) {
                 self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
             }
@@ -252,7 +255,7 @@ const VpkBrowser = struct {
 
     fn buildVpkList(cb: *CbHandle, vt: *iArea, index: usize) void {
         const gui = vt.win_ptr.gui_ptr;
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const list = self.list.getSlice();
         if (index >= list.len) return;
         var ly = gui.dstate.vlayout(vt.area);
@@ -276,7 +279,7 @@ const VpkBrowser = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.setSelected(id);
     }
 
@@ -309,10 +312,11 @@ const VpkBrowser = struct {
 
 pub const ModelBrowser = struct {
     const Self = @This();
+    pub var __cbhandle = guis.cbReg("cbhandle");
 
     vt: iWindow,
 
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
     selected_index: usize = 0,
 
     lscb: ListSearchCb = .{
@@ -426,6 +430,7 @@ pub const ModelBrowser = struct {
             .item_h = gui.dstate.nstyle.item_h,
             .index_ptr = &self.scroll_index,
             .current_index = self.selected_index,
+            .bg_col = gui.dstate.nstyle.color.bg,
         }) == .good) {
             self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
         }
@@ -433,7 +438,7 @@ pub const ModelBrowser = struct {
 
     fn buildModList(cb: *CbHandle, vt: *iArea, index: usize) void {
         const gui = vt.win_ptr.gui_ptr;
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const list = self.list.getSlice();
         if (index >= list.len) return;
         var ly = gui.dstate.vlayout(vt.area);
@@ -463,7 +468,7 @@ pub const ModelBrowser = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.setSelected(id);
     }
 
@@ -477,7 +482,7 @@ pub const ModelBrowser = struct {
     }
 
     fn btnAcceptCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         _ = id;
         self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
@@ -559,6 +564,7 @@ pub const ModelPreview = struct {
 };
 
 const TextureBrowser = struct {
+    pub var __cbhandle = guis.cbReg("cbhandle");
     const MAX_COL = 16;
     const MIN_COL = 4;
     const DEF_COL = 12;
@@ -567,7 +573,7 @@ const TextureBrowser = struct {
     ed: *Context,
     win: *iWindow,
 
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     mat_list: ArrayList(VpkId) = .{},
     mod_list: ArrayList(VpkId) = .{},
@@ -639,6 +645,7 @@ const TextureBrowser = struct {
                 .win = win,
                 .count = self.getTextureRowCount(),
                 .item_h = self.getTextureRowHeight(tview.w),
+                .bg_col = gui.dstate.nstyle.color.bg,
             }) == .good) {
                 self.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
             }
@@ -652,7 +659,7 @@ const TextureBrowser = struct {
     }
 
     fn slide_commit(cb: *CbHandle, _: *Gui, num: f32, _: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (num > MAX_COL or num < MIN_COL) return;
         self.num_column = @intFromFloat(num);
 
@@ -668,7 +675,7 @@ const TextureBrowser = struct {
     }
 
     fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (std.mem.eql(u8, p.string, self.prev_search.items))
             return;
         defer {
@@ -699,7 +706,7 @@ const TextureBrowser = struct {
     }
 
     fn buildTextureView(cb: *CbHandle, vt: *iArea, index: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const adj_index = index * self.num_column;
         if (adj_index >= self.mat_list_search_a.items.len) return;
         var tly = guis.TableLayout{
@@ -722,7 +729,7 @@ const TextureBrowser = struct {
     }
 
     fn cb_tex_btn(cb: *CbHandle, id: usize, dat: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.ed.edit_state.selected_texture_vpk_id = id;
         self.ed.asset_browser.recent_mats.put(id) catch {};
         if (self.scr_ptr) |scr| {
@@ -731,7 +738,7 @@ const TextureBrowser = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: usize, _: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         _ = id;
         self.ed.asset_browser.applyDialogState(self.ed) catch {};
     }
@@ -741,6 +748,7 @@ const ListSearchCb = struct {
     search_cb: *const fn (*ListSearchCb, VpkId, []const u8) bool,
 };
 const ListSearch = struct {
+    pub var __cbhandle = guis.cbReg("cbhandle");
     /// The list of matching items
     list_a: ArrayList(VpkId) = .{},
 
@@ -756,7 +764,7 @@ const ListSearch = struct {
 
     num_result: usize = 0,
 
-    cbhandle: CbHandle = .{},
+    cbhandle: CbHandle = .init(@This()),
 
     scr_ptr: ?*Wg.VScroll = null,
     win: *iWindow,
@@ -824,7 +832,7 @@ const ListSearch = struct {
     }
 
     fn cb_commitTextbox(cb: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         if (std.mem.eql(u8, p.string, self.prev_search.items))
             return;
         defer {
@@ -854,7 +862,7 @@ const ListSearch = struct {
     }
 
     fn btnCb(cb: *CbHandle, id: usize, _: *Gui, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.selected_index = id;
     }
 };

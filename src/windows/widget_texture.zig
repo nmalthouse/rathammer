@@ -7,7 +7,6 @@ const Rect = g.Rect;
 const Rec = g.Rec;
 const iWindow = g.iWindow;
 const Color = graph.Colori;
-const VScroll = g.Widget.VScroll;
 const Widget = g.Widget;
 const vpk = @import("../vpk.zig");
 const edit = @import("../editor.zig");

@@ -62,8 +62,9 @@ const menus = [_][]const u8{
 };
 
 pub const MenuBar = struct {
+    pub var __cbhandle = guis.cbReg("cbhandle");
     vt: iWindow,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
     ev_vt: app.iEvent = .{ .cb = event_cb },
 
     ed: *Context,
@@ -164,7 +165,7 @@ pub const MenuBar = struct {
     }
 
     fn drawModeCommit(cb: *guis.CbHandle, _: usize, _: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.ed.rebuildAllDependentState() catch {};
     }
 
@@ -180,7 +181,7 @@ pub const MenuBar = struct {
     }
 
     fn ws_btnCb(cb: *guis.CbHandle, uid: guis.Uid, _: guis.MouseCbState, _: *iWindow) void {
-        const self = cb.cast(@This(), "cbhandle");
+        const self = cb.cast(@This());
         self.ed.gapp.workspaces.active_ws = switch (uid) {
             0 => self.ed.workspaces.main,
             1 => self.ed.workspaces.asset,
@@ -192,7 +193,7 @@ pub const MenuBar = struct {
     }
 
     fn btnCb(cb: *guis.CbHandle, uid: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         const child = self.vt.area.children.items[uid];
         const r_win = Wg.BtnContextWindow.create(
             dat.gui,
@@ -209,7 +210,7 @@ pub const MenuBar = struct {
 
     //TODO atleast log the errors
     fn rightClickMenuBtn(cb: *guis.CbHandle, id: guis.Uid, mcb: guis.MouseCbState, _: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         switch (@as(MenuBtn, @enumFromInt(id))) {
             .save => action.trySave(self.ed) catch {},
             .saveas => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .save_map) catch return,
@@ -248,7 +249,7 @@ pub const MenuBar = struct {
     }
 
     pub fn checkbox_cb(cb: *guis.CbHandle, _: *Gui, val: bool, id: usize) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         switch (id) {
             btn_id(.draw_sprite) => self.ed.draw_state.tog.sprite = val,
             btn_id(.draw_mod) => self.ed.draw_state.tog.models = val,

@@ -405,9 +405,10 @@ pub const GuiWidget = struct {
         ptr: *Layer,
         depth: u16,
     };
+    pub var __cbhandle = guis.cbReg("cbhandle");
     ctx: *Context,
     editor: *edit.Context,
-    cbhandle: CbHandle = .{},
+    cbhandle: CbHandle = .init(@This()),
     win: *iWindow,
     scroll_index: usize = 0,
 
@@ -453,7 +454,7 @@ pub const GuiWidget = struct {
         const gui = ar.win_ptr.gui_ptr;
         const win = ar.win_ptr;
 
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
 
         var list = std.ArrayList(LayTemp){};
         defer list.deinit(gui.alloc);
@@ -481,7 +482,7 @@ pub const GuiWidget = struct {
     }
 
     fn textCb(vt: *CbHandle, p: Wg.Textbox.CommitParam) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
+        const self = vt.cast(@This());
         switch (p.user_id) {
             bi("set_name") => {
                 self.ctx.setName(self.selected_ptr.*, p.string) catch {};
@@ -492,7 +493,7 @@ pub const GuiWidget = struct {
     }
 
     fn btnCb(vt: *CbHandle, id: guis.Uid, _: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", vt));
+        const self = vt.cast(@This());
         switch (id) {
             bi("new_group") => {
                 if (action.createLayer(self.editor, self.selected_ptr.*, L.lang.default_layer_name) catch null) |new_id| {
@@ -532,8 +533,9 @@ const LayerWidget = struct {
         collapse: bool,
         check_color: u32 = 0xff,
     };
+    pub var __cbhandle = guis.cbReg("cbhandle");
     vt: iArea,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     opts: Opts,
     right_click_id: ?Id = null,
@@ -589,7 +591,7 @@ const LayerWidget = struct {
     }
 
     pub fn check_cb(cb: *CbHandle, gui: *Gui, checked: bool, uid: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.opts.parent.ctx.setEnabledCascade(@enumFromInt(@as(u16, @intCast(uid))), checked) catch return;
         self.opts.parent.editor.rebuildVisGroups() catch return;
         self.opts.win.needs_rebuild = true;
@@ -597,7 +599,7 @@ const LayerWidget = struct {
     }
 
     pub fn collapse_cb(cb: *CbHandle, gui: *Gui, checked: bool, uid: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.opts.parent.ctx.setCollapse(@enumFromInt((uid)), !checked);
         self.opts.win.needs_rebuild = true;
         _ = gui;
@@ -651,7 +653,7 @@ const LayerWidget = struct {
     }
 
     fn rightClickCheckbox(cb: *CbHandle, _: *Gui, val: bool, id: guis.Uid) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.vt.dirty();
         const ed = self.opts.parent.editor;
         const sel_id = self.right_click_id orelse return;
@@ -677,7 +679,7 @@ const LayerWidget = struct {
 
     fn rightClickMenuBtn(cb: *CbHandle, id: guis.Uid, dat: guis.MouseCbState, _: *iWindow) void {
         _ = dat;
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         self.vt.dirty();
         const ed = self.opts.parent.editor;
         const sel_id = self.right_click_id orelse return;

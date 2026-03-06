@@ -16,6 +16,7 @@ const L = @import("../locale.zig");
 
 pub const NagWindow = struct {
     pub var nag_window_open: bool = false;
+    pub var __cbhandle = guis.cbReg("cbhandle");
     const PostAction = enum {
         quit,
         close_map,
@@ -43,7 +44,7 @@ pub const NagWindow = struct {
     post: PostAction,
 
     vt: iWindow,
-    cbhandle: guis.CbHandle = .{},
+    cbhandle: guis.CbHandle = .init(@This()),
 
     editor: *Context,
 
@@ -100,7 +101,7 @@ pub const NagWindow = struct {
         _ = Btn(ar, ly.getArea(), L.lang.btn.quit, .{ .cb_fn = &btnCb, .id = Buttons.id(.quit), .cb_vt = &self.cbhandle });
     }
     pub fn btnCb(cb: *guis.CbHandle, id: usize, mcb: guis.MouseCbState, win: *iWindow) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("cbhandle", cb));
+        const self = cb.cast(@This());
         mcb.gui.deferTransientClose(win);
         //Quit editor or close the map
         switch (@as(Buttons, @enumFromInt(id))) {
