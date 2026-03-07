@@ -29,6 +29,7 @@ pub const Main3DView = struct {
     const Gui = G.Gui;
     const DrawState = G.DrawState;
     pub var __cbhandle = G.cbReg("cbhandle");
+    pub var __iWindow = G.iWindowReg("vt");
 
     vt: G.iWindow,
 
@@ -48,7 +49,7 @@ pub const Main3DView = struct {
     }
 
     pub fn update(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         const can_grab = gui.canGrabMouseOverride(vt);
         self.ed.stack_owns_input = can_grab;
         defer self.ed.stack_owns_input = false;
@@ -118,17 +119,13 @@ pub const Main3DView = struct {
     }
 
     pub fn build(vt: *iWindow, gui: *Gui, area: graph.Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         _ = gui;
         self.vt.area.area = area;
     }
 
-    pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
-
-    pub fn drawWin(_: *iArea, _: *Gui, _: *DrawState) void {}
-
     pub fn deinit(vt: *G.iWindow, gui: *G.Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.deinit(gui);
         gui.alloc.destroy(self);
     }
@@ -431,7 +428,7 @@ pub const Main3DView = struct {
                 try gui.updateWindowSize(r_win, graph.Rec(mpos.x, mpos.y, 800, 1200));
 
                 if (gui.getWindowId(self.workspaces.inspector)) |insp| {
-                    const ins: *@import("windows/inspector.zig").InspectorWindow = @alignCast(@fieldParentPtr("vt", insp));
+                    const ins = insp.cast(@import("windows/inspector.zig").InspectorWindow);
                     ins.layer_widget.build(gui, r_win, &r_win.area, r_win.area.area) catch {};
                 }
 

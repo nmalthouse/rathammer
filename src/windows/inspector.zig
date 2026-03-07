@@ -34,6 +34,7 @@ pub const InspectorWindow = struct {
     const MiscBtn = enum {
         ungroup,
     };
+    pub var __iWindow = guis.iWindowReg("vt");
 
     vt: iWindow,
     cbhandle: CbHandle = .init(@This()),
@@ -89,7 +90,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         //self.layout.deinit(gui, vt);
         self.kv_id_map.deinit();
         self.id_kv_map.deinit();
@@ -150,7 +151,7 @@ pub const InspectorWindow = struct {
     }
 
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
         vt.area.dirty();
@@ -1294,7 +1295,7 @@ const IoWg = struct {
 
 /// This should only be passed to Wg.Button !
 pub fn customButtonDraw(vt: *iArea, _: *Gui, d: *DrawState) void {
-    const self: *Wg.Button = @alignCast(@fieldParentPtr("vt", vt));
+    const self = vt.cast(Wg.Button);
     d.ctx.rect(vt.area, d.nstyle.color.text_bg);
     if (self.opts.user_1 == 1) {
         //const SELECTED_FIELD_COLOR = 0x6097dbff;

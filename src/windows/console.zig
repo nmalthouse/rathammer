@@ -28,6 +28,7 @@ pub const ConsoleCb = struct {
 pub const Console = struct {
     const Self = @This();
     pub var __cbhandle = guis.cbReg("cbhandle");
+    pub var __iWindow = guis.iWindowReg("vt");
     vt: iWindow,
     cbhandle: guis.CbHandle = .init(@This()),
 
@@ -70,7 +71,7 @@ pub const Console = struct {
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.deinit(gui);
         self.lines.deinit(self.alloc);
         self.line_arena.deinit();
@@ -81,7 +82,7 @@ pub const Console = struct {
 
     fn getTextView(self: *@This()) ?*Wg.TextView {
         if (self.vt.area.children.items.len != 2) return null;
-        const tv: *Wg.TextView = @alignCast(@fieldParentPtr("vt", self.vt.area.children.items[1]));
+        const tv = self.vt.area.children.items[1].cast(Wg.TextView);
         return tv;
     }
 
@@ -109,7 +110,7 @@ pub const Console = struct {
     }
 
     pub fn build(vt: *iWindow, gui: *Gui, area: Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.area.area = area;
         vt.area.clearChildren(gui, vt);
         vt.area.dirty();

@@ -26,6 +26,7 @@ pub const AssetBrowser = struct {
     pub var __cbhandle = guis.cbReg("cbhandle");
     pub const tabs = [_][]const u8{ "texture", "vpk", "fgd", "undo" };
     const Self = @This();
+    pub var __iWindow = guis.iWindowReg("vt");
 
     vt: iWindow,
     cbhandle: guis.CbHandle = .init(@This()),
@@ -134,7 +135,7 @@ pub const AssetBrowser = struct {
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         self.tex_browse.deinit();
         self.vpk_browse.deinit();
         vt.deinit(gui);
@@ -148,7 +149,7 @@ pub const AssetBrowser = struct {
     }
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
+        const self = win.cast(@This());
         win.area.area = area;
         win.area.clearChildren(gui, win);
         win.area.dirty();
@@ -234,7 +235,7 @@ const VpkBrowser = struct {
                 .index_ptr = &self.scroll_index,
                 .bg_col = gui.dstate.nstyle.color.bg,
             }) == .good) {
-                self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
+                self.list.scr_ptr = (lay.getLastChild() orelse return).cast(Wg.VScroll);
             }
         }
 
@@ -313,6 +314,7 @@ const VpkBrowser = struct {
 pub const ModelBrowser = struct {
     const Self = @This();
     pub var __cbhandle = guis.cbReg("cbhandle");
+    pub var __iWindow = guis.iWindowReg("vt");
 
     vt: iWindow,
 
@@ -328,7 +330,7 @@ pub const ModelBrowser = struct {
     scroll_index: usize = 0,
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         self.list.deinit();
         vt.deinit(gui);
         gui.alloc.destroy(self);
@@ -362,7 +364,7 @@ pub const ModelBrowser = struct {
     }
 
     pub fn update(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
 
         if (gui.sdl_win.isBindState(self.ed.conf.binds.global.up_line, .rising) and self.selected_index > 0) {
             if (self.scroll_index > 0)
@@ -384,7 +386,7 @@ pub const ModelBrowser = struct {
     }
 
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
+        const self = win.cast(@This());
         win.area.area = area;
         win.area.clearChildren(gui, win);
         win.area.dirty();
@@ -432,7 +434,7 @@ pub const ModelBrowser = struct {
             .current_index = self.selected_index,
             .bg_col = gui.dstate.nstyle.color.bg,
         }) == .good) {
-            self.list.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
+            self.list.scr_ptr = (lay.getLastChild() orelse return).cast(Wg.VScroll);
         }
     }
 
@@ -490,6 +492,7 @@ pub const ModelBrowser = struct {
 
 pub const ModelPreview = struct {
     const Vec3 = graph.za.Vec3;
+    pub var __iWindow = guis.iWindowReg("vt");
     vt: iWindow,
 
     drawctx: *graph.ImmediateDrawingContext,
@@ -509,7 +512,7 @@ pub const ModelPreview = struct {
     }
 
     pub fn update(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         const win = gui.sdl_win;
         const mdown = win.mouse.left == .high;
         const grabit = gui.canGrabMouseOverride(vt) and mdown;
@@ -557,7 +560,7 @@ pub const ModelPreview = struct {
     pub fn drawfn(_: *iArea, _: *Gui, _: *DrawState) void {}
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.deinit(gui);
         gui.alloc.destroy(self);
     }
@@ -647,7 +650,7 @@ const TextureBrowser = struct {
                 .item_h = self.getTextureRowHeight(tview.w),
                 .bg_col = gui.dstate.nstyle.color.bg,
             }) == .good) {
-                self.scr_ptr = @alignCast(@fieldParentPtr("vt", lay.getLastChild() orelse return));
+                self.scr_ptr = (lay.getLastChild() orelse return).cast(Wg.VScroll);
             }
         }
 

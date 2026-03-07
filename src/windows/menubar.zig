@@ -63,6 +63,7 @@ const menus = [_][]const u8{
 
 pub const MenuBar = struct {
     pub var __cbhandle = guis.cbReg("cbhandle");
+    pub var __iWindow = guis.iWindowReg("vt");
     vt: iWindow,
     cbhandle: guis.CbHandle = .init(@This()),
     ev_vt: app.iEvent = .{ .cb = event_cb },
@@ -86,19 +87,13 @@ pub const MenuBar = struct {
     }
 
     pub fn deinit(vt: *iWindow, gui: *Gui) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        const self = vt.cast(@This());
         vt.deinit(gui);
         gui.alloc.destroy(self);
     }
 
-    pub fn area_deinit(_: *iArea, _: *Gui, _: *iWindow) void {}
-
-    pub fn draw(vt: *iArea, _: *Gui, d: *DrawState) void {
-        d.ctx.rect(vt.area, d.nstyle.color.bg);
-    }
-
     pub fn build(win: *iWindow, gui: *Gui, area: Rect) void {
-        const self: *@This() = @alignCast(@fieldParentPtr("vt", win));
+        const self = win.cast(@This());
         win.area.area = area;
         win.area.clearChildren(gui, win);
         win.area.dirty();
