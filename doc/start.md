@@ -1,52 +1,26 @@
 # Intro
 RatHammer is an editor for Valve's Source engine maps, though it can also be used for standalone mapping.
 
-Open a terminal and navigate to where you downloaded RatHammer.
-```
-# Run the following command to list possible games and check configuration.
-./rathammer --games --checkhealth
-```
-The output will look like this, if your paths are configured correctly:
-```
-Loading config file: /home/rat/.config/rathammer/config.vdf
-Available game configs:
-           tf2
-default -> basic_hl2
-           gmod
-           cstrike
-```
-To map for a game other than Half Life 2 add one of the listed games with the --game flag
-```
-./rathammer --game tf2
-```
-
 # Games
 By Default RatHammer will search for Half Life 2 in your OS's default steam directory
 ```
 On Windows "/Program Files (x86)/Steam/steamapps/common"
 On Linux "$HOME/.local/share/Steam/steamapps/common"
 ```
-On Linux the default config file is copied to "$XDG_CONFIG_DIR/rathammer/config.vdf". This defaults to $HOME/.config/rathammer/config.vdf.
 
-On Windows the config is loaded from the XDG_CONFIG_DIR if set, otherwise it just loads the config from cwd.
+If you are using a non default steam dir, press the "edit config" button and select your steam dir
+
+Under this button the status of the games is listed, green means it is good. To see why a game config is not good, launch rathammer from a terminal, 
+it will display info for each failing game config.
+
+On Linux the default config file is copied to "$XDG_CONFIG_DIR/rathammer/config.json". This defaults to $HOME/.config/rathammer/config.json.
 
 Games are defined in a folder called 'games' in the config directory
-
-To map for a different Source game or use it for custom levels, you must edit config.vdf and set the default_game appropriately, or launch rathammer with the --game flag.
-All paths for game configuration can be temporarily overridden with command line flags, use --help to see these.
-If Rathammer fails to start, read through the console output and look for lines like this:
-```
-Failed to open directory Half-Life 2 in /tmp with error: error.FileNotFound
-Set a custom cwd with --custom_cwd flag
-```
-Unless something horribly wrong happened (Windows builds can be finicky), RatHammer will usually give you good idea of why it can't start.
-
-To load a vmf or ratmap you can use the --map flag, or you can select a map to load once the editor is started.
 
 ## Gui
 If the scale of the gui is incorrect, set a custom display scale with the --display_scale 1 flag.
 
-This can be permanently set in the config.vdf window section.
+This can be permanently set in the config.json window section.
 
 ## Editing
 Once you have successfully started RatHammer you will be greeted by a "pause menu", there are various global settings in here and documentation. Open and close the pause menu with 'Escape'.
@@ -71,7 +45,7 @@ Quick reference:
 
 Notice how these bindings all sit near wasd, so the left hand doesn't need to move out of position while editing.
 
-All keys can be remapped in the config.vdf file. By default all keys map to physical keys on the keyboard rather than symbols, so if you use a layout other than QWERTY, the keys are in the same place as they would be on a QWERTY layout. This behavior can be changed per key in the config.
+All keys can be remapped in the config.json file. By default all keys map to physical keys on the keyboard rather than symbols, so if you use a layout other than QWERTY, the keys are in the same place as they would be on a QWERTY layout. This behavior can be changed per key in the config.
 
 ## Selections
 At any time, you can change the selection. To select an object put the cross-hair (or mouse cursor if you hold shift to uncapture) over an object and press 'E'.
@@ -257,7 +231,7 @@ If enabled, on startup rathammer sends a get request to nmalthouse.net which ret
 
 If building from source, it is disabled by default, you must set -Dhttp_version_check=true.
 
-If you would like to disable the check, either set 'enable_version_check false' in config.vdf or use the flag --no_version_check
+If you would like to disable the check, either set 'enable_version_check false' in config.json or use the flag --no_version_check
 
 #### Recent maps view
 When you start the editor, a list of recently edited maps is shown.
@@ -290,9 +264,9 @@ In the future I plan on adding a list view of potential errors.
 Problematic solids can often be fixed by selecting them and running the command `optimize`
 
 #### Convert a ratmap to vmf
-You can convert a .ratmap or .json to vmf via the command line tool `jsonmaptovmf`.
+You can convert a .ratmap or .json to vmf via the command line tool `ratremote convert`.
 ```
-./jsonmaptovmf --map my_map.ratmap --output my_output.vmf
+./ratremote convert --map my_map.ratmap --output my_output.vmf
 ```
 
 #### Some of my custom assets don't show up!
@@ -309,7 +283,7 @@ In short, if you are having trouble with loose content not getting found, lowerc
 
 If you have a file named MyCoolTexture.png, rathammer will write MyCoolTexture.png to the map.json and everything will work!
 
-The same is true for gameinfo.txt. Rathammer will only search for the lowercase "gameinfo.txt". Either rename your GaMeInfO.TXT or specify the proper case in config.vdf.
+The same is true for gameinfo.txt. Rathammer will only search for the lowercase "gameinfo.txt". Either rename your GaMeInfO.TXT or specify the proper case in my_game.json.
 
 ### Credits
 ```

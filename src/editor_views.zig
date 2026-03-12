@@ -666,6 +666,7 @@ pub const Main3DView = struct {
                         param.drawBind("grid+", "view3d", "grid_inc", false);
                         param.drawBind("grid-", "view3d", "grid_dec", false);
                         param.drawBind("select", "view3d", "select", false);
+                        mt.text("cam speed: scroll", param.px_size, colors.fg_text);
                         param.drawBind("cam up", "view3d", "cam_up", false);
                         param.drawBind("cam down", "view3d", "cam_down", false);
                         param.drawBind("mouse_capture", "view3d", "mouse_capture", false);

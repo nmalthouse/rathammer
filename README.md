@@ -44,14 +44,12 @@ Second, wine is very slow to startup by default, 'running wineserver --persisten
 On arch make sure you have: 
 ```
 # Install zig 0.15.2, the pacman package may not be the correct version
-# Install dependencies
-sudo pacman -S zenity 
 ```
 
 ### Building and running
 ```
 # Master has breaking changes, clone latest tag
-git clone https://github.com/nmalthouse/rathammer.git --branch v0.2.1 
+git clone https://github.com/nmalthouse/rathammer.git --branch v0.3.0
 cd rathammer
 git submodule update --init --recursive
 zig build -Doptimize=ReleaseFast

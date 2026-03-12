@@ -1266,7 +1266,9 @@ pub const Context = struct {
                 try writer.interface.print("{s}\n", .{rec});
             }
             try writer.interface.flush();
-        } else |_| {}
+        } else |err| {
+            log.err("failed to create recent_maps.txt {t}", .{err});
+        }
     }
 
     fn loadJsonFile(self: *Self, path: std.fs.Dir, filename: []const u8, loadctx: *LoadCtx) !void {

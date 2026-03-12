@@ -22,6 +22,7 @@ const ptext = @import("widget_texture.zig");
 const action = @import("../actions.zig");
 const L = @import("../locale.zig");
 
+const log = std.log.scoped(.pause);
 pub const PauseWindow = struct {
     const Buttons = enum {
         unpause,
@@ -527,7 +528,7 @@ pub const PauseWindow = struct {
                     const info_data = util.getFileFromTar(alloc, recent_map, "info.json") catch try alloc.alloc(u8, 0);
                     defer alloc.free(info_data);
 
-                    const vpk_id = (self.editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, false) catch null) orelse {
+                    const vpk_id = (self.editor.vpkctx.getResourceIdFmt("internal", "{s}", .{filename}, true) catch null) orelse {
                         alloc.free(qoi_data);
                         continue;
                     };
@@ -553,7 +554,9 @@ pub const PauseWindow = struct {
                     } else |_| {}
 
                     try self.recents.append(self.alloc, rec);
-                } else |_| {}
+                } else |err| {
+                    log.err("failed to load recent map {s} {t}", .{ filename, err });
+                }
             }
         }
     }

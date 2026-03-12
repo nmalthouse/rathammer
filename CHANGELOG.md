@@ -1,4 +1,4 @@
-# Changelog for v0.2.3
+# Changelog for v0.3.0
 * Put jsonMapToVmf, ratremote, mapbuilder all into ratremote
 * Auto complete for io targetname
 * Remove support for vdf configs
@@ -26,3 +26,4 @@
 * fix vmf export writing a corrupt file on Windows
 * add basic gui to select a steam path
 * cube draw draw texture
+* fix recent maps on windows failing to load

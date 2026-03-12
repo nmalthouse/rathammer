@@ -137,7 +137,6 @@ pub const SdlFileData = struct {
             },
             .pick_map => {
                 edit.loadctx.setDraw(true); // Renable it
-                edit.setPaused(false);
                 edit.loadctx.resetTime();
                 edit.loadMap(
                     std.fs.cwd(),
@@ -148,6 +147,7 @@ pub const SdlFileData = struct {
                 ) catch |err| {
                     std.debug.print("load failed because {t}\n", .{err});
                 };
+                edit.setPaused(false);
             },
         }
     }
