@@ -171,7 +171,12 @@ pub const DrawBoundingVolume = struct {
 
     pub fn run(
         tool: *@This(),
-        keys: struct { z_up: bool, z_down: bool, z_raycast: bool },
+        keys: struct {
+            z_up: bool,
+            z_down: bool,
+            z_raycast: bool,
+            raycast_commit: bool,
+        },
         ed: *Editor,
         area: graph.Rect,
         view: graph.za.Mat4,
@@ -190,7 +195,7 @@ pub const DrawBoundingVolume = struct {
                         const inter = pot[0].point;
                         const cc = ed.grid.snapV3(inter);
                         grid.drawGridZ(inter, cc.z(), draw, ed.grid, 11);
-                        if (ed.edit_state.lmouse == .rising) {
+                        if (keys.raycast_commit) {
                             tool.plane_z = cc.z();
                         }
                     }

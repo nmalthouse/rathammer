@@ -394,6 +394,9 @@ pub fn wrappedMain(alloc: std.mem.Allocator, args: anytype) !void {
         try wsp.split.append(gapp.workspaces.alloc, .{ .window = .{ .id = model_prev, .min_width = ih } });
     }
 
+    //Send events to ensure keybindings are set
+    editor.setTool(0);
+
     while (true) {
         try gapp.run();
         if (NagWindow.nag_window_open) { //User sent a second quit event, exit regardless

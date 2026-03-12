@@ -1,5 +1,6 @@
 const std = @import("std");
 const Editor = @import("editor.zig");
+const app = @import("app.zig");
 const Context = Editor.Context;
 const tools = @import("tools.zig");
 const graph = @import("graph");
@@ -27,6 +28,8 @@ pub const Ctx2dView = struct {
     ed: *Context,
 
     axis: Axis,
+    ev_vt: app.iEvent = .{ .cb = event_cb },
+    enabled_tool_bind: graph.keybinding.ContextMask = .empty,
 
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext, axis: Axis) !*G.iWindow {
         var self = try gui.alloc.create(@This());
@@ -38,12 +41,34 @@ pub const Ctx2dView = struct {
         };
         self.vt.update_fn = update;
 
+        if (ed.eventctx.registerListener(&self.ev_vt)) |listener| {
+            ed.eventctx.subscribe(listener, @intFromEnum(app.EventKind.selection_changed)) catch {};
+            ed.eventctx.subscribe(listener, @intFromEnum(app.EventKind.tool_changed)) catch {};
+        } else |_| {}
+
         return &self.vt;
     }
 
     pub fn update(vt: *iWindow, gui: *Gui) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.updateErr(gui) catch {};
+    }
+
+    pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
+        const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
+
+        switch (ev) {
+            .selection_changed => {},
+            .tool_changed => {
+                self.vt.key_ctx_mask.set.toggleSet(self.enabled_tool_bind.set);
+                self.enabled_tool_bind = .empty;
+                if (self.ed.getCurrentTool()) |tvt| {
+                    self.enabled_tool_bind = tvt.key_ctx_mask;
+                    self.vt.key_ctx_mask.set.toggleSet(self.enabled_tool_bind.set);
+                }
+            },
+            else => {},
+        }
     }
 
     pub fn updateErr(self: *@This(), gui: *Gui) !void {

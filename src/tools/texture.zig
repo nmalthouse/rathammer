@@ -1,5 +1,6 @@
 const tools = @import("../tools.zig");
 const i3DTool = tools.i3DTool;
+const colors = @import("../colors.zig").colors;
 const Vec3 = graph.za.Vec3;
 const Mat3 = graph.za.Mat3;
 const graph = @import("graph");
@@ -89,6 +90,7 @@ pub const TextureTool = struct {
                 .gui_build_cb = &buildGui,
                 .selected_solid_edge_color = 0xff00aa,
                 .event_fn = &event,
+                .info_3d_fn = drawInfo,
             },
             .ed = ed,
             .alloc = alloc,
@@ -114,6 +116,19 @@ pub const TextureTool = struct {
         draw.rectTex(r, rec, editor.asset_atlas);
     }
 
+    pub fn drawInfo(vt: *i3DTool, param: tools.ToolInfoParam) void {
+        const cc = colors.fg_text;
+        //const ed = param.ed;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+
+        param.drawBind("wrap", "texture", "wrap", true);
+        param.drawBind("pick", "texture", "eyedrop", true);
+        param.drawBind("apply", "texture", "apply", false);
+
+        param.mt.textFmt("texture", .{}, param.px_size, cc);
+    }
+
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.selected_faces.deinit(self.alloc);
@@ -128,12 +143,6 @@ pub const TextureTool = struct {
     pub fn buildGui(vt: *i3DTool, inspector: *tools.Inspector, area_vt: *iArea, gui: *Gui, win: *iWindow) void {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.win_ptr = win;
-        const doc =
-            \\This is the Texture tool.
-            \\Right click applies the selected texture
-            \\Holding q and right clicking picks the texture
-            \\Hold z and right click to wrap the texture
-        ;
         const H = struct {
             fn param(s: *TextureTool, id: GuiTextEnum) Wg.TextboxOptions {
                 return .{
@@ -166,8 +175,6 @@ pub const TextureTool = struct {
             }
         };
         var ly = gui.dstate.vlayout(area_vt.area);
-        ly.pushHeight(Wg.TextView.heightForN(gui, 4));
-        _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{ .mode = .split_on_space });
         {
             var hy = guis.HorizLayout{ .bounds = ly.getArea() orelse return, .count = 4 };
             _ = Wg.Button.build(area_vt, hy.getArea(), L.lang.tool.texture.reset_face_world, H.btn(self, .reset_world));
@@ -474,7 +481,7 @@ pub const TextureTool = struct {
                 win.needs_rebuild = true;
         }
         blk: {
-            if (editor.edit_state.rmouse == .rising) {
+            if (editor.isBindState(editor.conf.binds.texture.apply, .rising)) {
                 if (self.win_ptr) |win|
                     win.needs_rebuild = true;
                 const dupe = editor.isBindState(editor.conf.binds.texture.wrap, .high);

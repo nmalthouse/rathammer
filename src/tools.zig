@@ -36,6 +36,28 @@ pub const Inspector = @import("windows/inspector.zig").InspectorWindow;
 pub const ToolRegistry = VtableReg(i3DTool);
 pub const ToolReg = ToolRegistry.TableReg;
 pub const initToolReg = ToolRegistry.initTableReg;
+/// If tool is active, this gets passed to tool_icon_fn and allows tool to drawImmediate information about
+/// its state
+pub const ToolInfoParam = struct {
+    //start: graph.Vec2f,
+    //draw: *graph.ImmediateDrawingContext,
+    px_size: f32,
+    //font: *graph.FontInterface,
+    mt: *graph.MultiLineText,
+    ed: *Editor,
+
+    pub fn drawBind(self: *const @This(), name: []const u8, comptime bind_ctx: []const u8, comptime bind_name: []const u8, display_hold: bool) void {
+        const cc = if (display_hold and
+            self.ed.isBindState(@field(@field(self.ed.conf.binds, bind_ctx), bind_name), .high)) colors.bind_active else colors.fg_text;
+        var buf: [128]u8 = undefined;
+        self.mt.textFmt(
+            "{s}: {s}",
+            .{ name, @field(@field(self.ed.config.keys, bind_ctx), bind_name).nameFull(&buf) },
+            self.px_size,
+            cc,
+        );
+    }
+};
 
 /// Tools are singleton.
 /// When a tool is switched to a focus event is sent to the tool.
@@ -53,6 +75,7 @@ pub const i3DTool = struct {
     runTool_2d_fn: ?*const fn (*@This(), ToolData, *Editor) ToolError!void = null,
     gui_build_cb: ?*const fn (*@This(), *Inspector, *iArea, *RGui, *iWindow) void = null,
     event_fn: ?*const fn (*@This(), ToolEvent, *Editor) void = null,
+    info_3d_fn: ?*const fn (*@This(), ToolInfoParam) void = null,
 
     key_ctx_mask: keybinding.ContextMask = .empty,
     selected_solid_edge_color: u32 = 0xff00ff,
@@ -142,6 +165,7 @@ pub const PlaceEntity = struct {
             .gui_build_cb = &buildGui,
             .tool_icon_fn = &@This().drawIcon,
             .event_fn = event,
+            .info_3d_fn = drawInfo,
         } };
         return &obj.vt;
     }
@@ -153,6 +177,16 @@ pub const PlaceEntity = struct {
             .focus => {},
             else => {},
         }
+    }
+
+    pub fn drawInfo(vt: *i3DTool, param: ToolInfoParam) void {
+        const cc = colors.fg_text;
+        //const active = colors.bind_active;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+        //var buf: [128]u8 = undefined;
+
+        param.mt.textFmt("place entity", .{}, param.px_size, cc);
     }
 
     pub fn drawIcon(vt: *i3DTool, draw: *DrawCtx, editor: *Editor, r: graph.Rect) void {
@@ -432,6 +466,7 @@ pub const TranslateFace = struct {
                 .tool_icon_fn = &@This().drawIcon,
                 .gui_build_cb = &buildGui,
                 .event_fn = &event,
+                .info_3d_fn = drawInfo,
             },
             .gizmo = .{},
             .prop = Proportional.init(alloc),
@@ -450,6 +485,16 @@ pub const TranslateFace = struct {
         const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
         self.prop.deinit();
         alloc.destroy(self);
+    }
+
+    pub fn drawInfo(vt: *i3DTool, param: ToolInfoParam) void {
+        const cc = colors.fg_text;
+        //const active = colors.bind_active;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+        //var buf: [128]u8 = undefined;
+
+        param.mt.textFmt("face translate", .{}, param.px_size, cc);
     }
 
     pub fn runTool(vt: *i3DTool, td: ToolData, editor: *Editor) ToolError!void {

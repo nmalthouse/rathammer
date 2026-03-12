@@ -130,6 +130,8 @@ pub const Main3DView = struct {
         gui.alloc.destroy(self);
     }
 
+    //TODO this should be moved into editor.Context
+    //The main3dview should not handle events for all
     pub fn event_cb(ev_vt: *app.iEvent, ev: app.Event) void {
         const self: *@This() = @alignCast(@fieldParentPtr("ev_vt", ev_vt));
 
@@ -557,12 +559,8 @@ pub const Main3DView = struct {
         try draw_nd.flush(null, self.draw_state.cam3d);
         graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
         if (param.draw_hud) { // text stuff
-            const col = 0xff_ff_ffff;
+            const col = colors.fg_text;
             const p = self.draw_state.cam3d.pos;
-
-            const SINGLE_COLOR = 0xfcc858ff;
-            const MANY_COLOR = 0xfc58d6ff;
-            const HIDDEN_COLOR = 0x20B2AAff;
 
             var mt = graph.MultiLineText.start(draw, .{ .x = 0, .y = 0 }, font);
             if (self.draw_state.init_asset_count > 0) {
@@ -581,13 +579,13 @@ pub const Main3DView = struct {
             }
             mt.textFmt("pos: {d:.2} {d:.2} {d:.2}", .{ p.data[0], p.data[1], p.data[2] }, fh, col);
             mt.textFmt("select: {s}", .{@tagName(self.selection.mode)}, fh, switch (self.selection.mode) {
-                .one => SINGLE_COLOR,
-                .many => MANY_COLOR,
+                .one => colors.selected_single,
+                .many => colors.selected_many,
             });
             if (self.selection.mode == .many)
                 mt.textFmt("Selected: {d}", .{self.getSelected().len}, fh, col);
             if (self.edit_state.manual_hidden_count > 0) {
-                mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, HIDDEN_COLOR);
+                mt.textFmt("{d} objects hidden", .{self.edit_state.manual_hidden_count}, fh, colors.hidden);
             }
             const num_invalid = self.ecs.data.invalid.count;
             if (num_invalid > 0) {
@@ -606,7 +604,7 @@ pub const Main3DView = struct {
                 }
             }
 
-            mt.drawBgRect(0x99, fh * 30);
+            mt.drawBgRect(colors.bg_text_alpha, fh * 30);
 
             const off = fh * 5;
             self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);

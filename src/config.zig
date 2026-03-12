@@ -299,6 +299,7 @@ pub const Keys = struct {
         tool_context: Bind = SC(.G),
         //mouse_capture: Bind = SC(.LSHIFT),
         mouse_capture: Bind = .{ .button = .{ .mouse = .middle } },
+        commit: Bind = .{ .button = .{ .mouse = .right } },
 
         cam_slow: Bind = SC(.LCTRL),
 
@@ -338,6 +339,7 @@ pub const Keys = struct {
         plane_up: Bind = SC(.X),
         plane_down: Bind = SC(.Z),
         plane_raycast: Bind = SC(.Q),
+        set_plane: Bind = .{ .button = .{ .mouse = .left } },
     } = .{},
 
     fast_face: struct {
@@ -351,6 +353,7 @@ pub const Keys = struct {
     texture: struct {
         eyedrop: Bind = SC(.Q),
         wrap: Bind = SC(.Z),
+        apply: Bind = .{ .button = .{ .mouse = .right } },
     } = .{},
 };
 

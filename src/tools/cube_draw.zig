@@ -1,5 +1,6 @@
 const tools = @import("../tools.zig");
 const i3DTool = tools.i3DTool;
+const colors = @import("../colors.zig").colors;
 const Vec3 = graph.za.Vec3;
 const Mat3 = graph.za.Mat3;
 const graph = @import("graph");
@@ -96,6 +97,7 @@ pub const CubeDraw = struct {
             .runTool_fn = &@This().runTool,
             .tool_icon_fn = &@This().drawIcon,
             .gui_build_cb = &buildGui,
+            .info_3d_fn = drawInfo,
             .event_fn = &event,
         } };
         obj.vt.key_ctx_mask.setValue(ed.conf.binds.cube_draw.context_id, true);
@@ -107,6 +109,33 @@ pub const CubeDraw = struct {
         _ = self;
         const rec = editor.asset.getRectFromName("cube_draw.png") orelse graph.Rec(0, 0, 0, 0);
         draw.rectTex(r, rec, editor.asset_atlas);
+    }
+
+    pub fn drawInfo(vt: *i3DTool, param: tools.ToolInfoParam) void {
+        const cc = colors.fg_text;
+        const ed = param.ed;
+        const active = colors.bind_active;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        var buf: [128]u8 = undefined;
+        switch (self.state) {
+            .start => {
+                param.mt.textFmt("plane_up: {s}", .{ed.config.keys.cube_draw.plane_up.nameFull(&buf)}, param.px_size, cc);
+                param.mt.textFmt("plane_down: {s}", .{ed.config.keys.cube_draw.plane_down.nameFull(&buf)}, param.px_size, cc);
+                param.mt.textFmt("set plane: {s}", .{ed.config.keys.cube_draw.set_plane.nameFull(&buf)}, param.px_size, cc);
+                param.mt.textFmt(
+                    "plane_raycast: {s}",
+                    .{ed.config.keys.cube_draw.plane_raycast.nameFull(&buf)},
+                    param.px_size,
+                    if (ed.isBindState(ed.conf.binds.cube_draw.plane_raycast, .high)) active else cc,
+                );
+            },
+            .planar => {
+                param.mt.textFmt("commit cube: {s}", .{ed.config.keys.view3d.commit.nameFull(&buf)}, param.px_size, cc);
+            },
+            else => {},
+        }
+
+        param.mt.textFmt("cube draw", .{}, param.px_size, cc);
     }
 
     pub fn buildGui(vt: *i3DTool, inspector: *tools.Inspector, area_vt: *iArea, gui: *RGui, win: *iWindow) void {
@@ -397,7 +426,7 @@ pub const CubeDraw = struct {
                         const inter = pot[0].point;
                         const cc = self.grid.snapV3(inter);
                         grid.drawGridZ(inter, cc.z(), draw, snap, 11);
-                        if (self.edit_state.lmouse == .rising) {
+                        if (self.isBindState(self.conf.binds.cube_draw.set_plane, .rising)) {
                             tool.plane_z = cc.z();
                         }
                     }

@@ -239,9 +239,10 @@ pub const VertexTranslate = struct {
                     }
                 },
                 .falling, .low => {
-                    if (lmouse == .falling)
+                    if (lmouse == .falling) {
                         self.dist = Vec3.zero();
-                    st.move_start = null;
+                        st.move_start = null;
+                    }
                 },
             }
             {

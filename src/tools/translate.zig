@@ -19,6 +19,7 @@ const edit = @import("../editor.zig");
 const Editor = edit.Context;
 const toolcom = @import("../tool_common.zig");
 const action = @import("../actions.zig");
+const colors = @import("../colors.zig").colors;
 
 //const COLOR_MOVE = 0xe8a130_ee;
 const COLOR_MOVE = 0x00ff00ff;
@@ -91,6 +92,7 @@ pub const Translate = struct {
                 .tool_icon_fn = &@This().drawIcon,
                 .gui_build_cb = &buildGui,
                 .event_fn = &event,
+                .info_3d_fn = drawInfo,
 
                 .selected_solid_edge_color = COLOR_MOVE,
                 .selected_solid_point_color = 0,
@@ -109,6 +111,27 @@ pub const Translate = struct {
         _ = self;
         const rec = editor.asset.getRectFromName("translate.png") orelse graph.Rec(0, 0, 0, 0);
         draw.rectTex(r, rec, editor.asset_atlas);
+    }
+
+    pub fn drawInfo(vt: *i3DTool, param: tools.ToolInfoParam) void {
+        const cc = colors.fg_text;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+
+        switch (self.mode) {
+            .translate, .rotate => {
+                param.drawBind("marquee", "view3d", "marquee", false);
+                param.drawBind("commit", "view3d", "commit", false);
+                param.drawBind("duplicate", "view3d", "duplicate", true);
+            },
+            .marquee => {
+                param.drawBind("select", "view3d", "commit", false);
+                param.drawBind("plane up", "cube_draw", "plane_up", false);
+                param.drawBind("plane down", "cube_draw", "plane_down", false);
+                param.drawBind("set plane", "cube_draw", "set_plane", false);
+                param.drawBind("set raycast", "cube_draw", "plane_raycast", true);
+            },
+        }
+        param.mt.textFmt("translate tool: {t}", .{self.mode}, param.px_size, cc);
     }
 
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
@@ -166,6 +189,7 @@ pub const Translate = struct {
                         .z_up = editor.isBindState(editor.conf.binds.cube_draw.plane_up, .rising),
                         .z_down = editor.isBindState(editor.conf.binds.cube_draw.plane_down, .rising),
                         .z_raycast = editor.isBindState(editor.conf.binds.cube_draw.plane_raycast, .high),
+                        .raycast_commit = editor.isBindState(editor.conf.binds.cube_draw.set_plane, .rising),
                     }, editor, td.screen_area, td.view_3d.*, td.draw),
                     .finished => {
                         const rc = editor.camRay(td.screen_area, td.view_3d.*);
@@ -173,7 +197,7 @@ pub const Translate = struct {
                         const bounds = self.bb_gizmo.aabbGizmo(&self.cube_draw.start, &self.cube_draw.end, rc, editor.edit_state.lmouse, editor.grid, draw_nd);
                         const cc = util3d.cubeFromBounds(bounds[0], bounds[1]);
                         td.draw.cube(cc[0], cc[1], 0x2222_22dd);
-                        if (editor.edit_state.rmouse == .rising)
+                        if (editor.isBindState(editor.conf.binds.view3d.commit, .rising))
                             action.selectInBounds(editor, bounds) catch return error.fatal;
                     },
                 }
@@ -231,7 +255,7 @@ pub const Translate = struct {
                 }
             }
             tool.modeSwitchCube(self, origin, giz_active == .high, draw_nd, td);
-            const commit = self.edit_state.rmouse == .rising;
+            const commit = self.isBindState(self.conf.binds.view3d.commit, .rising);
             const real_commit = giz_active == .high and commit;
             const selected = self.getSelected();
             for (selected) |id| {
@@ -369,7 +393,7 @@ pub const Translate = struct {
             }
 
             tool.modeSwitchCube(self, origin, giz_active == .high, draw_nd, td);
-            const commit = self.edit_state.rmouse == .rising;
+            const commit = self.isBindState(self.conf.binds.view3d.commit, .rising);
             const real_commit = giz_active == .high and commit;
             const dist = self.grid.snapV3(origin_mut.sub(origin));
             switch (giz_active) {

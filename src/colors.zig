@@ -17,4 +17,11 @@ const Colors = struct {
     fast_face_plane: u32 = 0xff000033,
 
     bad_normal: u32 = 0xff0000_44,
+
+    selected_single: u32 = 0xfcc858ff,
+    selected_many: u32 = 0xfc58d6ff,
+    bind_active: u32 = 0xfc58d6ff,
+    hidden: u32 = 0x20B2AAff,
+    fg_text: u32 = 0xffffff_ff,
+    bg_text_alpha: u32 = 0x99,
 };

@@ -33,6 +33,7 @@ pub const FastFaceManip = struct {
                 .deinit_fn = &@This().deinit,
                 .runTool_fn = &@This().runTool,
                 .tool_icon_fn = &@This().drawIcon,
+                .info_3d_fn = drawInfo,
                 .event_fn = &event,
                 .gui_build_cb = &buildGui,
                 .selected_solid_edge_color = 0xf7_a94a_af,
@@ -49,6 +50,24 @@ pub const FastFaceManip = struct {
         _ = self;
         const rec = editor.asset.getRectFromName("fast_face_manip.png") orelse graph.Rec(0, 0, 0, 0);
         draw.rectTex(r, rec, editor.asset_atlas);
+    }
+
+    pub fn drawInfo(vt: *i3DTool, param: tools.ToolInfoParam) void {
+        const cc = colors.fg_text;
+        const ed = param.ed;
+        const active = colors.bind_active;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        var buf: [128]u8 = undefined;
+        _ = self;
+
+        param.mt.textFmt(
+            "extrude: {s}",
+            .{ed.config.keys.fast_face.extrude.nameFull(&buf)},
+            param.px_size,
+            if (ed.isBindState(ed.conf.binds.fast_face.extrude, .high)) active else cc,
+        );
+
+        param.mt.textFmt("fast face", .{}, param.px_size, cc);
     }
 
     pub fn deinit(vt: *i3DTool, alloc: std.mem.Allocator) void {
