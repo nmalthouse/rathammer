@@ -20,6 +20,10 @@ pub const Config = struct {
     gui_tint: u32 = 0xffff_ffff,
     mouse_grab_when: enum { key_low, key_high, toggle } = .key_high,
     keys: Keys = .{},
+    toggle: struct {
+        show_keybind_help: bool = true,
+        show_tool_info: bool = true,
+    } = .{},
     window: struct {
         height_px: i32 = 600,
         width_px: i32 = 800,

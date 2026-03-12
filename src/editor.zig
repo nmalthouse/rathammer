@@ -1434,36 +1434,6 @@ pub const Context = struct {
         loadctx.cb("csg generated");
     }
 
-    pub fn drawToolbar(self: *Self, area: graph.Rect, draw: *DrawCtx, font: *graph.FontInterface, fh: f32) void {
-        const start = area.pos();
-        const w = fh * 5;
-        const tool_index = self.edit_state.__tool_index;
-        const info = @typeInfo(@TypeOf(self.conf.binds.tool)).@"struct".fields;
-        const info_start = start.sub(.{ .y = 0, .x = 0 }); //info draws upwards
-        inline for (info[0 .. info.len - 1], 0..) |tool_name, i| {
-            if (i < self.tools.vtables.dense.items.len) {
-                const active_tool = tool_index == i;
-                const tool = self.tools.vtables.dense.items[i];
-                const fi: f32 = @floatFromInt(i);
-                const rec = graph.Rec(start.x + fi * w, start.y, w, w);
-                const trec = graph.Rec(start.x + fi * w, start.y, w + fh, w);
-                tool.tool_icon_fn(tool, draw, self, rec);
-                var buf: [32]u8 = undefined;
-                const n = @field(self.config.keys.tool, tool_name.name).nameFull(&buf);
-                draw.textClipped(trec, "{s}", .{n}, .{ .px_size = fh, .font = font, .color = 0xff }, .left);
-                if (active_tool) {
-                    draw.rectBorder(rec, 3, colors.selected);
-                    if (tool.info_3d_fn) |infofn| {
-                        var mt = graph.MultiLineText.start(draw, info_start, font);
-                        mt.direction = .up;
-                        infofn(tool, .{ .mt = &mt, .px_size = fh, .ed = self });
-                        mt.drawBgRect(0x99, fh * 30);
-                    }
-                }
-            }
-        }
-    }
-
     fn modelIdFromName(self: *Self, mdl_name: []const u8) !?vpk.VpkResId {
         const mdln = blk: {
             if (std.mem.endsWith(u8, mdl_name, ".mdl"))

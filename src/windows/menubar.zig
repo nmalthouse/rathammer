@@ -42,6 +42,8 @@ const MenuBtn = enum(guis.Uid) {
     draw_skybox,
     draw_outline,
     draw_debug,
+    draw_keys,
+    draw_tool_info,
     export_obj,
     export_obj_as,
     todo,
@@ -253,6 +255,17 @@ pub const MenuBar = struct {
             btn_id(.draw_outline) => self.ed.draw_state.draw_outlines = val,
             btn_id(.draw_skybox) => self.ed.draw_state.tog.skybox = val,
             btn_id(.draw_debug) => self.ed.draw_state.tog.debug_stats = val,
+            btn_id(.draw_keys) => {
+                self.ed.conf.config.toggle.show_keybind_help = val;
+                action.writeConfig(self.ed) catch {};
+                self.ed.config = self.ed.conf.config;
+            },
+            btn_id(.draw_tool_info) => {
+                self.ed.conf.config.toggle.show_tool_info = val;
+                action.writeConfig(self.ed) catch {};
+                self.ed.config = self.ed.conf.config;
+            },
+
             else => {},
         }
     }
@@ -270,6 +283,8 @@ pub const MenuBar = struct {
                     .{ btn_id(.draw_outline), L.lang.checkbox.draw_outlines, .{ .checkbox = self.ed.draw_state.draw_outlines } },
                     .{ btn_id(.draw_skybox), L.lang.checkbox.draw_skybox, .{ .checkbox = tog.skybox } },
                     .{ btn_id(.draw_debug), L.lang.checkbox.draw_debug_stat, .{ .checkbox = tog.debug_stats } },
+                    .{ btn_id(.draw_keys), L.lang.checkbox.draw_keybinds, .{ .checkbox = self.ed.config.toggle.show_keybind_help } },
+                    .{ btn_id(.draw_tool_info), L.lang.checkbox.draw_tool_info, .{ .checkbox = self.ed.config.toggle.show_tool_info } },
                 });
             },
             btn_strid("file") => {

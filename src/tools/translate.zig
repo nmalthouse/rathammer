@@ -469,9 +469,6 @@ pub const Translate = struct {
         const doc =
             \\This is the translate tool.
             \\Select objects with 'E'.
-            \\Left Click and drag the gizmo.
-            \\Right click to commit the translation.
-            \\Hold 'Shift' to uncapture the mouse.
             \\Click the white cube to toggle rotation.
             \\Clicking on the solid will do a 'smart translate' where: 
             \\If the mouse raycast is > 30 degrees from the horizon, the solid is moved in the xy plane.

@@ -1,4 +1,5 @@
 const tools = @import("../tools.zig");
+const colors = @import("../colors.zig").colors;
 const util3d = graph.util_3d;
 const edit = @import("../editor.zig");
 const Editor = edit.Context;
@@ -46,6 +47,7 @@ pub const Clipping = struct {
                 .runTool_fn = &runTool,
                 .runTool_2d_fn = &runTool2d,
                 .event_fn = &event,
+                .info_3d_fn = drawInfo,
             },
             .points = undefined,
         };
@@ -79,6 +81,15 @@ pub const Clipping = struct {
         _ = self;
         const rec = editor.asset.getRectFromName("clipping.png") orelse graph.Rec(0, 0, 0, 0);
         draw.rectTex(r, rec, editor.asset_atlas);
+    }
+
+    pub fn drawInfo(vt: *tools.i3DTool, param: tools.ToolInfoParam) void {
+        const cc = colors.fg_text;
+        const self: *@This() = @alignCast(@fieldParentPtr("vt", vt));
+        _ = self;
+
+        param.drawBind("commit clip", "view3d", "commit", false);
+        param.mt.textFmt("clipping", .{}, param.px_size, cc);
     }
 
     pub fn runTool(vt: *tools.i3DTool, td: tools.ToolData, ed: *Editor) tools.ToolError!void {
@@ -249,8 +260,7 @@ pub const Clipping = struct {
                     td.draw.convexPoly(&.{ r0, r1, r2, r3 }, 0xff88);
                     draw_nd.convexPoly(&.{ r0, r1, r2, r3 }, 0xff44);
                 }
-                const rm = ed.edit_state.rmouse;
-                if (rm == .rising)
+                if (ed.isBindState(ed.conf.binds.view3d.commit, .rising))
                     try self.tryCommitClip(ed);
             },
         }

@@ -143,15 +143,9 @@ pub const CubeDraw = struct {
         const doc =
             \\This is the cube draw tool
             \\Select a texture with alt-t
-            \\left click to add the start point.
-            \\Click again to finish cube.
-            \\
-            \\Change the height of the draw plane with x and z
-            \\Or, hold q and aim at a entity, left click to set this as the new position.
-            \\Change the grid size with 'R' and 'F'
         ;
         var ly = guis.VerticalLayout{ .item_height = gui.dstate.nstyle.item_h, .bounds = area_vt.area };
-        ly.pushHeight(Wg.TextView.heightForN(gui, 7));
+        ly.pushHeight(Wg.TextView.heightForN(gui, 2));
         _ = Wg.TextView.build(area_vt, ly.getArea(), &.{doc}, win, .{
             .mode = .split_on_space,
         });

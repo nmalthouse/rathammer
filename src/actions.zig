@@ -156,7 +156,10 @@ pub fn setGameDir(ed: *Ed, new_dir: []const u8) !void {
 }
 
 pub fn writeConfig(ed: *Ed) !void {
-    var out = try ed.dirs.config.dir.createFile("config.json", .{});
+    var out = ed.dirs.config.dir.createFile("config.json", .{}) catch |err| {
+        ed.notify("Failed to write config: {t}", .{err}, colors.bad);
+        return err;
+    };
     defer out.close();
     var out_buf: [1024]u8 = undefined;
     var out_wr = out.writer(&out_buf);

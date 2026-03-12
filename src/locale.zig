@@ -135,6 +135,8 @@ pub const Strings = struct {
         draw_skybox: Str = "draw_skybox",
         draw_debug_stat: Str = "draw debug stat",
         modify_displacement: Str = "Modify disps",
+        draw_keybinds: Str = "draw keybinds",
+        draw_tool_info: Str = "draw tool info",
     } = .{},
 
     btn: struct {

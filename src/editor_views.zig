@@ -607,7 +607,7 @@ pub const Main3DView = struct {
             mt.drawBgRect(colors.bg_text_alpha, fh * 30);
 
             const off = fh * 5;
-            self.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
+            window.drawToolbar(graph.Rec(0, screen_area.h - off, screen_area.w, off), draw, font, fh);
             //3d marquee only works when mouse is not grabbed, otherwise camera projection changes throughout marquee
             if (!self.stack_grabbed_mouse and limits.IS_DEBUG) {
                 if (self.isBindState(bind.marquee_3d, .rising)) {
@@ -630,6 +630,51 @@ pub const Main3DView = struct {
         }
         try self.draw_state.screen_space_text_ctx.flush(null, self.draw_state.cam3d);
         try draw.flush(null, null);
+    }
+
+    pub fn drawToolbar(window: *@This(), area: graph.Rect, draw: *DrawCtx, font: *graph.FontInterface, fh: f32) void {
+        const self = window.ed;
+        const start = area.pos();
+        const w = fh * 5;
+        const tool_index = self.edit_state.__tool_index;
+        const info = @typeInfo(@TypeOf(self.conf.binds.tool)).@"struct".fields;
+        const info_start = start.sub(.{ .y = 0, .x = 0 }); //info draws upwards
+        inline for (info[0 .. info.len - 1], 0..) |tool_name, i| {
+            if (i < self.tools.vtables.dense.items.len) {
+                const active_tool = tool_index == i;
+                const tool = self.tools.vtables.dense.items[i];
+                const fi: f32 = @floatFromInt(i);
+                const rec = graph.Rec(start.x + fi * w, start.y, w, w);
+                const trec = graph.Rec(start.x + fi * w, start.y, w + fh, w);
+                tool.tool_icon_fn(tool, draw, self, rec);
+                var buf: [32]u8 = undefined;
+                const n = @field(self.config.keys.tool, tool_name.name).nameFull(&buf);
+                draw.textClipped(trec, "{s}", .{n}, .{ .px_size = fh, .font = font, .color = 0xff }, .left);
+                if (active_tool) {
+                    draw.rectBorder(rec, 3, colors.selected);
+                    var mt = graph.MultiLineText.start(draw, info_start, font);
+                    mt.direction = .up;
+                    const param = tools.ToolInfoParam{ .mt = &mt, .px_size = fh, .ed = self };
+                    if (self.config.toggle.show_tool_info) {
+                        if (tool.info_3d_fn) |infofn| {
+                            infofn(tool, param);
+                        }
+                    }
+
+                    if (self.config.toggle.show_keybind_help) {
+                        mt.text("", param.px_size, 0xff);
+                        param.drawBind("grid+", "view3d", "grid_inc", false);
+                        param.drawBind("grid-", "view3d", "grid_dec", false);
+                        param.drawBind("select", "view3d", "select", false);
+                        param.drawBind("cam up", "view3d", "cam_up", false);
+                        param.drawBind("cam down", "view3d", "cam_down", false);
+                        param.drawBind("mouse_capture", "view3d", "mouse_capture", false);
+                        mt.text("bindings [to hide this 'view->show keybinds']", param.px_size, colors.fg_text);
+                    }
+                    mt.drawBgRect(0x99, fh * 30);
+                }
+            }
+        }
     }
 
     pub fn drawToBitmap(self: *@This(), bmp: *graph.Bitmap) !void {

@@ -30,6 +30,11 @@ pub const GameList = struct {
         self.deinit();
         self.* = .init(self.alloc);
 
+        var stdout_buf: [128]u8 = undefined;
+
+        var stdout_writer = std.fs.File.stdout().writer(&stdout_buf);
+        const out = &stdout_writer.interface;
+
         var it = game_map.iterator();
         while (it.next()) |item| {
             var summary: std.io.Writer.Allocating = .init(self.alloc);
@@ -77,11 +82,12 @@ pub const GameList = struct {
             };
             try self.list.put(self.alloc, new.name, new);
             if (!new.good)
-                std.debug.print("{s}: {s}\n", .{
+                try out.print("{s}: {s}\n", .{
                     new.name,
                     new.reason,
                 });
         }
+        try out.flush();
     }
 
     pub fn id(self: *Self, game_name: []const u8) ?usize {
