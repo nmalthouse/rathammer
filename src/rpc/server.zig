@@ -52,7 +52,13 @@ pub const RpcServer = struct {
         return ret;
     }
 
-    pub fn serverThread(self: *Self) !void {
+    pub fn serverThread(self: *Self) void {
+        self.serverThreadErr() catch |err| {
+            std.debug.print("Rpc server died with error {t}\n", .{err});
+        };
+    }
+
+    pub fn serverThreadErr(self: *Self) !void {
         std.fs.cwd().deleteFile("test.socket") catch {};
         const addr = try std.net.Address.initUnix("test.socket");
         defer std.fs.cwd().deleteFile("test.socket") catch {};

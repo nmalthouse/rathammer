@@ -98,7 +98,7 @@ pub const Main3DView = struct {
         self.ed.stack_grabbed_mouse = should_grab;
         defer self.ed.stack_grabbed_mouse = false;
         //self.ed.handleMisc3DKeys();
-        draw3Dview(self, self.ed, vt.area.area, self.drawctx, true) catch return;
+        draw3Dview(self, self.ed, vt.area.area, self.drawctx, .{ .draw_hud = true }) catch return;
     }
 
     pub fn create(ed: *Context, gui: *G.Gui, drawctx: *graph.ImmediateDrawingContext) !*G.iWindow {
@@ -154,7 +154,10 @@ pub const Main3DView = struct {
         self: *Context,
         screen_area: graph.Rect,
         draw: *graph.ImmediateDrawingContext,
-        draw_hud: bool,
+        param: struct {
+            draw_hud: bool,
+            back_buffer: graph.gl.uint = 0,
+        },
     ) !void {
         const bind = &self.conf.binds.view3d;
         const font = self.gapp.gui.dstate.font;
@@ -322,6 +325,7 @@ pub const Main3DView = struct {
             .fac = self.draw_state.factor,
             .pad = self.draw_state.pad,
             .index = self.draw_state.index,
+            .back_buffer = param.back_buffer,
         }, draw, self.draw_state.planes);
 
         const LADDER_RENDER_DISTANCE = 1024;
@@ -552,7 +556,7 @@ pub const Main3DView = struct {
 
         try draw_nd.flush(null, self.draw_state.cam3d);
         graph.gl.Clear(graph.gl.DEPTH_BUFFER_BIT);
-        if (draw_hud) { // text stuff
+        if (param.draw_hud) { // text stuff
             const col = 0xff_ff_ffff;
             const p = self.draw_state.cam3d.pos;
 
@@ -628,5 +632,27 @@ pub const Main3DView = struct {
         }
         try self.draw_state.screen_space_text_ctx.flush(null, self.draw_state.cam3d);
         try draw.flush(null, null);
+    }
+
+    pub fn drawToBitmap(self: *@This(), bmp: *graph.Bitmap) !void {
+        if (bmp.format != .rgb_8) return error.unsupportedBitmapFormat;
+        { //Try to create a thumbnail
+
+            var rb = try graph.RenderTexture.init(bmp.w, bmp.h);
+            defer rb.deinit();
+            rb.bind(true);
+
+            const old_dim = self.drawctx.screen_dimensions;
+            self.drawctx.screen_dimensions = .{ .x = @floatFromInt(bmp.w), .y = @floatFromInt(bmp.h) };
+            defer self.drawctx.screen_dimensions = old_dim;
+            try self.draw3Dview(self.ed, .{ .w = @floatFromInt(bmp.w), .h = @floatFromInt(bmp.h) }, self.drawctx, .{
+                .draw_hud = false,
+                .back_buffer = rb.fb,
+            });
+
+            graph.gl.BindFramebuffer(graph.gl.FRAMEBUFFER, rb.fb);
+            graph.gl.ReadPixels(0, 0, @intCast(bmp.w), @intCast(bmp.h), graph.gl.RGB, graph.gl.UNSIGNED_BYTE, &bmp.data.items[0]);
+            try bmp.invertY();
+        }
     }
 };

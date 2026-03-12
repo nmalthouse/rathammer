@@ -48,6 +48,7 @@ const version = @import("version.zig").version;
 const app = @import("app.zig");
 const action = @import("actions.zig");
 const rpc = @import("rpc/server.zig");
+const limits = @import("limits.zig");
 
 const async_util = @import("async.zig");
 const util3d = graph.util_3d;
@@ -1561,7 +1562,7 @@ pub const Context = struct {
 
         var jwriter = std.Io.Writer.Allocating.init(self.alloc);
 
-        if (true) { //TODO REMOVE
+        if (limits.IS_DEBUG) { //TODO REMOVE
 
             var out = try std.fs.cwd().createFile("undo_dump.json", .{});
             defer out.close();
@@ -1586,26 +1587,10 @@ pub const Context = struct {
 
             const sz = 256;
             var bmp = try graph.Bitmap.initBlank(self.alloc, sz, sz, .rgb_8);
-            { //Try to create a thumbnail
-
-                var rb = try graph.RenderTexture.init(sz, sz);
-                defer rb.deinit();
-                rb.bind(true);
-
-                if (self.gapp.gui.getWindowId(self.workspaces.main_3d_win)) |main3d| {
-                    const winptr: *eviews.Main3DView = @alignCast(@fieldParentPtr("vt", main3d));
-
-                    const old_dim = winptr.drawctx.screen_dimensions;
-                    winptr.drawctx.screen_dimensions = .{ .x = sz, .y = sz };
-                    defer winptr.drawctx.screen_dimensions = old_dim;
-                    try eviews.Main3DView.draw3Dview(winptr, self, .{ .w = sz, .h = sz }, winptr.drawctx, false);
-                }
-
-                graph.gl.BindFramebuffer(graph.gl.FRAMEBUFFER, rb.fb);
-                graph.gl.ReadPixels(0, 0, sz, sz, graph.gl.RGB, graph.gl.UNSIGNED_BYTE, &bmp.data.items[0]);
-                try bmp.invertY();
+            if (self.gapp.gui.getWindowId(self.workspaces.main_3d_win)) |main3d| {
+                const winptr: *eviews.Main3DView = @alignCast(@fieldParentPtr("vt", main3d));
+                try winptr.drawToBitmap(&bmp);
             }
-
             try async_util.CompressAndSave.spawn(
                 self.alloc,
                 &self.async_asset_load,

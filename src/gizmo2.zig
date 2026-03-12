@@ -27,7 +27,7 @@ pub const Gizmo = struct {
         //view: graph.za.Mat4,
         //mouse_pos: graph.Vec2f,
     ) BtnState {
-        const CIRCLE_DIST_SCALE = 3;
+        const CIRCLE_DIST_SCALE = 4;
         const gizmo_size = orig.distance(camera_pos) / 64 * 10;
         const oz = gizmo_size / 20;
         //const tr = oz * 3;
@@ -109,7 +109,7 @@ pub const Gizmo = struct {
 
                     const rstart = V2.new(x1.dot(r1), y1.dot(r1)).scale(CIRCLE_DIST_SCALE);
                     const rend = V2.new(x1.dot(r2), y1.dot(r2)).scale(CIRCLE_DIST_SCALE);
-                    const SEGMENT_PER_180 = 30;
+                    const SEGMENT_PER_180 = 60;
                     //angle = atan2(vector2.y, vector2.x) - atan2(vector1.y, vector1.x);
                     const theta_free = std.math.atan2(rend.y(), rend.x()) - std.math.atan2(rstart.y(), rstart.x());
                     const theta = std.math.radiansToDegrees(theta_free);

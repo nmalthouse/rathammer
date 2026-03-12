@@ -18,3 +18,11 @@
 * invalid solids are tagged and can be cycled through with ctrl+o
 * invalid solids are omitted from vmf export by default
 * added menu button to remove all duplicate vertices in map
+* fast face tool inverts normals when possible
+* add extrude mode for fast face when holding z
+* add uvlock button
+* add spike/cone primitive
+* textview text can be selected
+* fix vmf export writing a corrupt file on Windows
+* add basic gui to select a steam path
+* cube draw draw texture
