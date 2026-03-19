@@ -53,6 +53,7 @@ pub const SdlFileData = struct {
 
         pick_vmf, // Distinct from pick map for now. only one json map can be imported but any number of vmfs can be imported
         export_obj,
+        export_selected,
     };
     const map_filters = [_]graph.c.SDL_DialogFileFilter{
         .{ .name = "maps", .pattern = "json;vmf;ratmap" },
@@ -115,6 +116,9 @@ pub const SdlFileData = struct {
                     };
                 }
             },
+            .export_selected => {
+                actions.exportSelected(edit, first) catch return;
+            },
             .export_obj => {
                 edit.setObjName(first) catch return;
 
@@ -129,7 +133,7 @@ pub const SdlFileData = struct {
                         .save_map_quit => .quit,
                         .save_map_close => .unload_map,
                         else => .nothing,
-                    }) catch return;
+                    }, .{}) catch return;
                 }
             },
             .pick_steam_dir => {
@@ -154,7 +158,7 @@ pub const SdlFileData = struct {
 
     pub fn workFunc(self: *@This()) void {
         switch (self.action) {
-            .save_map, .save_map_quit, .save_map_close, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
+            .export_selected, .save_map, .save_map_quit, .save_map_close, .export_obj => graph.SDL.openSaveDialog(&saveFileCallback2, self, &.{}, .{}),
             .pick_map => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{}),
             .pick_vmf => graph.SDL.openFilePicker(&saveFileCallback2, self, &map_filters, .{ .allow_many = true }),
             .pick_steam_dir => graph.SDL.openFolderPicker(&saveFileCallback2, self, .{ .allow_many = false }),

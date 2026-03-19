@@ -45,6 +45,7 @@ const MenuBtn = enum(guis.Uid) {
     draw_keys,
     draw_tool_info,
     export_obj,
+    export_selected,
     export_obj_as,
     todo,
     _,
@@ -233,6 +234,7 @@ pub const MenuBar = struct {
                     action.unloadMap(self.ed) catch {};
                 }
             },
+            .export_selected => async_util.SdlFileData.spawn(self.ed.alloc, &self.ed.async_asset_load, .export_selected) catch return,
             .export_obj => {
                 const path = self.ed.last_exported_obj_path orelse return;
                 const name = self.ed.last_exported_obj_name orelse return;
@@ -298,6 +300,7 @@ pub const MenuBar = struct {
                     .{ btn_id(.build_map_user), L.lang.btn.build_user, .btn },
                     .{ btn_id(.export_obj), L.lang.btn.export_obj, if (has_obj) .btn else .blank },
                     .{ btn_id(.export_obj_as), L.lang.btn.export_obj_as, .btn },
+                    .{ btn_id(.export_selected), L.lang.btn.export_selected, .btn },
                     .{ btn_id(.unload_map), L.lang.btn.unload_map, .btn },
                     .{ btn_id(.quit), L.lang.btn.quit, .btn },
                 });

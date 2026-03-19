@@ -9,6 +9,7 @@ const Ed = editor.Context;
 const raycast = @import("raycast_solid.zig");
 const async_util = @import("async.zig");
 const RaycastSlice = []const raycast.RcastItem;
+const util = @import("util.zig");
 const vpk = @import("vpk.zig");
 const util3d = graph.util_3d;
 const Lays = @import("layer.zig");
@@ -203,11 +204,35 @@ pub fn unloadMap(ed: *Ed) !void {
 
 pub fn trySave(ed: *Ed) !void {
     if (ed.loaded_map_name) |basename| {
-        ed.saveAndNotify(basename, ed.loaded_map_path orelse "", .nothing) catch |err| {
+        ed.saveAndNotify(basename, ed.loaded_map_path orelse "", .nothing, .{}) catch |err| {
             ed.notify("Failed saving map: {t}", .{err}, colors.bad);
         };
     } else {
         try async_util.SdlFileData.spawn(ed.alloc, &ed.async_asset_load, .save_map);
+    }
+}
+
+pub fn exportSelected(ed: *Ed, name: []const u8) !void {
+    const split = try util.pathToMapName(name);
+    const new_name = try std.fs.path.join(ed.frame_arena.allocator(), &.{ split[0], try ed.printScratch("{s}.ratmap", .{split[1]}) });
+
+    var jwriter = std.Io.Writer.Allocating.init(ed.alloc);
+
+    if (ed.writeToJson(&jwriter.writer, .{ .only_selected = true })) {
+        try async_util.CompressAndSave.spawn(
+            ed.alloc,
+            &ed.async_asset_load,
+            .{
+                .json_buffer = try jwriter.toOwnedSlice(),
+                .json_info_buffer = "",
+                .dir = try std.fs.cwd().openDir(".", .{}),
+                .name = new_name,
+                .post = .nothing,
+                .thumbnail = null,
+            },
+        );
+    } else |err| {
+        editor.log.err("{t}", .{err});
     }
 }
 

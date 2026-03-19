@@ -195,6 +195,7 @@ pub const Strings = struct {
 
         next_invalid: Str = "select next invalid",
         rm_dupe_verts: Str = "remove duplicate verts",
+        export_selected: Str = "export selection as",
     } = .{},
 };
 

@@ -28,6 +28,7 @@ cp -r rat_custom "$RATOUT"
 
 cp -r games "$RATOUT"/games
 cp -r extra "$RATOUT"/extra
+cp -r scripts "$RATOUT"/scripts
 
 # Copyright stuff
 cp extra/thirdparty_legal.txt "$RATOUT"/thirdparty_legal.txt

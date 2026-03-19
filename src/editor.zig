@@ -838,75 +838,100 @@ pub const Context = struct {
         return self.gapp.main_window.mouse;
     }
 
-    pub fn writeToJson(self: *Self, writer: *std.Io.Writer) !void {
+    pub fn writeToJson(self: *Self, writer: *std.Io.Writer, param: struct { only_selected: bool = false }) !void {
         var jwr = std.json.Stringify{
             .writer = writer,
             .options = .{ .whitespace = .indent_1 },
         };
         try jwr.beginObject();
         {
-            if (self.edit_state.map_uuid == 0) {
-                self.edit_state.map_uuid = uuid.v4.new();
-            }
-
             try jwr.objectField("editor");
-            try jwr.write(json_map.JsonEditor{
-                .cam = json_map.JsonCamera.fromCam(self.draw_state.cam3d),
-                .map_json_version = json_map.CURRENT_MAP_VERSION,
-                .map_version = self.edit_state.map_version,
-                .uuid = self.edit_state.map_uuid,
-                .editor_version = version,
-            });
+            if (param.only_selected) {
+                try jwr.write(json_map.JsonEditor{
+                    .cam = json_map.JsonCamera.fromCam(self.draw_state.cam3d),
+                    .map_json_version = json_map.CURRENT_MAP_VERSION,
+                    .map_version = 0,
+                    .uuid = uuid.v4.new(),
+                    .editor_version = version,
+                });
+            } else {
+                if (self.edit_state.map_uuid == 0) {
+                    self.edit_state.map_uuid = uuid.v4.new();
+                }
+                try jwr.write(json_map.JsonEditor{
+                    .cam = json_map.JsonCamera.fromCam(self.draw_state.cam3d),
+                    .map_json_version = json_map.CURRENT_MAP_VERSION,
+                    .map_version = self.edit_state.map_version,
+                    .uuid = self.edit_state.map_uuid,
+                    .editor_version = version,
+                });
+            }
 
             try jwr.objectField("visgroup");
             try self.layers.writeToJson(&jwr);
-
-            try jwr.objectField("extra");
-            {
-                try jwr.beginObject();
-                try jwr.objectField("recent_mat");
-                try self.writeComponentToJson(&jwr, self.asset_browser.recent_mats.list, 0);
-                try jwr.objectField("selected_layer");
-                try jwr.write(@as(u16, @intFromEnum(self.edit_state.selected_layer)));
-                try jwr.endObject();
-            }
-
             try jwr.objectField("sky_name");
             try jwr.write(self.loaded_skybox_name);
+
+            if (!param.only_selected) {
+                try jwr.objectField("extra");
+                {
+                    try jwr.beginObject();
+                    try jwr.objectField("recent_mat");
+                    try self.writeComponentToJson(&jwr, self.asset_browser.recent_mats.list, 0);
+                    try jwr.objectField("selected_layer");
+                    try jwr.write(@as(u16, @intFromEnum(self.edit_state.selected_layer)));
+                    try jwr.endObject();
+                }
+            }
             try jwr.objectField("objects");
             try jwr.beginArray();
             {
-                for (self.ecs.entities.items, 0..) |ent, id| {
-                    if (ent.isSet(EcsT.Types.tombstone_bit))
-                        continue;
-                    if (ent.isSet(@intFromEnum(EcsT.Components.deleted)))
-                        continue;
-                    try jwr.beginObject();
-                    {
-                        try jwr.objectField("id");
-                        try jwr.write(id);
+                const help = struct {
+                    fn writeEnt(jw: anytype, s: *Context, id: anytype, ent: anytype) !void {
+                        try jw.beginObject();
+                        {
+                            try jw.objectField("id");
+                            try jw.write(id);
 
-                        if (self.groups.getGroup(@intCast(id))) |group| {
-                            try jwr.objectField("owned_group");
-                            try jwr.write(group);
-                        }
+                            if (s.groups.getGroup(@intCast(id))) |group| {
+                                try jw.objectField("owned_group");
+                                try jw.write(group);
+                            }
 
-                        inline for (EcsT.Fields, 0..) |field, f_i| {
-                            if (!@hasDecl(field.ftype, "ECS_NO_SERIAL")) {
-                                if (ent.isSet(f_i)) {
-                                    try jwr.objectField(field.name);
-                                    const ptr = try self.ecs.getPtr(@intCast(id), @enumFromInt(f_i));
-                                    try self.writeComponentToJson(&jwr, ptr.*, @intCast(id));
+                            inline for (EcsT.Fields, 0..) |field, f_i| {
+                                if (!@hasDecl(field.ftype, "ECS_NO_SERIAL")) {
+                                    if (ent.isSet(f_i)) {
+                                        try jw.objectField(field.name);
+                                        const ptr = try s.ecs.getPtr(@intCast(id), @enumFromInt(f_i));
+                                        try s.writeComponentToJson(jw, ptr.*, @intCast(id));
+                                    }
                                 }
                             }
                         }
+                        try jw.endObject();
                     }
-                    try jwr.endObject();
+                };
+                if (param.only_selected) {
+                    const sel = self.getSelected();
+                    for (sel) |id| {
+                        const ent = self.ecs.getEntity(id) catch |err| {
+                            log.err("{t}", .{err});
+                            continue;
+                        };
+                        try help.writeEnt(&jwr, self, id, ent);
+                    }
+                } else {
+                    for (self.ecs.entities.items, 0..) |ent, id| {
+                        if (ent.isSet(EcsT.Types.tombstone_bit))
+                            continue;
+                        if (ent.isSet(@intFromEnum(EcsT.Components.deleted)))
+                            continue;
+                        try help.writeEnt(&jwr, self, id, ent);
+                    }
                 }
             }
             try jwr.endArray();
         }
-        //Men I trust, men that rust
         try jwr.endObject();
     }
 
@@ -1534,7 +1559,8 @@ pub const Context = struct {
         return self.scratch_buf.items;
     }
 
-    pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8, post: async_util.CompressAndSave.Post) !void {
+    pub fn saveAndNotify(self: *Self, basename: []const u8, path: []const u8, post: async_util.CompressAndSave.Post, param: struct {}) !void {
+        _ = param;
         self.edit_state.map_version += 1;
         var timer = try std.time.Timer.start();
 
@@ -1543,15 +1569,7 @@ pub const Context = struct {
 
         var jwriter = std.Io.Writer.Allocating.init(self.alloc);
 
-        if (limits.IS_DEBUG) { //TODO REMOVE
-
-            var out = try std.fs.cwd().createFile("undo_dump.json", .{});
-            defer out.close();
-
-            //try self.undoctx.writeToJson(out.writer());
-        }
-
-        if (self.writeToJson(&jwriter.writer)) {
+        if (self.writeToJson(&jwriter.writer, .{})) {
             var info_writer = std.Io.Writer.Allocating.init(self.alloc);
             var jwr_info = std.json.Stringify{ .writer = &info_writer.writer, .options = .{} };
             try jwr_info.write(json_map.JsonInfo{
@@ -1667,7 +1685,7 @@ pub const Context = struct {
                 defer out_file.close();
                 var write_buf: [4096]u8 = undefined;
                 var wr = out_file.writer(&write_buf);
-                self.writeToJson(&wr.interface) catch |err| {
+                self.writeToJson(&wr.interface, .{}) catch |err| {
                     log.err("writeToJson failed ! {}", .{err});
                     self.notify("Autosave failed!: {}", .{err}, colors.bad);
                 };

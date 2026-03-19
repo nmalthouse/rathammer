@@ -114,7 +114,7 @@ pub const NagWindow = struct {
                     self.editor.saveAndNotify(basename, self.editor.loaded_map_path orelse "", switch (self.post) {
                         .quit => .quit,
                         .close_map => .unload_map,
-                    }) catch return;
+                    }, .{}) catch return;
                     self.doPostAction() catch return;
                 } else {
                     async_util.SdlFileData.spawn(self.editor.alloc, &self.editor.async_asset_load, switch (self.post) {
