@@ -76,8 +76,8 @@ pub const EcsT = graph.Ecs.Registry(&.{
 /// The editor creates a Groups which manages the mapping between a owning entity and its groupid
 pub const Groups = struct {
     const Self = @This();
-    pub const GroupId = u16;
-    pub const MAX_GROUP = std.math.maxInt(u16) - 1;
+    pub const GroupId = u32;
+    pub const MAX_GROUP = std.math.maxInt(GroupId) - 1;
     pub const NO_GROUP = 0;
 
     pub const Group = struct {
@@ -98,7 +98,7 @@ pub const Groups = struct {
         }
     };
 
-    group_counter: u16 = NO_GROUP,
+    group_counter: GroupId = NO_GROUP,
 
     /// Map owners to groups.
     entity_mapper: std.AutoHashMap(EcsT.Id, GroupId),

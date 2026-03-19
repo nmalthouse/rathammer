@@ -55,11 +55,13 @@ pub const UndoGroup = struct {
 /// append() your undo
 /// call apply()
 pub const GroupBuilder = struct {
+    dummy: bool = false,
     items: *std.ArrayListUnmanaged(UndoAmal),
     ctx: *UndoContext,
     alloc: std.mem.Allocator,
 
     pub fn append(self: *const @This(), item: tt.UnionT) !void {
+        if (self.dummy) return;
         var complete = UndoAmal{
             .d = item,
             .undo_id = self.ctx.getId(),
@@ -167,6 +169,10 @@ pub const UndoContext = struct {
 
     pub fn pushNewFmt(self: *Self, comptime fmt: []const u8, args: anytype) !GroupBuilder {
         return self.pushNewFmtOpts(fmt, args, .{});
+    }
+
+    pub fn getDummyGroupBuilder(self: *Self) !GroupBuilder {
+        return .{ .items = &.{}, .ctx = self, .alloc = self.alloc, .dummy = true };
     }
 
     pub fn pushNewFmtOpts(self: *Self, comptime fmt: []const u8, args: anytype, opts: PushOpts) !GroupBuilder {

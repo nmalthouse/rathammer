@@ -190,7 +190,7 @@ pub const Strings = struct {
 
         snap_selected_to_int: Str = "snap selected to integer",
 
-        import_vmfs: Str = "import vmfs",
+        import_vmfs: Str = "import maps",
         unload_map: Str = "close map",
 
         next_invalid: Str = "select next invalid",

@@ -1251,7 +1251,7 @@ pub const Context = struct {
             try self.loadJsonFile(path, filename, loadctx);
         } else if (endsWith(u8, filename, ".vmf")) {
             ext = ".vmf";
-            try self.loadVmf(path, filename, loadctx, null);
+            try self.loadVmf(path, filename, loadctx);
         } else {
             return error.unknownMapExtension;
         }
@@ -1303,10 +1303,6 @@ pub const Context = struct {
     }
 
     fn loadJson(self: *Self, slice: []const u8, loadctx: *LoadCtx, filename: []const u8) !void {
-        if (self.has_loaded_map) {
-            log.err("Map already loaded", .{});
-            return error.multiMapLoadNotSupported;
-        }
         defer self.has_loaded_map = true;
         var timer = try std.time.Timer.start();
         defer log.info("Loaded json in {d}ms", .{timer.read() / std.time.ns_per_ms});
@@ -1315,10 +1311,97 @@ pub const Context = struct {
             .alloc = self.alloc,
             .str_store = &self.string_storage,
         };
-        var parsed = try json_map.loadJson(jsonctx, slice, loadctx, &self.ecs, &self.vpkctx, &self.groups);
+        // create a fresh ecs, and groups that map is loaded into.
+        // if load is successfull, insert all of those into actual ecs
+
+        var temp_ecs: EcsT = try .init(self.alloc);
+        var temp_groups: ecs.Groups = .init(self.alloc);
+        defer temp_ecs.deinit();
+        defer temp_groups.deinit();
+
+        var parsed = try json_map.loadJson(jsonctx, slice, loadctx, &temp_ecs, &self.vpkctx, &temp_groups);
         defer parsed.deinit();
 
+        const root_layer_id = if (self.has_loaded_map) try self.layers.putTopLevelGroupEnsureUnique(filename) else .none;
+        var layer_map = try self.layers.insertLayersFromJson(
+            parsed.value.visgroup,
+            self.layers.getLayerFromId(root_layer_id).?,
+        );
+        defer layer_map.deinit();
+
+        // Layer components must be updated
+        var layit = temp_ecs.iterator(.layer);
+        while (layit.next()) |lay| {
+            if (lay.id != .none) {
+                const mapped = layer_map.get(lay.id) orelse {
+                    log.err("failed to map layer id {d}", .{lay.id});
+                    continue;
+                };
+                lay.id = mapped;
+            }
+        }
+
+        var ent_mapper = std.AutoHashMap(EcsT.Id, EcsT.Id).init(self.alloc);
+        defer ent_mapper.deinit();
+        for (temp_ecs.entities.items, 0..) |ent, old_id_| {
+            const old_id: EcsT.Id = @intCast(old_id_);
+            if (ent.isSet(EcsT.Types.tombstone_bit))
+                continue;
+
+            const new_id = try self.ecs.createEntity();
+            try ent_mapper.put(old_id, new_id);
+
+            inline for (EcsT.Fields, 0..) |_, f_i| {
+                if (ent.isSet(f_i)) {
+                    if (try temp_ecs.getOptPtr(old_id, @enumFromInt(f_i))) |comp| {
+                        const duped = try comp.dupe(&self.ecs, new_id);
+                        try self.ecs.attachComponentAndCreate(new_id, @enumFromInt(f_i), duped);
+                    }
+                }
+            }
+        }
+
+        var group_mapper = std.AutoHashMap(ecs.Groups.GroupId, ecs.Groups.GroupId).init(self.alloc);
+        defer group_mapper.deinit();
+        {
+            var it = temp_groups.group_mapper.iterator();
+            while (it.next()) |item| {
+                const new_id = try self.groups.newGroup(if (item.value_ptr.*) |v| ent_mapper.get(v) else null);
+                try group_mapper.put(item.key_ptr.*, new_id);
+            }
+
+            var ents = ent_mapper.iterator();
+            while (ents.next()) |ent| {
+                if (try self.ecs.getOptPtr(ent.value_ptr.*, .group)) |group| {
+                    if (group_mapper.get(group.id)) |new| {
+                        group.id = new;
+                    }
+                }
+
+                // ensure all new entities exist within a non-root layer
+                if (self.has_loaded_map) {
+                    if (try self.ecs.getOptPtr(ent.value_ptr.*, .layer)) |lay| {
+                        if (lay.id == .none) {
+                            lay.id = root_layer_id;
+                        }
+                    } else {
+                        try self.ecs.attach(ent.value_ptr.*, .layer, .{
+                            .id = root_layer_id,
+                        });
+                    }
+                }
+            }
+        }
+
         if (!self.has_loaded_map) {
+            if (self.ecs.entities.items.len > 0) {
+                log.info("compressed entities by: {d} / {d} = {d:.2}%", .{
+                    self.ecs.entities.items.len,
+                    temp_ecs.entities.items.len,
+                    @as(f32, @floatFromInt(self.ecs.entities.items.len)) * 100 /
+                        @as(f32, @floatFromInt(temp_ecs.entities.items.len)),
+                });
+            }
             try self.setMapName(filename);
             try self.loadSkybox(parsed.value.sky_name);
             parsed.value.editor.cam.setCam(&self.draw_state.cam3d);
@@ -1337,11 +1420,11 @@ pub const Context = struct {
                     if (self.asset_browser.recent_mats.list.items.len > 0) {
                         self.edit_state.selected_texture_vpk_id = self.asset_browser.recent_mats.list.items[0];
                     }
-                    self.edit_state.selected_layer = @enumFromInt(v.value.selected_layer);
+                    if (layer_map.get(@enumFromInt(v.value.selected_layer))) |sel| {
+                        self.edit_state.selected_layer = sel;
+                    }
                 } else |_| {} //This data is not essential to parse
             }
-
-            try self.layers.insertVisgroupsFromJson(parsed.value.visgroup);
         }
 
         loadctx.cb("Building meshes");
@@ -1357,10 +1440,8 @@ pub const Context = struct {
         path: std.fs.Dir,
         filename: []const u8,
         loadctx: *LoadCtx,
-        /// If set map's vis groups will be ignored and all objects will be put in a layer with override_vis name
-        override_vis: ?[]const u8,
     ) !void {
-        const vis_override = if (override_vis) |n| try self.layers.getOrPutTopLevelGroup(n) else null;
+        const vis_override = if (self.has_loaded_map) try self.layers.getOrPutTopLevelGroup(filename) else null;
         defer self.has_loaded_map = true;
         var timer = try std.time.Timer.start();
 

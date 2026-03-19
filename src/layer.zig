@@ -280,39 +280,67 @@ pub const Context = struct {
         try wr.endObject();
     }
 
-    pub fn insertVisgroupsFromJson(self: *Self, json_vis: ?json_map.VisGroup) !void {
-        const jv = json_vis orelse return;
-        if (jv.id != 0) return; //Root must be 0
+    pub fn insertLayersFromJson(self: *Self, json_layers: ?json_map.VisGroup, root_layer: *Layer) !std.AutoHashMap(Id, Id) {
+        var id_map = std.AutoHashMap(Id, Id).init(self.alloc);
+        const jv = json_layers orelse return id_map;
+        if (jv.id != 0) return id_map; //should always have a root which must be 0
 
         // we omit insertion of the root node as the root is immutable.
-
         for (jv.children) |child| {
-            try self.insertRecur(self.root, child);
+            try self.insertRecur(root_layer, child, &id_map);
         }
+
+        return id_map;
     }
 
-    fn insertRecur(self: *Self, parent: *Layer, layer: json_map.VisGroup) !void {
-        if (self.map.contains(@enumFromInt(layer.id))) {
+    pub fn insertVisgroupsFromJson(self: *Self, json_vis: ?json_map.VisGroup) !void {
+        var map = try self.insertLayersFromJson(json_vis, self.root);
+        map.deinit();
+    }
+
+    fn insertRecur(self: *Self, parent: *Layer, layer: json_map.VisGroup, id_map: *std.AutoHashMap(Id, Id)) !void {
+        const new_id = self.newLayerId();
+        if (id_map.contains(@enumFromInt(layer.id))) {
             log.warn("layer with duplicate id: {d} {s}, omitting", .{ layer.id, layer.name });
             return;
         }
 
-        //Ensure any new groups don't intersect with old
-        self.layer_counter = @max(self.layer_counter, layer.id);
+        try id_map.put(@enumFromInt(layer.id), new_id);
 
-        var new = try createLayer(self.alloc, @enumFromInt(layer.id), layer.name);
+        var new = try createLayer(self.alloc, new_id, layer.name);
         new.disabled = layer.disabled;
         new.collapse = layer.collapse;
         new.locked = layer.locked;
         new.omit_export = layer.omit_export;
         try self.layers.append(self.alloc, new);
-        try self.map.put(@enumFromInt(layer.id), new);
+        try self.map.put(new_id, new);
 
         try parent.children.append(self.alloc, new);
 
         for (layer.children) |child| {
-            try self.insertRecur(new, child);
+            try self.insertRecur(new, child, id_map);
         }
+    }
+
+    pub fn putTopLevelGroupEnsureUnique(self: *Self, name: []const u8) !Id {
+        var count: u32 = 0;
+        for (self.root.children.items) |child| {
+            if (std.mem.startsWith(u8, child.name, name)) {
+                count += 1;
+                if (child.name.len == name.len) {
+                    continue;
+                }
+                const ending = child.name[name.len..];
+                const number = std.fmt.parseInt(u32, ending, 10) catch continue;
+                count = @max(number, count);
+            }
+        }
+
+        var aw: std.io.Writer.Allocating = .init(self.alloc);
+        defer aw.deinit();
+        try aw.writer.print("{s}{d}", .{ name, count });
+
+        return (try self.newLayer(if (count > 0) aw.written() else name, self.root.id, .{})).id;
     }
 
     pub fn getOrPutTopLevelGroup(self: *Self, name: []const u8) !Id {

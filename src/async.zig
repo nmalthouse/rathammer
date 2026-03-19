@@ -110,8 +110,9 @@ pub const SdlFileData = struct {
                 }
                 edit.loadctx.setDraw(true);
                 edit.loadctx.resetTime();
+                const gn = edit.loaded_game_name orelse return;
                 for (self.files.items) |file| {
-                    edit.loadVmf(std.fs.cwd(), file, edit.loadctx, file) catch |err| {
+                    edit.loadMap(std.fs.cwd(), file, edit.loadctx, gn) catch |err| {
                         log.err("import vmf failed {t}", .{err});
                     };
                 }
