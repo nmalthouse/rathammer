@@ -1,8 +1,10 @@
 # Level editor for the Source Engine
 
-![Screenshot of the editor](doc/screen_v0.4.0.jpg)
+![Screenshot of the editor](doc/0.4.0.jpg)
 
 Rathammer is still in development, as such, it is missing many features, and some things are in a half finished state. Expect some bugs, and gui weirdness.
+
+This repo just hosts the downloads and docs, the actual source is on sr.ht
 
 [Documentation](doc/start.md)
 
