@@ -241,6 +241,16 @@ In the directory where rathammer stores the config (see the first few lines of o
 This file contains a list of absolute paths to ratmaps separated by newlines
 
 ### Troubleshooting / Tips
+#### Blurry on Wayland hidpi
+Look at the first few lines of console output when starting rathammer for 'SDL renderer: '.
+
+If it doesn't say wayland, your compositor doesn't support 'wp_fifo_manager_v1' so SDL defaults to the x11 driver.
+The x11 driver will not provide a hidpi backbuffer and will instead scale the output.
+
+To force the wayland driver: `SDL_VIDEODRIVER=wayland ./rathammer`
+
+See [https://wayland.app/protocols/fifo-v1#compositor-support](https://wayland.app/protocols/fifo-v1#compositor-support)
+
 #### On Linux, after pressing F9 to build nothing seems to happen.
 There is some bug with wine, where the first time you run vbsp it will hang indefinitely. Hit f9 again to spin up some new build threads. 
 
