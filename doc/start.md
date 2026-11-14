@@ -4,18 +4,24 @@ RatHammer is an editor for Valve's Source engine maps, though it can also be use
 # Games
 By Default RatHammer will search for Half Life 2 in your OS's default steam directory
 ```
-On Windows "/Program Files (x86)/Steam/steamapps/common"
-On Linux "$HOME/.local/share/Steam/steamapps/common"
+#Default steam directory:
+Linux  : "$HOME/.local/share/Steam/steamapps/common"
+Windows: "/Program Files (x86)/Steam/steamapps/common"
 ```
-
 If you are using a non default steam dir, press the "edit config" button and select your steam dir
 
-Under this button the status of the games is listed, green means it is good. To see why a game config is not good, launch rathammer from a terminal, 
-it will display info for each failing game config.
+Under this button the status of the games is listed, green means it is good. 
 
-On Linux the default config file is copied to "$XDG_CONFIG_DIR/rathammer/config.json". This defaults to $HOME/.config/rathammer/config.json.
+### Configuration
+Location
+```
+Linux  : $XDG_CONFIG_DIR/rathammer/config.json -> $HOME/.config/rathammer/config.json
+Windows: /Users/YourName/AppData/Roaming/rathammer/rathammer/config.json
+```
 
-Games are defined in a folder called 'games' in the config directory
+Games are defined in a folder called 'games' in the config directory. Rathammer comes with configuration for many source games.
+
+The gui for changing configuration is not done yet, you will need to edit the file directly to make most changes. Oops :D
 
 ## Gui
 If the scale of the gui is incorrect, set a custom display scale with the --display_scale 1 flag.
@@ -23,16 +29,19 @@ If the scale of the gui is incorrect, set a custom display scale with the --disp
 This can be permanently set in the config.json window section.
 
 ## Editing
-Once you have successfully started RatHammer you will be greeted by a "pause menu", there are various global settings in here and documentation. Open and close the pause menu with 'Escape'.
-RatHammer was designed with 3D editing as the main form. There are 2d views but are relegated to speciality tasks that benefit from a orthographic view, such as alignment and selection of vertices in an axis aligned solid.
+RatHammer was designed with 3D editing as the main form. 
+There are 2d views but they don't do much right now. I plan on removing them and just having the option for orthographic cameras in the 3d view. 
+
+(This is partially supported, type `ortho` in the console to toggle between orthographic and perspective)
+
+The keyboard layout for rathammer is designed to work like a game. 
 
 Quick reference:
-
 * Navigation -> WASD
 * Camera up/down -> space/c
 * Change camera speed -> scroll
 * Uncapture mouse -> shift
-* Pause/console -> Escape
+* console -> Escape
 * Grid inc/dec -> R/F
 * Duplicate / texture-wrap -> z
 * Delete -> ctrl+d
@@ -42,13 +51,32 @@ Quick reference:
 * undo / redo -> ctrl+z, ctrl+shift+z 
 * save / save as -> ctrl+s, ctrl+shift+s
 * F9 build map (map must have name) -> writes bsp file to "dump.bsp"
+* F10 build map using custom command
 
 Notice how these bindings all sit near wasd, so the left hand doesn't need to move out of position while editing.
 
 All keys can be remapped in the config.json file. By default all keys map to physical keys on the keyboard rather than symbols, so if you use a layout other than QWERTY, the keys are in the same place as they would be on a QWERTY layout. This behavior can be changed per key in the config.
 
+## Custom map build command
+Pressing F9 will do try to do a debug compile of the current map. If you want to customize how your map is built you can use build_map_user (F10)
+* Locate the game config you are mapping with in the config folder
+* in the `mapbuilder` section add:
+```
+"user_build_cmd": "/path/to/my_script.sh"
+```
+
+* user_build_cmd is just a path to an executable, you cannot provide arguments.
+* Data is passed to the script via environment vars.
+* See scripts/user_script.sh for an example of how to build a map, including all the env vars
+
+### converting ratmap to vmf
+You can also convert a ratmap into a vmf without launching the editor using:
+```
+./rathammer convert --map ~/user-data/ratmaps/factory.ratmap --output converted.vmf
+```
+
 ## Selections
-At any time, you can change the selection. To select an object put the cross-hair (or mouse cursor if you hold shift to uncapture) over an object and press 'E'.
+At any time, you can change the selection. To select an object put the cross-hair or mouse cursor over an object and press 'E'.
 To select more than one object, toggle the selection mode to 'many' using the tab key. 
 In the top left corner of the 3d view there is information about the current selection and grid size etc.
 To clear the current selection press ctrl+E
@@ -64,6 +92,11 @@ Vmf and Bsp files store all brushes as a collection of intersecting planes. This
 The last one is important as it means you cannot cut a face in two, to texture it for example, without cutting the entire brush in two.
 
 RatHammer stores and edits polygon meshes, more specifically, each brush is comprised of a set of vertices and 4 or more sides. Each side specifies a convex polygon by indexing into the vertices. RatHammer will not stop you from breaking the above rules, and will often allow you to export broken brushes to vmf, so be careful.
+
+Rathammer attempts to detect invalid brushes and will display a count in the top left corner.
+
+* To cycle through invalid solids press `ctrl+o` or use the "edit->select next invalid"
+* The solid will have text explaining the issue. To remove duplicate verts use "edit->remove duplicate verts"
 
 ## Tools
 At the bottom of the 3d view there is a row of tools, the active tool has a green border around it. Above each icon is the keybinding used to activate that tool.
@@ -84,7 +117,10 @@ The gizmo is always positioned on the centroid of the last selected object. Rota
 A Specialized tool for moving the faces of a single solid in an arbitrary direction. If more than one entity is selected it will draw a bounding box around all selected and allow you to scale them proportionally. 
 
 ### Place model
-Places entities in the world. The default entity is prop_static and if you have a model selected in the model browser (alt+m) that model gets placed. 
+Right click to open the radial menu. The last placed entity types becomes the new default.
+
+Pick a model using alt+m
+
 To create a brush entity, select entities and press ctrl+t.
 
 ### Cube draw
@@ -113,11 +149,8 @@ Right click on any face to apply the texture. Left click on a face to select it.
 Holding z and right clicking will wrap the texture from the selected face. This is equivalent to Hammer's (alt + right click ).
 
 ### Vertex tool
+#### The current vertex tool is total crap and I will write a better one at some point
 In 3d, mouse over a vertex and left click to add. Drag the gizmo and right click to move those vertices.
-
-In the 2d views (alt + 2), left click on a vertex or left click and drag to do a marquee. Hold shift and drag to move all selected vertices.
-
-This vertex tool is temporary and I hope to write a much better one in the future.
 
 ### Clipping tool
 The clipping tool only works in the 3d viewport for now.
@@ -177,17 +210,33 @@ The help command shows a list of commands.
 
 Use the console to: load pointfile, load portalfile, select all entities with a specific class "select_class prop_static"
 
-
 ## Lighting Preview
 Rathammer has deferred renderer that can be used to preview light_environment (sunlight), light, and light_spot.
 
-In the pause menu, change the "renderer" to "def". If you don't have a light_environment entity, the world will be bright white! If a map has more than one light_environment, rathammer uses the last one that was set. Change the class of the one you want to use to something else and change it back to light_environment, the values will not be lost, but it will then be the controller of the sunlight.
+In the menu bar, change the "light" to "cheap". If you don't have a light_environment entity, the world will be bright white! If a map has more than one light_environment, rathammer uses the last one that was set. Change the class of the one you want to use to something else and change it back to light_environment, the values will not be lost, but it will then be the *controller of the sunlight*.
 
 The renderer is far from perfect currently, and may need manual tuning to make the lighting match Source's.
 
-Under the graphics tab in the pause menu, there are lots of parameters to tune.
+There are lots of debug graphics settings under options->graphics
 
 If you are on an iGPU and have lots of lights on screen, the framerate may drop. You can increase performance significantly by lowering the resolution of the 3d viewport using the "res scale" slider under graphics. 
+
+## Localization 
+Some of the text used by the gui can be localized to whatever language you want. Text must be encoded at utf-8, RTL is not supported
+```
+./rathammer editor --dump_lang > my_lang.csv
+
+# edit the csv file with excel or whatever
+
+python scripts/csv2json.py --csv my_lang.csv --json my_lang.json
+
+# Test your lang in editor
+./rathammer editor --lang my_lang.json
+
+# If your lanugage has unicode codepoints not included in the default font (Roboto Regular), you must load a custom font:
+# Japanese using noto sans
+./rathammer editor --lang ratasset/lang/jp.json --fontfile /usr/share/fonts/noto-cjk/NotoSansCJK-Regular.ttc
+```
 
 ## The json map format
 For up to date documentation, look at the src/json_map.JsonMap struct.
@@ -272,12 +321,6 @@ If you see `potentially invalid solid: 12 error.vertsDifferent` -> press ~ and r
 In the future I plan on adding a list view of potential errors.
 
 Problematic solids can often be fixed by selecting them and running the command `optimize`
-
-#### Convert a ratmap to vmf
-You can convert a .ratmap or .json to vmf via the command line tool `ratremote convert`.
-```
-./ratremote convert --map my_map.ratmap --output my_output.vmf
-```
 
 #### Some of my custom assets don't show up!
 Official Valve tools are case insensitive when it comes to asset names.
